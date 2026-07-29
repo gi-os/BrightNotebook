@@ -47,9 +47,19 @@ classification and the extraction:
 Photographing from the CALENDAR tab tells the model to expect dates. From NOTES it
 decides for itself.
 
-The key is yours and stays on the phone: Settings → paste it, or scan it as a QR from
-<https://gi-os.github.io/LightNotebook/>. Typing and the calendar work with no key at
-all — only the camera needs one, at a fraction of a cent a page.
+The key is yours and stays on the phone. Settings → paste it, or **SCAN QR**: put your key
+into <https://gi-os.github.io/LightNotebook/> (client-side, the key never leaves the page)
+and point the phone at the code rather than typing a hundred characters on a phone
+keyboard.
+
+The scanner is the one from [gi-os/LightQR](https://github.com/gi-os/LightQR) — a CameraX
+analyzer decoding the luminance plane with ZXing core, wrapped in a Light-styled screen
+with a reticle and nothing else. No Play Services, and no borrowed Material activity
+flashing up mid-flow. A code that isn't shaped like a key is refused with a line of text
+and the camera keeps scanning, so a poster in frame can't be saved as your API key.
+
+Typing and the calendar work with no key at all — only the camera needs one, at a fraction
+of a cent a page.
 
 ## Design
 
@@ -95,8 +105,9 @@ fails if it ever drifts.
 python3 scripts/generate_icon.py      # launcher icon, needs Pillow
 ```
 
-The markdown and date code is deliberately free of Android imports, so all of it is unit
-tested off-device: list round-trips, return-key behaviour, month grids, clock parsing.
+The markdown, date and QR-payload code is deliberately free of Android imports, so all of
+it is unit tested off-device: list round-trips, return-key behaviour, month grids, clock
+parsing, and which scanned payloads count as a key.
 
 Requires the camera, and calendar read/write only if mirroring is on. Everything else is
 local: Room on the phone, no account, no sync.

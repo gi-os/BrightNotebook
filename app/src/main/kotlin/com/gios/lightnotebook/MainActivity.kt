@@ -2,7 +2,6 @@ package com.gios.lightnotebook
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -27,6 +26,7 @@ import com.gios.lightnotebook.ui.CalendarScreen
 import com.gios.lightnotebook.ui.CameraScreen
 import com.gios.lightnotebook.ui.CaptureScreen
 import com.gios.lightnotebook.ui.DayScreen
+import com.gios.lightnotebook.ui.KeyScanScreen
 import com.gios.lightnotebook.ui.LightActionSheet
 import com.gios.lightnotebook.ui.LightSheetAction
 import com.gios.lightnotebook.ui.NoteEditorScreen
@@ -38,8 +38,6 @@ import com.gios.lightnotebook.ui.theme.LightBottomBar
 import com.gios.lightnotebook.ui.theme.LightNotebookTheme
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,17 +46,6 @@ class MainActivity : ComponentActivity() {
             LightNotebookTheme {
                 val nav = rememberNavController()
                 val vm: NotebookViewModel = viewModel()
-
-                val scanQr = rememberLauncherForActivityResult(ScanContract()) { result ->
-                    val raw = result.contents?.trim() ?: return@rememberLauncherForActivityResult
-                    // The companion page can prefix the payload; accept it either way.
-                    val key = if (raw.startsWith("anthropic:", true)) {
-                        raw.substringAfter(':').trim()
-                    } else {
-                        raw
-                    }
-                    vm.setApiKey(key)
-                }
 
                 Box(
                     Modifier
@@ -135,12 +122,15 @@ class MainActivity : ComponentActivity() {
                         composable("settings") {
                             SettingsScreen(
                                 vm = vm,
-                                onScanQr = {
-                                    scanQr.launch(
-                                        ScanOptions()
-                                            .setBeepEnabled(false)
-                                            .setPrompt("Scan Anthropic API key QR"),
-                                    )
+                                onScanQr = { nav.navigate("scan") },
+                                onBack = { nav.popBackStack() },
+                            )
+                        }
+                        composable("scan") {
+                            KeyScanScreen(
+                                onKey = { key ->
+                                    vm.setApiKey(key)
+                                    nav.popBackStack()
                                 },
                                 onBack = { nav.popBackStack() },
                             )

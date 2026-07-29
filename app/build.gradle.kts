@@ -77,8 +77,10 @@ dependencies {
     // Networking (Claude vision)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // QR scanning (API key entry)
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    // QR decoding for API key entry. ZXing core only — the scanner itself is the one
+    // from gi-os/LightQR, a CameraX analyzer, so no Play Services and no borrowed
+    // Material activity. See ui/KeyScanScreen.kt.
+    implementation("com.google.zxing:core:3.5.3")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
