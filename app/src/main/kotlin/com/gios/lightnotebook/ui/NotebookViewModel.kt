@@ -9,8 +9,10 @@ import com.gios.lightnotebook.ai.Vision
 import com.gios.lightnotebook.ai.VisionParser
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.FolderEntity
+import com.gios.lightnotebook.data.LightPassBridge
 import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
+import com.gios.lightnotebook.data.PassShowing
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
@@ -128,11 +130,33 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     private val _month = MutableStateFlow(NoteDates.monthOf(NoteDates.today()))
     val month: StateFlow<YearMonth> = _month.asStateFlow()
 
+    /* ---- films, read out of LightPass ---- */
+
+    private val _showings = MutableStateFlow<List<PassShowing>>(emptyList())
+
+    /** Screenings from LightPass. Empty when it isn't installed, which is not an error. */
+    val showings: StateFlow<List<PassShowing>> = _showings.asStateFlow()
+
+    /**
+     * Re-read on every visit to a calendar screen rather than observed: tickets change when
+     * the user is in the other app, so there is no moment here worth watching for, and the
+     * shelf is a handful of rows.
+     */
+    fun refreshShowings() = viewModelScope.launch {
+        _showings.value = withContext(Dispatchers.IO) {
+            LightPassBridge.showings(getApplication())
+        }
+    }
+
+    fun openPass(passId: String) {
+        LightPassBridge.openPass(getApplication(), passId)
+    }
+
     private val _selectedDay = MutableStateFlow(NoteDates.today())
     val selectedDay: StateFlow<Long> = _selectedDay.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val dayCounts: StateFlow<Map<Long, Int>> = _month
+    private val entryCounts: StateFlow<Map<Long, Int>> = _month
         .flatMapLatest { m ->
             val from = m.atDay(1).toEpochDay()
             val to = m.atEndOfMonth().toEpochDay()
@@ -142,10 +166,24 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Dots on the grid count films too, or a day with only a ticket on it looks empty. */
+    val dayCounts: StateFlow<Map<Long, Int>> =
+        combine(entryCounts, _showings) { counts, showings ->
+            val merged = counts.toMutableMap()
+            showings.forEach { merged[it.epochDay] = (merged[it.epochDay] ?: 0) + 1 }
+            merged
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayEntries: StateFlow<List<DayEntryEntity>> = _selectedDay
         .flatMapLatest { repo.observeDay(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Films on the open day, earliest first. */
+    val dayShowings: StateFlow<List<PassShowing>> =
+        combine(_selectedDay, _showings) { day, showings ->
+            showings.filter { it.epochDay == day }.sortedBy { it.startMinutes ?: -1 }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val upcoming: StateFlow<List<DayEntryEntity>> = repo.observeUpcoming(NoteDates.today(), 8)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

@@ -9,6 +9,19 @@
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
+    <!--
+      Android 11 package visibility: without these, the ticket provider is invisible and
+      the deep link resolves to nothing, silently. Both entries are for gi-os/LightPass.
+    -->
+    <queries>
+        <package android:name="com.gios.lightpass" />
+        <provider android:authorities="com.gios.lightpass.passes" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="lightpass" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

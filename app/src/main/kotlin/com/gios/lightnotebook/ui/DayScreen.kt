@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,9 +42,13 @@ fun DayScreen(
     onBack: () -> Unit,
 ) {
     val entries by vm.dayEntries.collectAsStateWithLifecycle()
+    val showings by vm.dayShowings.collectAsStateWithLifecycle()
     var draft by remember(epochDay) { mutableStateOf("") }
     var editing by remember { mutableStateOf<DayEntryEntity?>(null) }
     var actionsFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+
+    // Tickets can be added, re-dated or deleted while this app was in the background.
+    LaunchedEffect(epochDay) { vm.refreshShowings() }
 
     fun commit() {
         val text = draft.trim()
@@ -65,10 +70,23 @@ fun DayScreen(
         )
         LightRule()
 
-        if (entries.isEmpty()) {
+        if (entries.isEmpty() && showings.isEmpty()) {
             LightEmptyState("Nothing on this day yet.", Modifier.weight(1f))
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                // Films come from LightPass and are not editable here — tapping one opens
+                // the stub in Movie Tickets, which is where the barcode you need is.
+                items(showings, key = { it.passId }) { showing ->
+                    LightListRow(
+                        title = showing.title,
+                        sub = showing.where,
+                        detail = NoteDates.clock(showing.startMinutes),
+                        leading = LightIcons.Ticket,
+                        trailing = LightIcons.Forward,
+                        onClick = { vm.openPass(showing.passId) },
+                    )
+                    LightRule()
+                }
                 items(entries, key = { it.id }) { entry ->
                     LightListRow(
                         title = entry.text,

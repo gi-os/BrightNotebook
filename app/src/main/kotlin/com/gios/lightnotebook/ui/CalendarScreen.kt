@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -50,7 +52,23 @@ fun CalendarScreen(
     val counts by vm.dayCounts.collectAsStateWithLifecycle()
     val selected by vm.selectedDay.collectAsStateWithLifecycle()
     val upcoming by vm.upcoming.collectAsStateWithLifecycle()
+    val showings by vm.showings.collectAsStateWithLifecycle()
     val today = NoteDates.today()
+
+    // Tickets are added in the other app, so re-read them on arrival here.
+    LaunchedEffect(Unit) { vm.refreshShowings() }
+
+    val agenda = remember(upcoming, showings, today) {
+        val fromEntries = upcoming.map {
+            AgendaRow(it.epochDay, it.startMinutes, it.text, null, null)
+        }
+        val fromFilms = showings
+            .filter { it.epochDay >= today }
+            .map { AgendaRow(it.epochDay, it.startMinutes, it.title, it.where, it.passId) }
+        (fromEntries + fromFilms)
+            .sortedWith(compareBy({ it.epochDay }, { it.minutes ?: -1 }))
+            .take(8)
+    }
 
     Column(modifier.fillMaxSize()) {
         LightTopBar(
@@ -98,7 +116,7 @@ fun CalendarScreen(
         Spacer(Modifier.height(0.6f.verticalGridUnitsAsDp()))
         LightRule()
 
-        if (upcoming.isEmpty()) {
+        if (agenda.isEmpty()) {
             LightEmptyState(
                 message = "Nothing on the calendar.\nTap a day to write on it, or ADD\nto photograph a paper one.",
                 modifier = Modifier.weight(1f),
@@ -107,13 +125,18 @@ fun CalendarScreen(
             Column(Modifier.weight(1f).fillMaxWidth()) {
                 LightSectionLabel("NEXT UP")
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(upcoming, key = { it.id }) { entry ->
+                    items(agenda, key = { it.key }) { row ->
+                        val day = NoteDates.dayTitle(row.epochDay).lowercase()
+                            .replaceFirstChar { it.uppercase() }
                         LightListRow(
-                            title = entry.text,
-                            sub = NoteDates.dayTitle(entry.epochDay).lowercase()
-                                .replaceFirstChar { it.uppercase() },
-                            detail = NoteDates.clock(entry.startMinutes),
-                            onClick = { onOpenDay(entry.epochDay) },
+                            title = row.title,
+                            sub = listOfNotNull(day, row.sub).joinToString(" · "),
+                            detail = NoteDates.clock(row.minutes),
+                            leading = if (row.passId != null) LightIcons.Ticket else null,
+                            onClick = {
+                                // A film goes to its stub; anything else to its day.
+                                if (row.passId != null) vm.openPass(row.passId) else onOpenDay(row.epochDay)
+                            },
                         )
                         LightRule()
                     }
@@ -121,6 +144,21 @@ fun CalendarScreen(
             }
         }
     }
+}
+
+/**
+ * A line in NEXT UP. Notebook entries and LightPass films end up in the same list, because
+ * "what is coming" is one question — but a film keeps its ticket id so the tap can go
+ * where the barcode is.
+ */
+private data class AgendaRow(
+    val epochDay: Long,
+    val minutes: Int?,
+    val title: String,
+    val sub: String?,
+    val passId: String?,
+) {
+    val key: String get() = passId?.let { "pass:$it" } ?: "$epochDay:$minutes:$title"
 }
 
 /**

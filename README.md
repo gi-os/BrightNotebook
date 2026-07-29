@@ -36,6 +36,18 @@ one you are on is lit and underscored; the others recede.
   (Settings → PHONE CALENDAR). The notebook is the source of truth; the mirror is a
   bonus, and deleting an entry removes both.
 
+## Films from LightPass
+
+If [Movie Tickets](https://github.com/gi-os/LightPass) is installed, its tickets show up on
+the day they screen — a dot on the grid, a ticket-stub row on the day, a line in NEXT UP —
+and tapping one opens the stub in LightPass, where the barcode is.
+
+Nothing is copied. LightNotebook reads LightPass's content provider (title, cinema, seat,
+day, start and end), so a ticket deleted or re-dated over there is right over here on the
+next look, and the film rows are not editable in the notebook. If LightPass isn't
+installed, or is an older build with no provider, the calendar is simply films-free — no
+message, no setup step.
+
 ## Camera
 
 ADD → Camera photographs a page and Claude Haiku reads it. One request does the
