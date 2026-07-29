@@ -40,6 +40,7 @@ fun SettingsScreen(
     val mirror by vm.mirrorEvents.collectAsStateWithLifecycle()
     val lead by vm.defaultLead.collectAsStateWithLifecycle()
     val calendars by vm.calendars.collectAsStateWithLifecycle()
+    val status by vm.importStatus.collectAsStateWithLifecycle()
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
     var leadSheet by remember { mutableStateOf(false) }
@@ -113,6 +114,19 @@ fun SettingsScreen(
                 filled = false,
                 modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
                 onClick = onCalendars,
+            )
+            LightWideButton(
+                label = "SYNC NOW",
+                filled = false,
+                enabled = calendars.isNotEmpty(),
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                onClick = { vm.syncNow() },
+            )
+            LightText(
+                text = status ?: "Imported calendars refresh themselves about once an hour.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
             )
 
             LightText(

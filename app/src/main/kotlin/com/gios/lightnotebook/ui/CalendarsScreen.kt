@@ -1,6 +1,7 @@
 package com.gios.lightnotebook.ui
 
 import android.Manifest
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -54,7 +55,19 @@ fun CalendarsScreen(
     // dead end the user cannot fix.
     val pickIcs = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
-    ) { uri -> if (uri != null) vm.importIcs(uri) }
+    ) { uri ->
+        if (uri != null) {
+            // Hold on to the grant, or the hourly refresh cannot re-read the file after a
+            // restart — a one-off import would quietly stop updating.
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            vm.importIcs(uri)
+        }
+    }
 
     val askCalendarRead = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),

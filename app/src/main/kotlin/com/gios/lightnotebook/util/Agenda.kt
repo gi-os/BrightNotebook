@@ -1,0 +1,138 @@
+package com.gios.lightnotebook.util
+
+import kotlin.math.abs
+
+/**
+ * A line on the agenda: a calendar entry, a film from LightPass, or one of each that turned
+ * out to be the same plan.
+ *
+ * [id] must be the row's own identity, not something derived from what it says. An earlier
+ * version keyed rows on day + time + title, which crashed the agenda the moment two things
+ * matched — the same event imported into two calendars, or "gym" typed on two days at no
+ * particular time. A `LazyColumn` throws on a repeated key rather than tolerating it.
+ */
+data class AgendaRow(
+    val id: String,
+    val epochDay: Long,
+    val minutes: Int?,
+    val title: String,
+    val label: String? = null,
+    val reminderMinutes: Int? = null,
+    /** Set when there is a ticket behind this row: tapping it opens the stub. */
+    val passId: String? = null,
+    /** Set when there is a calendar entry behind this row: its own sheet still works. */
+    val entryId: String? = null,
+) {
+    /** "Regal Union Square · 10 min before", whichever parts exist. */
+    val subtitle: String?
+        get() {
+            val remind = reminderMinutes?.let {
+                if (it <= 0) "at the time" else "$it min before"
+            }
+            return listOfNotNull(label, remind).joinToString(" · ").takeIf { it.isNotBlank() }
+        }
+}
+
+/**
+ * Ordering, de-duplication and the matching of tickets to calendar entries. Android-free so
+ * all of it is tested off-device — which is where the crash above should have been caught.
+ */
+object Agenda {
+
+    /** Two showings of the same film count as one plan if they start about now. */
+    private const val SAME_PLAN_MINUTES = 45
+
+    private val STOP_WORDS = setOf(
+        "the", "a", "an", "and", "at", "in", "on", "to",
+        "movie", "movies", "film", "ticket", "tickets", "showing", "screening",
+    )
+
+    /**
+     * Everything in the order it happens: by day, and within a day all-day items first,
+     * then by clock time. Duplicate ids are dropped rather than allowed to reach the list.
+     */
+    fun merge(vararg sources: List<AgendaRow>): List<AgendaRow> =
+        sources.asSequence()
+            .flatten()
+            .sortedWith(compareBy({ it.epochDay }, { it.minutes ?: -1 }))
+            .distinctBy { it.id }
+            .toList()
+
+    /**
+     * Folds tickets and calendar entries that describe the same plan into single rows.
+     *
+     * A film in the calendar and a ticket for it are one thing you are doing, and listing
+     * both is how the agenda ended up saying "Dune" twice. The ticket wins the tap, because
+     * that is where the barcode is; the entry's reminder and label survive, because that is
+     * what the calendar was for. Anything unmatched passes through untouched.
+     *
+     * Each ticket claims at most one entry and each entry can only be claimed once, so a
+     * double feature stays two rows.
+     */
+    fun collapse(entries: List<AgendaRow>, films: List<AgendaRow>): List<AgendaRow> {
+        val claimed = mutableSetOf<String>()
+        val folded = films.map { film ->
+            val match = entries.firstOrNull { entry ->
+                entry.id !in claimed && samePlan(entry, film)
+            } ?: return@map film
+            claimed.add(match.id)
+            film.copy(
+                // The entry's own time is trusted over the ticket's when the ticket has none.
+                minutes = film.minutes ?: match.minutes,
+                label = film.label ?: match.label,
+                reminderMinutes = match.reminderMinutes,
+                entryId = match.entryId ?: match.id,
+            )
+        }
+        val untouched = entries.filterNot { it.id in claimed }
+        return merge(untouched, folded)
+    }
+
+    /** Same day, near enough the same time, and near enough the same words. */
+    internal fun samePlan(entry: AgendaRow, film: AgendaRow): Boolean {
+        if (entry.epochDay != film.epochDay) return false
+        if (!timesAgree(entry.minutes, film.minutes)) return false
+        return titlesAgree(entry.title, film.title)
+    }
+
+    /**
+     * An all-day entry and a timed ticket are still the same plan — "Dune, Saturday" is how
+     * people write down a film they have a 19:30 ticket for.
+     */
+    internal fun timesAgree(a: Int?, b: Int?): Boolean {
+        if (a == null || b == null) return true
+        return abs(a - b) <= SAME_PLAN_MINUTES
+    }
+
+    /**
+     * Loose on purpose. A ticket says "DUNE: PART TWO" and the calendar says "Dune Part 2
+     * w/ Alex"; being strict here would leave the duplicate on screen, which is the thing
+     * being fixed.
+     */
+    internal fun titlesAgree(a: String, b: String): Boolean {
+        val left = keywords(a)
+        val right = keywords(b)
+        if (left.isEmpty() || right.isEmpty()) return false
+        if (left == right) return true
+        val shared = left.intersect(right).size
+        if (shared == 0) return false
+        // One title containing the other counts: "dune" inside "dune part two".
+        if (shared == minOf(left.size, right.size)) return true
+        return shared.toDouble() / maxOf(left.size, right.size) >= 0.6
+    }
+
+    /** Words that carry meaning: lowercase, punctuation gone, filler gone. */
+    internal fun keywords(title: String): Set<String> = title
+        .lowercase()
+        .replace(Regex("[^a-z0-9]+"), " ")
+        .split(' ')
+        .filter { it.isNotBlank() && it !in STOP_WORDS }
+        .toSet()
+
+    /** The heading above a day's rows. */
+    fun heading(epochDay: Long, today: Long): String = when (epochDay) {
+        today -> "TODAY · ${NoteDates.dayTitle(epochDay)}"
+        today + 1 -> "TOMORROW · ${NoteDates.dayTitle(epochDay)}"
+        else -> NoteDates.dayTitle(epochDay)
+    }
+}

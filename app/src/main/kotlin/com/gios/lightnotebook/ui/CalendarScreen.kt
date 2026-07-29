@@ -29,6 +29,7 @@ import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.LightTopBar
 import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.lightClickable
+import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.NoteDates
@@ -54,7 +55,7 @@ fun CalendarScreen(
     // Tickets are added in the other app, so re-read them on arrival here.
     LaunchedEffect(Unit) { vm.refreshShowings() }
 
-    val ahead = upcoming.size + showings.count { it.epochDay >= today }
+    val anythingAhead = upcoming.isNotEmpty() || showings.any { it.epochDay >= today }
     val next = upcoming.firstOrNull()
 
     Column(modifier.fillMaxSize()) {
@@ -85,16 +86,24 @@ fun CalendarScreen(
             }
         }
 
-        NoteDates.weeks(month).forEach { week ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = lightInset())) {
-                week.forEach { day ->
-                    DayCell(
-                        epochDay = day,
-                        entries = day?.let { counts[it] } ?: 0,
-                        isToday = day == today,
-                        modifier = Modifier.weight(1f),
-                        onClick = { if (day != null) onOpenDay(day) },
-                    )
+        // Swipe the grid to change month, since the arrows are a long reach from a thumb.
+        Column(
+            Modifier.lightHorizontalSwipe(
+                onLeft = { vm.stepMonth(1) },
+                onRight = { vm.stepMonth(-1) },
+            ),
+        ) {
+            NoteDates.weeks(month).forEach { week ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = lightInset())) {
+                        week.forEach { day ->
+                        DayCell(
+                            epochDay = day,
+                            entries = day?.let { counts[it] } ?: 0,
+                            isToday = day == today,
+                            modifier = Modifier.weight(1f),
+                            onClick = { if (day != null) onOpenDay(day) },
+                        )
+                    }
                 }
             }
         }
@@ -112,8 +121,8 @@ fun CalendarScreen(
             verticalArrangement = Arrangement.spacedBy(0.6f.verticalGridUnitsAsDp()),
         ) {
             LightWideButton(
-                label = if (ahead > 0) "NEXT UP · $ahead" else "NEXT UP",
-                filled = ahead > 0,
+                label = "NEXT UP",
+                filled = anythingAhead,
                 onClick = onOpenAgenda,
             )
             if (next != null) {

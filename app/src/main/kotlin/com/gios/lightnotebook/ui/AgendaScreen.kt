@@ -7,13 +7,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightTopBar
+import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.NoteDates
 
 /**
@@ -29,36 +29,10 @@ fun AgendaScreen(
     onOpenDay: (Long) -> Unit,
     onBack: () -> Unit,
 ) {
-    val upcoming by vm.upcoming.collectAsStateWithLifecycle()
-    val showings by vm.showings.collectAsStateWithLifecycle()
-    val calendars by vm.calendars.collectAsStateWithLifecycle()
+    val rows by vm.agendaRows.collectAsStateWithLifecycle()
     val today = NoteDates.today()
 
     LaunchedEffect(Unit) { vm.refreshShowings() }
-
-    val rows = remember(upcoming, showings, calendars, today) {
-        val fromEntries = upcoming.map { entry ->
-            AgendaItem(
-                epochDay = entry.epochDay,
-                minutes = entry.startMinutes,
-                title = entry.text,
-                label = calendars.firstOrNull { it.id == entry.calendarId }?.label,
-                reminderMinutes = entry.reminderMinutes,
-                passId = null,
-            )
-        }
-        val fromFilms = showings.filter { it.epochDay >= today }.map { showing ->
-            AgendaItem(
-                epochDay = showing.epochDay,
-                minutes = showing.startMinutes,
-                title = showing.title,
-                label = showing.where ?: "Movie Tickets",
-                reminderMinutes = null,
-                passId = showing.passId,
-            )
-        }
-        (fromEntries + fromFilms).sortedWith(compareBy({ it.epochDay }, { it.minutes ?: -1 }))
-    }
 
     Column(Modifier.fillMaxSize()) {
         LightTopBar(
@@ -77,28 +51,21 @@ fun AgendaScreen(
                     if (row.epochDay != lastDay) {
                         lastDay = row.epochDay
                         item(key = "day-${row.epochDay}") {
-                            LightSectionLabel(
-                                when (row.epochDay) {
-                                    today -> "TODAY · ${NoteDates.dayTitle(row.epochDay)}"
-                                    today + 1 -> "TOMORROW · ${NoteDates.dayTitle(row.epochDay)}"
-                                    else -> NoteDates.dayTitle(row.epochDay)
-                                },
-                            )
+                            LightSectionLabel(Agenda.heading(row.epochDay, today))
                         }
                     }
-                    item(key = row.key) {
+                    item(key = row.id) {
                         LightListRow(
                             title = row.title,
-                            sub = row.subtitle(),
+                            sub = row.subtitle,
                             detail = NoteDates.clock(row.minutes) ?: "All day",
                             leading = if (row.passId != null) LightIcons.Ticket else null,
                             trailing = if (row.reminderMinutes != null) LightIcons.Alarm else null,
                             onClick = {
-                                if (row.passId != null) {
-                                    vm.openPass(row.passId)
-                                } else {
-                                    onOpenDay(row.epochDay)
-                                }
+                                // A ticket goes to its stub, because that is where the
+                                // barcode is; anything else opens its day.
+                                val pass = row.passId
+                                if (pass != null) vm.openPass(pass) else onOpenDay(row.epochDay)
                             },
                         )
                         LightRule()
@@ -106,22 +73,5 @@ fun AgendaScreen(
                 }
             }
         }
-    }
-}
-
-/** A line on the agenda: an entry, or a film from LightPass. */
-private data class AgendaItem(
-    val epochDay: Long,
-    val minutes: Int?,
-    val title: String,
-    val label: String?,
-    val reminderMinutes: Int?,
-    val passId: String?,
-) {
-    val key: String get() = passId?.let { "pass:$it" } ?: "$epochDay:$minutes:$title"
-
-    fun subtitle(): String? {
-        val remind = reminderMinutes?.let { if (it <= 0) "at the time" else "$it min before" }
-        return listOfNotNull(label, remind).joinToString(" · ").takeIf { it.isNotBlank() }
     }
 }

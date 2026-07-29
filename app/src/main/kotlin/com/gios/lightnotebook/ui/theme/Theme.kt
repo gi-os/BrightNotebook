@@ -8,13 +8,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -22,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -258,6 +263,39 @@ fun Modifier.lightClickable(
         onClick = onClick,
     )
 }
+
+/**
+ * Horizontal swipes, for moving between dates.
+ *
+ * A drag rather than a fling: the threshold is a fraction of the screen, so a slow deliberate
+ * push works as well as a flick, and a vertical scroll underneath is untouched because only
+ * horizontal drags are consumed. [onLeft] is a swipe towards the left, which by the usual
+ * reading means "forward".
+ */
+fun Modifier.lightHorizontalSwipe(
+    onLeft: () -> Unit,
+    onRight: () -> Unit,
+): Modifier = composed {
+    val threshold = with(LocalDensity.current) { SWIPE_THRESHOLD_DP.dp.toPx() }
+    var travelled by remember { mutableFloatStateOf(0f) }
+    pointerInput(Unit) {
+        detectHorizontalDragGestures(
+            onDragStart = { travelled = 0f },
+            onDragEnd = {
+                when {
+                    travelled <= -threshold -> onLeft()
+                    travelled >= threshold -> onRight()
+                }
+                travelled = 0f
+            },
+            onDragCancel = { travelled = 0f },
+        ) { _, delta ->
+            travelled += delta
+        }
+    }
+}
+
+private const val SWIPE_THRESHOLD_DP = 48
 
 /**
  * Same, with a long press. Long press is where a note's own actions live — pin, move,

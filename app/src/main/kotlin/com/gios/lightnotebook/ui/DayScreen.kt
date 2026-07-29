@@ -31,6 +31,7 @@ import com.gios.lightnotebook.ui.theme.LightTextVariant
 import com.gios.lightnotebook.ui.theme.LightTopBar
 import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.lightClickable
+import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.NoteDates
@@ -43,12 +44,12 @@ import com.gios.lightnotebook.util.NoteDates
 @Composable
 fun DayScreen(
     vm: NotebookViewModel,
-    epochDay: Long,
     onBack: () -> Unit,
 ) {
-    val entries by vm.dayEntries.collectAsStateWithLifecycle()
-    val showings by vm.dayShowings.collectAsStateWithLifecycle()
-    val calendars by vm.calendars.collectAsStateWithLifecycle()
+    // The open day comes from the view model, not from the route: swiping moves it, and
+    // pushing a new screen on the stack for every day you flick past would be absurd.
+    val epochDay by vm.selectedDay.collectAsStateWithLifecycle()
+    val rows by vm.dayRows.collectAsStateWithLifecycle()
     var draft by remember(epochDay) { mutableStateOf("") }
     var editing by remember { mutableStateOf<DayEntryEntity?>(null) }
     var actionsFor by remember { mutableStateOf<DayEntryEntity?>(null) }
@@ -89,42 +90,42 @@ fun DayScreen(
         )
         LightRule()
 
-        if (entries.isEmpty() && showings.isEmpty()) {
-            LightEmptyState("Nothing on this day yet.", Modifier.weight(1f))
+        // Swipe left for tomorrow, right for yesterday — a paper diary is a stack of days,
+        // and going back to the grid to move one square along was a chore.
+        val body = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .lightHorizontalSwipe(onLeft = { vm.stepDay(1) }, onRight = { vm.stepDay(-1) })
+
+        if (rows.isEmpty()) {
+            LightEmptyState("Nothing on this day yet.", body)
         } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                // Films come from LightPass and are not editable here — tapping one opens
-                // the stub in Movie Tickets, which is where the barcode you need is.
-                items(showings, key = { it.passId }) { showing ->
+            LazyColumn(body) {
+                items(rows, key = { it.id }) { row ->
+                    val entry = vm.entryById(row.entryId)
                     LightListRow(
-                        title = showing.title,
-                        sub = showing.where,
-                        detail = NoteDates.clock(showing.startMinutes),
-                        leading = LightIcons.Ticket,
-                        trailing = LightIcons.Forward,
-                        onClick = { vm.openPass(showing.passId) },
-                    )
-                    LightRule()
-                }
-                items(entries, key = { it.id }) { entry ->
-                    val label = calendars.firstOrNull { it.id == entry.calendarId }?.label
-                    LightListRow(
-                        title = entry.text,
-                        sub = listOfNotNull(
-                            label,
-                            entry.reminderMinutes?.let {
-                                if (it <= 0) "at the time" else "$it min before"
-                            },
-                        ).joinToString(" · ").takeIf { it.isNotBlank() },
-                        detail = NoteDates.clock(entry.startMinutes),
+                        title = row.title,
+                        sub = row.subtitle,
+                        detail = NoteDates.clock(row.minutes),
                         leading = when {
-                            entry.fromPhoto -> LightIcons.Camera
-                            entry.isImported -> LightIcons.Calendar
+                            row.passId != null -> LightIcons.Ticket
+                            entry?.fromPhoto == true -> LightIcons.Camera
+                            entry?.isImported == true -> LightIcons.Calendar
                             else -> null
                         },
-                        trailing = if (entry.reminderMinutes != null) LightIcons.Alarm else null,
-                        onClick = { actionsFor = entry },
-                        onLongClick = { actionsFor = entry },
+                        trailing = when {
+                            row.passId != null -> LightIcons.Forward
+                            row.reminderMinutes != null -> LightIcons.Alarm
+                            else -> null
+                        },
+                        // A ticket opens its stub in Movie Tickets; a plain entry opens its
+                        // own actions. A row that is both takes the ticket on a tap and the
+                        // entry on a long press.
+                        onClick = {
+                            val pass = row.passId
+                            if (pass != null) vm.openPass(pass) else entry?.let { actionsFor = it }
+                        },
+                        onLongClick = entry?.let { { actionsFor = it } },
                     )
                     LightRule()
                 }

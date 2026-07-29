@@ -77,6 +77,11 @@
             android:name=".notify.ReminderReceiver"
             android:exported="false" />
 
+        <!-- Hourly refresh of imported calendars. -->
+        <receiver
+            android:name=".notify.SyncAlarm"
+            android:exported="false" />
+
         <receiver
             android:name=".notify.ReminderBootReceiver"
             android:exported="false">

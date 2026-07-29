@@ -29,7 +29,8 @@ class ReminderBootReceiver : BroadcastReceiver() {
                 val entries = NotebookDatabase.get(app).dao()
                     .entriesWithRemindersBlocking(NoteDates.today())
                 Reminders.rearmAll(app, entries)
-                Log.i(TAG, "re-armed ${entries.size} reminder(s) after boot")
+                SyncAlarm.schedule(app)
+                Log.i(TAG, "re-armed ${entries.size} reminder(s) and the hourly sync after boot")
             } catch (t: Throwable) {
                 Log.w(TAG, "could not re-arm reminders: $t")
             } finally {

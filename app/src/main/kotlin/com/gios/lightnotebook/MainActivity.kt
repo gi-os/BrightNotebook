@@ -74,7 +74,10 @@ class MainActivity : ComponentActivity() {
 
                 // A force-stop cancels every alarm an app owns and says nothing about it,
                 // so reminders are re-armed on the way in as well as after a reboot.
-                LaunchedEffect(Unit) { vm.rearmReminders() }
+                LaunchedEffect(Unit) {
+                    vm.rearmReminders()
+                    vm.scheduleSync()
+                }
 
                 val requestedDay by pendingDay.collectAsStateWithLifecycle()
                 LaunchedEffect(requestedDay) {
@@ -118,11 +121,11 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(navArgument("epochDay") { type = NavType.LongType }),
                         ) { entry ->
                             val day = entry.arguments!!.getLong("epochDay")
-                            // Selecting here keeps the month grid and the day screen agreed
-                            // on which day is open — and the day screen reads its entries
-                            // from that selection, so it has to happen before first draw.
+                            // The route only seeds the selection; the day screen reads it
+                            // from the view model afterwards, so swiping can move it without
+                            // pushing a screen per day.
                             LaunchedEffect(day) { vm.selectDay(day) }
-                            DayScreen(vm = vm, epochDay = day, onBack = { nav.popBackStack() })
+                            DayScreen(vm = vm, onBack = { nav.popBackStack() })
                         }
                         composable("camera") {
                             CameraScreen(

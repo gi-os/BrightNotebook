@@ -18,8 +18,12 @@ import com.gios.lightnotebook.data.LightPassBridge
 import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
 import com.gios.lightnotebook.data.PassShowing
+import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.notify.Reminders
+import com.gios.lightnotebook.notify.SyncAlarm
+import com.gios.lightnotebook.util.Agenda
+import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
@@ -193,11 +197,53 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
+     * The open day as rows, with tickets folded into the calendar entries that describe the
+     * same plan. A film in the calendar and a ticket for it are one thing you are doing, and
+     * showing both was how the day ended up saying "Dune" twice.
+     */
+    val dayRows: StateFlow<List<AgendaRow>> =
+        combine(dayEntries, dayShowings, repo.observeCalendars()) { entries, showings, calendars ->
+            Agenda.collapse(
+                entries = entries.map { it.toAgendaRow(calendars) },
+                films = showings.map { it.toAgendaRow() },
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Everything ahead as rows, folded the same way, for the agenda screen.
+     *
+     * Reads the repository rather than the [upcoming] flow below it: a property initialiser
+     * cannot see one declared later, and Kotlin only says so at compile time on a good day.
+     */
+    val agendaRows: StateFlow<List<AgendaRow>> =
+        combine(
+            repo.observeUpcoming(NoteDates.today(), UPCOMING_LIMIT),
+            _showings,
+            repo.observeCalendars(),
+        ) { entries, showings, calendars ->
+            val today = NoteDates.today()
+            Agenda.collapse(
+                entries = entries.map { it.toAgendaRow(calendars) },
+                films = showings.filter { it.epochDay >= today }.map { it.toAgendaRow() },
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Looks an entry back up for its own sheet, since a row only carries the id. */
+    fun entryById(id: String?): DayEntryEntity? =
+        id?.let { wanted -> dayEntries.value.firstOrNull { it.id == wanted } }
+
+    /** Moves the open day by a day at a time, for swiping. */
+    fun stepDay(delta: Long) {
+        selectDay(_selectedDay.value + delta)
+    }
+
+    /**
      * Everything ahead, for the agenda screen. Sixty rows rather than a handful: it is a
      * whole screen now, and scrolling it is the point.
      */
-    val upcoming: StateFlow<List<DayEntryEntity>> = repo.observeUpcoming(NoteDates.today(), 60)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val upcoming: StateFlow<List<DayEntryEntity>> =
+        repo.observeUpcoming(NoteDates.today(), UPCOMING_LIMIT)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun stepMonth(delta: Long) {
         _month.value = _month.value.plusMonths(delta)
@@ -358,6 +404,26 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         finishImport(outcome.first, outcome.second)
     }
 
+    /** The SYNC NOW button. The same pass the hourly alarm runs. */
+    fun syncNow() = viewModelScope.launch {
+        _importStatus.value = "Syncing…"
+        val result = withContext(Dispatchers.IO) { Sync.run(getApplication()) }
+        refreshShowings()
+        _importStatus.value = when {
+            result.nothingToDo -> "Nothing imported yet — add a calendar first."
+            result.failed > 0 && result.calendars == 0 ->
+                "Could not reach any calendar. The file may have moved."
+            result.failed > 0 ->
+                "Refreshed ${result.calendars}, could not reach ${result.failed}."
+            else -> "Refreshed ${result.calendars} calendar(s), ${result.events} event(s)."
+        }
+    }
+
+    /** Arms the hourly refresh. Called at launch; boot does it too. */
+    fun scheduleSync() {
+        SyncAlarm.schedule(getApplication())
+    }
+
     private suspend fun finishImport(result: ImportResult?, error: String?) {
         if (result == null) {
             _importStatus.value = error ?: "Nothing imported."
@@ -494,6 +560,28 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             onDone(events.size, mirrored > 0)
         }
 
+    /* ---------------- mapping to agenda rows ---------------- */
+
+    private fun DayEntryEntity.toAgendaRow(calendars: List<CalendarEntity>) = AgendaRow(
+        // Namespaced so an entry and a ticket can never collide on a list key.
+        id = "entry:$id",
+        epochDay = epochDay,
+        minutes = startMinutes,
+        title = text,
+        label = calendars.firstOrNull { it.id == calendarId }?.label,
+        reminderMinutes = reminderMinutes,
+        entryId = id,
+    )
+
+    private fun PassShowing.toAgendaRow() = AgendaRow(
+        id = "pass:$passId",
+        epochDay = epochDay,
+        minutes = startMinutes,
+        title = title,
+        label = where,
+        passId = passId,
+    )
+
     private suspend fun mirror(
         title: String,
         epochDay: Long,
@@ -504,5 +592,10 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         return withContext(Dispatchers.IO) {
             SystemCalendar.insert(getApplication(), title, epochDay, startMinutes, endMinutes)
         }
+    }
+
+    private companion object {
+        /** Enough to scroll for a while without holding a year of rows in memory. */
+        const val UPCOMING_LIMIT = 60
     }
 }
