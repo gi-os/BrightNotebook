@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -296,6 +297,30 @@ fun Modifier.lightHorizontalSwipe(
 }
 
 private const val SWIPE_THRESHOLD_DP = 48
+
+/**
+ * A pinch inwards, for backing out of a screen you zoomed into. The counterpart of the
+ * planner's zoom-in: whatever gesture took you somewhere should take you back.
+ */
+fun Modifier.lightPinchOut(onPinchOut: () -> Unit): Modifier = composed {
+    pointerInput(Unit) {
+        var zoom = 1f
+        var fired = false
+        detectTransformGestures(panZoomLock = false) { _, _, zoomChange, _ ->
+            zoom *= zoomChange
+            if (!fired && zoom < PINCH_OUT_RATIO) {
+                fired = true
+                onPinchOut()
+            }
+            if (zoomChange == 1f && zoom > 1f) {
+                // A drag with no pinch: reset, so a long scroll cannot accumulate into one.
+                zoom = 1f
+            }
+        }
+    }
+}
+
+private const val PINCH_OUT_RATIO = 0.75f
 
 /**
  * Same, with a long press. Long press is where a note's own actions live — pin, move,

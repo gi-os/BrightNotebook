@@ -166,6 +166,9 @@ class NotebookRepository(private val context: Context) {
     fun observeUpcoming(from: Long, limit: Int = 30): Flow<List<DayEntryEntity>> =
         dao.observeUpcoming(from, limit)
 
+    fun observeRange(from: Long, to: Long): Flow<List<DayEntryEntity>> =
+        dao.observeRange(from, to)
+
     suspend fun addDayEntry(
         epochDay: Long,
         text: String,

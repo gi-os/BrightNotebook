@@ -28,8 +28,20 @@ one you are on is lit and underscored; the others recede.
 
 ## Calendar
 
-- A month at a time. Today is inverted, a day with anything on it carries a dot, and
-  nothing else is marked.
+It is one endless wall planner rather than a page of months: seven columns, weeks running
+downwards, **pinch to zoom and drag to go anywhere in time**.
+
+- Three stops, snapped to on release. **Month** — numbers and a dot, the floor and the home
+  position. **Week** — each day large enough to read what is on it. Keep going and it hands
+  over to the **day screen**, which is a real screen: locked to that one day, swipe left and
+  right between days, pinch out to come back to the planner.
+- Let go near home and it springs exactly back to it. TODAY does the same from anywhere.
+- Double-tap zooms in a stop about the point you tapped.
+- The whole surface is drawn in a single `Canvas` against a `TextMeasurer`. Six visible weeks
+  is forty-two cells with a number and up to four lines each, and recomposing that on every
+  frame of a drag is not something this phone would do smoothly.
+- Today is inverted, a day with anything on it carries a dot, the 1st of a month carries its
+  name so panning through a year never loses the place.
 - Tap a day and type. `9:30 dentist` files itself at half past nine; `dentist` is an
   all-day line. That is the entire time picker — and any row's time can be changed later
   from its own sheet.
@@ -161,10 +173,11 @@ fails if it ever drifts.
 python3 scripts/generate_icon.py      # launcher icon, needs Pillow
 ```
 
-The markdown, date, QR-payload, iCalendar and reminder-timing code is deliberately free of
-Android imports, so all of it is unit tested off-device — 58 tests covering list
+The markdown, date, QR-payload, iCalendar, agenda-merge, planner-geometry and
+reminder-timing code is deliberately free of Android imports, so all of it is unit tested off-device — 88 tests covering list
 round-trips, return-key behaviour, month grids, clock parsing, which scanned payloads count
-as a key, timezone handling and line folding in .ics files, and when an alarm should fire.
+as a key, timezone handling and line folding in .ics files, when an alarm should fire, which rows fold
+together, and every piece of the planner's zoom arithmetic.
 
 The database migrates rather than resets: version 2 added calendars, reminders and import
 provenance as a real `Migration`, because `fallbackToDestructiveMigration` is only harmless

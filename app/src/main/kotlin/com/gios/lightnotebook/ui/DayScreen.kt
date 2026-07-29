@@ -33,6 +33,7 @@ import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.lightClickable
 import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import com.gios.lightnotebook.ui.theme.lightInset
+import com.gios.lightnotebook.ui.theme.lightPinchOut
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.NoteDates
 
@@ -96,6 +97,8 @@ fun DayScreen(
             .weight(1f)
             .fillMaxWidth()
             .lightHorizontalSwipe(onLeft = { vm.stepDay(1) }, onRight = { vm.stepDay(-1) })
+            // Pinching out is how you got here in reverse, so it takes you back to the planner.
+            .lightPinchOut(onPinchOut = onBack)
 
         if (rows.isEmpty()) {
             LightEmptyState("Nothing on this day yet.", body)

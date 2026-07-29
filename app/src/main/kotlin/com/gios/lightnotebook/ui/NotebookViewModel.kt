@@ -228,6 +228,40 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /* ---- the zoomable planner's window ---- */
+
+    private val _canvasWindow = MutableStateFlow(NoteDates.today()..NoteDates.today())
+
+    /**
+     * Rows for the days the planner can currently see, keyed by day.
+     *
+     * Windowed rather than "everything": the surface is endless, and the alternative is
+     * holding every entry ever written to draw six visible weeks. The canvas reports what it
+     * needs as it is panned.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val canvasRows: StateFlow<Map<Long, List<AgendaRow>>> = _canvasWindow
+        .flatMapLatest { window ->
+            combine(
+                repo.observeRange(window.first, window.last),
+                _showings,
+                repo.observeCalendars(),
+            ) { entries, showings, calendars ->
+                val films = showings.filter { it.epochDay in window }
+                Agenda.collapse(
+                    entries = entries.map { it.toAgendaRow(calendars) },
+                    films = films.map { it.toAgendaRow() },
+                ).groupBy { it.epochDay }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Called as the planner is panned. Ignores anything that isn't actually a new span. */
+    fun setCanvasWindow(from: Long, to: Long) {
+        val next = from..to
+        if (_canvasWindow.value != next) _canvasWindow.value = next
+    }
+
     /** Looks an entry back up for its own sheet, since a row only carries the id. */
     fun entryById(id: String?): DayEntryEntity? =
         id?.let { wanted -> dayEntries.value.firstOrNull { it.id == wanted } }

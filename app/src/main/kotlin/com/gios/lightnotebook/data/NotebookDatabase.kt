@@ -192,6 +192,14 @@ interface NotebookDao {
     )
     fun observeUpcoming(from: Long, limit: Int): Flow<List<DayEntryEntity>>
 
+    /** Every entry in a span of days, for the zoomable planner's visible window. */
+    @Query(
+        "SELECT * FROM day_entries WHERE epochDay BETWEEN :from AND :to AND " +
+            "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1)) " +
+            "ORDER BY epochDay ASC, startMinutes IS NULL DESC, startMinutes ASC, createdAt ASC",
+    )
+    fun observeRange(from: Long, to: Long): Flow<List<DayEntryEntity>>
+
     /** Everything still to come that asked to be reminded — used to re-arm alarms. */
     @Query(
         "SELECT * FROM day_entries WHERE reminderMinutes IS NOT NULL AND epochDay >= :from AND " +
