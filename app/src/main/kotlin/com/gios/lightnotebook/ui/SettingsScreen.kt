@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.SystemCalendar
+import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -31,13 +32,17 @@ import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 fun SettingsScreen(
     vm: NotebookViewModel,
     onScanQr: () -> Unit,
+    onCalendars: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val saved by vm.apiKey.collectAsStateWithLifecycle()
     val mirror by vm.mirrorEvents.collectAsStateWithLifecycle()
+    val lead by vm.defaultLead.collectAsStateWithLifecycle()
+    val calendars by vm.calendars.collectAsStateWithLifecycle()
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
+    var leadSheet by remember { mutableStateOf(false) }
 
     val askCalendar = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -94,6 +99,45 @@ fun SettingsScreen(
             )
 
             LightText(
+                text = "CALENDARS",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.6f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = if (calendars.isEmpty()) {
+                    "IMPORT A CALENDAR"
+                } else {
+                    "CALENDARS · ${calendars.size}"
+                },
+                filled = false,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = onCalendars,
+            )
+
+            LightText(
+                text = "REMIND ME",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.6f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = lead?.let {
+                    if (it <= 0) "AT THE TIME" else "$it MINUTES BEFORE"
+                } ?: "NEVER",
+                filled = lead != null,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = { leadSheet = true },
+            )
+            LightText(
+                text = "What a new entry with a time on it gets. Change any single one from " +
+                    "its own row on the day.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+            )
+
+            LightText(
                 text = "PHONE CALENDAR",
                 variant = LightTextVariant.Superfine,
                 lighten = true,
@@ -131,6 +175,23 @@ fun SettingsScreen(
                     bottom = 1.6f.verticalGridUnitsAsDp(),
                 ),
             )
+        }
+    }
+
+    if (leadSheet) {
+        LightActionSheet(heading = "REMIND ME", onDismiss = { leadSheet = false }) {
+            LightSheetAction("Never") {
+                vm.setDefaultLead(null)
+                leadSheet = false
+            }
+            Reminders.LEAD_CHOICES.forEach { minutes ->
+                LightSheetAction(
+                    if (minutes <= 0) "At the time" else "$minutes minutes before",
+                ) {
+                    vm.setDefaultLead(minutes)
+                    leadSheet = false
+                }
+            }
         }
     }
 }

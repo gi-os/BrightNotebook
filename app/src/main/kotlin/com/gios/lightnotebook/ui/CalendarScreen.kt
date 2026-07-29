@@ -12,17 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
@@ -46,11 +42,11 @@ import com.gios.lightnotebook.util.NoteDates
 fun CalendarScreen(
     vm: NotebookViewModel,
     onOpenDay: (Long) -> Unit,
+    onOpenAgenda: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val month by vm.month.collectAsStateWithLifecycle()
     val counts by vm.dayCounts.collectAsStateWithLifecycle()
-    val selected by vm.selectedDay.collectAsStateWithLifecycle()
     val upcoming by vm.upcoming.collectAsStateWithLifecycle()
     val showings by vm.showings.collectAsStateWithLifecycle()
     val today = NoteDates.today()
@@ -58,17 +54,8 @@ fun CalendarScreen(
     // Tickets are added in the other app, so re-read them on arrival here.
     LaunchedEffect(Unit) { vm.refreshShowings() }
 
-    val agenda = remember(upcoming, showings, today) {
-        val fromEntries = upcoming.map {
-            AgendaRow(it.epochDay, it.startMinutes, it.text, null, null)
-        }
-        val fromFilms = showings
-            .filter { it.epochDay >= today }
-            .map { AgendaRow(it.epochDay, it.startMinutes, it.title, it.where, it.passId) }
-        (fromEntries + fromFilms)
-            .sortedWith(compareBy({ it.epochDay }, { it.minutes ?: -1 }))
-            .take(8)
-    }
+    val ahead = upcoming.size + showings.count { it.epochDay >= today }
+    val next = upcoming.firstOrNull()
 
     Column(modifier.fillMaxSize()) {
         LightTopBar(
@@ -105,7 +92,6 @@ fun CalendarScreen(
                         epochDay = day,
                         entries = day?.let { counts[it] } ?: 0,
                         isToday = day == today,
-                        isSelected = day == selected,
                         modifier = Modifier.weight(1f),
                         onClick = { if (day != null) onOpenDay(day) },
                     )
@@ -113,83 +99,67 @@ fun CalendarScreen(
             }
         }
 
-        Spacer(Modifier.height(0.6f.verticalGridUnitsAsDp()))
+        Spacer(Modifier.height(0.8f.verticalGridUnitsAsDp()))
         LightRule()
 
-        if (agenda.isEmpty()) {
-            LightEmptyState(
-                message = "Nothing on the calendar.\nTap a day to write on it, or ADD\nto photograph a paper one.",
-                modifier = Modifier.weight(1f),
+        // NEXT UP is a door, not a list. Squeezed under the grid it was three rows of small
+        // type fighting a 42-cell grid for attention and losing.
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = lightInset(), vertical = 1f.verticalGridUnitsAsDp()),
+            verticalArrangement = Arrangement.spacedBy(0.6f.verticalGridUnitsAsDp()),
+        ) {
+            LightWideButton(
+                label = if (ahead > 0) "NEXT UP · $ahead" else "NEXT UP",
+                filled = ahead > 0,
+                onClick = onOpenAgenda,
             )
-        } else {
-            Column(Modifier.weight(1f).fillMaxWidth()) {
-                LightSectionLabel("NEXT UP")
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(agenda, key = { it.key }) { row ->
-                        val day = NoteDates.dayTitle(row.epochDay).lowercase()
-                            .replaceFirstChar { it.uppercase() }
-                        LightListRow(
-                            title = row.title,
-                            sub = listOfNotNull(day, row.sub).joinToString(" · "),
-                            detail = NoteDates.clock(row.minutes),
-                            leading = if (row.passId != null) LightIcons.Ticket else null,
-                            onClick = {
-                                // A film goes to its stub; anything else to its day.
-                                if (row.passId != null) vm.openPass(row.passId) else onOpenDay(row.epochDay)
-                            },
-                        )
-                        LightRule()
-                    }
-                }
+            if (next != null) {
+                // One line of what is actually next, so the button is not a mystery box.
+                LightText(
+                    text = listOfNotNull(
+                        NoteDates.clock(next.startMinutes),
+                        next.text,
+                    ).joinToString(" · "),
+                    variant = LightTextVariant.Detail,
+                    lighten = true,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LightText(
+                    text = NoteDates.dayTitle(next.epochDay),
+                    variant = LightTextVariant.Superfine,
+                    lighten = true,
+                )
             }
         }
     }
 }
 
 /**
- * A line in NEXT UP. Notebook entries and LightPass films end up in the same list, because
- * "what is coming" is one question — but a film keeps its ticket id so the tap can go
- * where the barcode is.
- */
-private data class AgendaRow(
-    val epochDay: Long,
-    val minutes: Int?,
-    val title: String,
-    val sub: String?,
-    val passId: String?,
-) {
-    val key: String get() = passId?.let { "pass:$it" } ?: "$epochDay:$minutes:$title"
-}
-
-/**
  * One square.
  *
- * The day you are looking at is **inverted** — a filled block with the number knocked out
- * — because that is the one piece of state you need to find without hunting. Today is
- * outlined instead: worth marking, but you already know what today is. A day with
- * anything written on it carries a dot. All three read on a matte greyscale panel, and no
- * two of them are the same kind of mark, so they can stack on the same square.
+ * Today is inverted; every other day is left plain. There was a version of this that also
+ * boxed the day you last opened, and it was noise — the box outlived the visit and said
+ * nothing you needed on the way back.
  */
 @Composable
 private fun DayCell(
     epochDay: Long?,
     entries: Int,
     isToday: Boolean,
-    isSelected: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val colors = LightThemeTokens.colors
-    val ink = if (isSelected) colors.background else colors.content
+    val ink = if (isToday) colors.background else colors.content
     Box(
         modifier
             .height(3.4f.verticalGridUnitsAsDp())
             .padding(0.1f.gridUnitsAsDp())
-            .background(if (isSelected) colors.content else colors.background)
-            .border(
-                width = if (isToday && !isSelected) 1.dp else 0.dp,
-                color = if (isToday && !isSelected) colors.content else colors.background,
-            )
+            .background(if (isToday) colors.content else colors.background)
             .let { if (epochDay != null) it.lightClickable(onClick = onClick) else it },
         contentAlignment = Alignment.Center,
     ) {

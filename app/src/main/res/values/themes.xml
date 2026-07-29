@@ -7,4 +7,19 @@
         <item name="android:navigationBarColor">@android:color/black</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+
+    <!--
+      The reminder box: a floating strip, not a screen. Floating so it occupies only the
+      rows it draws and the app underneath stays visible and tappable, and with no window
+      animation because the box appearing *is* the event — animating it out only keeps the
+      panel lit for a few more frames.
+    -->
+    <style name="Theme.LightNotebook.Alert" parent="Theme.LightNotebook">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+    </style>
 </resources>

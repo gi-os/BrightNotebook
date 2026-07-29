@@ -1,5 +1,9 @@
 package com.gios.lightnotebook.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.DayEntryEntity
+import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -33,7 +38,7 @@ import com.gios.lightnotebook.util.NoteDates
 /**
  * One day. Anything can go on it: a line of text, or a line of text with a time in
  * front of it — typing "9:30 dentist" is enough, so there is no time picker to wade
- * through.
+ * through, and a timed entry is given the default reminder without being asked.
  */
 @Composable
 fun DayScreen(
@@ -43,12 +48,26 @@ fun DayScreen(
 ) {
     val entries by vm.dayEntries.collectAsStateWithLifecycle()
     val showings by vm.dayShowings.collectAsStateWithLifecycle()
+    val calendars by vm.calendars.collectAsStateWithLifecycle()
     var draft by remember(epochDay) { mutableStateOf("") }
     var editing by remember { mutableStateOf<DayEntryEntity?>(null) }
     var actionsFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    var remindingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    var timingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
 
     // Tickets can be added, re-dated or deleted while this app was in the background.
     LaunchedEffect(epochDay) { vm.refreshShowings() }
+
+    // Asked for on the way in, not at first launch: a reminder is the only thing here that
+    // needs it, and this screen is where reminders come from.
+    val askNotify = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     fun commit() {
         val text = draft.trim()
@@ -88,11 +107,23 @@ fun DayScreen(
                     LightRule()
                 }
                 items(entries, key = { it.id }) { entry ->
+                    val label = calendars.firstOrNull { it.id == entry.calendarId }?.label
                     LightListRow(
                         title = entry.text,
+                        sub = listOfNotNull(
+                            label,
+                            entry.reminderMinutes?.let {
+                                if (it <= 0) "at the time" else "$it min before"
+                            },
+                        ).joinToString(" · ").takeIf { it.isNotBlank() },
                         detail = NoteDates.clock(entry.startMinutes),
-                        leading = if (entry.fromPhoto) LightIcons.Camera else null,
-                        onClick = { editing = entry },
+                        leading = when {
+                            entry.fromPhoto -> LightIcons.Camera
+                            entry.isImported -> LightIcons.Calendar
+                            else -> null
+                        },
+                        trailing = if (entry.reminderMinutes != null) LightIcons.Alarm else null,
+                        onClick = { actionsFor = entry },
                         onLongClick = { actionsFor = entry },
                     )
                     LightRule()
@@ -128,6 +159,95 @@ fun DayScreen(
         }
     }
 
+    /* ---- sheets ---- */
+
+    actionsFor?.let { entry ->
+        LightActionSheet(
+            heading = entry.text.take(34).uppercase(),
+            onDismiss = { actionsFor = null },
+        ) {
+            LightSheetAction(
+                label = "Reminder",
+                sub = entry.reminderMinutes?.let {
+                    if (it <= 0) "At the time" else "$it minutes before"
+                } ?: if (entry.startMinutes == null) "Needs a time first" else "None",
+            ) {
+                remindingFor = entry
+                actionsFor = null
+            }
+            LightSheetAction(
+                label = "Time",
+                sub = NoteDates.clock(entry.startMinutes) ?: "All day",
+            ) {
+                timingFor = entry
+                actionsFor = null
+            }
+            if (!entry.isImported) {
+                LightSheetAction("Edit text") {
+                    editing = entry
+                    actionsFor = null
+                }
+            }
+            LightSheetAction(
+                label = "Delete",
+                sub = when {
+                    entry.systemEventId != null -> "Also removes it from the phone's calendar"
+                    entry.isImported -> "Comes back if you import again"
+                    else -> null
+                },
+            ) {
+                vm.deleteDayEntry(entry)
+                actionsFor = null
+            }
+        }
+    }
+
+    remindingFor?.let { entry ->
+        LightActionSheet(heading = "REMIND ME", onDismiss = { remindingFor = null }) {
+            if (entry.startMinutes == null) {
+                LightText(
+                    text = "Give it a time first — a reminder counts back from one.",
+                    variant = LightTextVariant.Detail,
+                    lighten = true,
+                    modifier = Modifier.padding(
+                        horizontal = lightInset(),
+                        vertical = 1f.verticalGridUnitsAsDp(),
+                    ),
+                )
+            } else {
+                LightSheetAction("Never") {
+                    vm.setEntryReminder(entry, null)
+                    remindingFor = null
+                }
+                Reminders.LEAD_CHOICES.forEach { minutes ->
+                    LightSheetAction(
+                        label = if (minutes <= 0) "At the time" else "$minutes minutes before",
+                        sub = NoteDates.clock(
+                            (entry.startMinutes - minutes).coerceAtLeast(0),
+                        ),
+                    ) {
+                        vm.setEntryReminder(entry, minutes)
+                        remindingFor = null
+                    }
+                }
+            }
+        }
+    }
+
+    timingFor?.let { entry ->
+        LightNameSheet(
+            title = "TIME · 9:30, 9PM, OR BLANK FOR ALL DAY",
+            initial = NoteDates.clock(entry.startMinutes).orEmpty(),
+            confirmLabel = "SET",
+            allowBlank = true,
+            onConfirm = { typed ->
+                vm.setEntryTime(entry, NoteDates.parseClock(typed))
+                timingFor = null
+            },
+            onDismiss = { timingFor = null },
+        )
+    }
+
     editing?.let { entry ->
         LightNameSheet(
             title = "EDIT ENTRY",
@@ -139,28 +259,4 @@ fun DayScreen(
             onDismiss = { editing = null },
         )
     }
-
-    actionsFor?.let { entry ->
-        LightActionSheet(
-            heading = entry.text.take(34).uppercase(),
-            onDismiss = { actionsFor = null },
-        ) {
-            LightSheetAction("Edit text") {
-                editing = entry
-                actionsFor = null
-            }
-            LightSheetAction(
-                label = "Delete",
-                sub = if (entry.systemEventId != null) {
-                    "Also removes it from the phone's calendar"
-                } else {
-                    null
-                },
-            ) {
-                vm.deleteDayEntry(entry)
-                actionsFor = null
-            }
-        }
-    }
 }
-

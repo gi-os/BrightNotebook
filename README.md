@@ -15,7 +15,8 @@ one you are on is lit and underscored; the others recede.
 
 - Folders, and pinning to the top of the list. Long-press any note for pin / move /
   delete; long-press the folder chip you are in for rename / delete.
-- **Bold**, bullets and numbered lists, from three keys on the action bar: `B`, `•`, `1.`
+- **Bold**, bullets and numbered lists, from three keys — `B`, `•`, `1.` — which appear on
+  the action bar only while text is selected, since that is the only time they apply.
 - Press return on a list line and the marker carries down. Press return on an empty one
   and the list ends. No menus.
 - Search across titles and bodies.
@@ -27,14 +28,54 @@ one you are on is lit and underscored; the others recede.
 
 ## Calendar
 
-- A month at a time. The day you are looking at is inverted, today is outlined, and a day
-  with anything on it carries a dot — three different kinds of mark, so they stack on one
-  square without ambiguity.
+- A month at a time. Today is inverted, a day with anything on it carries a dot, and
+  nothing else is marked.
 - Tap a day and type. `9:30 dentist` files itself at half past nine; `dentist` is an
-  all-day line. That is the entire time picker.
+  all-day line. That is the entire time picker — and any row's time can be changed later
+  from its own sheet.
+- **NEXT UP** is a button, not a strip. It opens the agenda on its own screen: a day at a
+  time, in order, times and labels legible, films included.
 - Entries are also written to the phone's own calendar when there is a writable one
   (Settings → PHONE CALENDAR). The notebook is the source of truth; the mirror is a
   bonus, and deleting an entry removes both.
+
+## Reminders
+
+Anything with a time gets one. The lead time is Settings → REMIND ME (default ten minutes
+before, or never), and any single entry can be changed from its row.
+
+When one comes due you get three things: a notification, a buzz, and a box that lights the
+panel. The alarm is `setExactAndAllowWhileIdle`, which is the only kind that fires on time
+through Doze — `setAndAllowWhileIdle` is throttled to roughly once every nine minutes,
+which for "tell me at 08:50" is the same as not firing. Alarms don't survive a reboot and a
+force-stop clears them, so everything is re-armed at boot and again at every launch.
+
+The box needs one adb grant, because LightOS has no settings screen for it and Android 14
+uses that appop to decide whether a broadcast may start an activity:
+
+```
+adb shell appops set com.gios.lightnotebook SYSTEM_ALERT_WINDOW allow
+```
+
+Without it the notification and the buzz still arrive; only the panel stays dark. The
+notifier, the wake-the-screen activity and the buzz pattern are ported from
+[LightChat](https://github.com/gi-os/LightChat).
+
+## Calendars and importing
+
+Settings → CALENDARS. Each one carries a label, can be hidden from the grid, and can be
+removed with its events.
+
+- **Import a .ics file** — an export or an invite, from anywhere. The parser reads
+  `VEVENT` blocks and unfolds long lines properly; `TZID` and UTC stamps are converted to
+  the phone's own day, so a 01:30 UTC call doesn't land on tomorrow. Recurrence is
+  deliberately not expanded: a weekly meeting arrives as its first occurrence rather than
+  as a series this parser would get subtly wrong.
+- **Import from this phone** — whatever LightOS already syncs, read through
+  `CalendarContract.Instances`, so the provider's own recurrence expansion is used instead.
+
+Imports are snapshots. Re-importing the same source **replaces** its events, so something
+moved at the source moves here rather than appearing twice.
 
 ## Films from LightPass
 
@@ -120,9 +161,14 @@ fails if it ever drifts.
 python3 scripts/generate_icon.py      # launcher icon, needs Pillow
 ```
 
-The markdown, date and QR-payload code is deliberately free of Android imports, so all of
-it is unit tested off-device: list round-trips, return-key behaviour, month grids, clock
-parsing, and which scanned payloads count as a key.
+The markdown, date, QR-payload, iCalendar and reminder-timing code is deliberately free of
+Android imports, so all of it is unit tested off-device — 58 tests covering list
+round-trips, return-key behaviour, month grids, clock parsing, which scanned payloads count
+as a key, timezone handling and line folding in .ics files, and when an alarm should fire.
+
+The database migrates rather than resets: version 2 added calendars, reminders and import
+provenance as a real `Migration`, because `fallbackToDestructiveMigration` is only harmless
+until somebody's notes are in there.
 
 Requires the camera, and calendar read/write only if mirroring is on. Everything else is
 local: Room on the phone, no account, no sync.

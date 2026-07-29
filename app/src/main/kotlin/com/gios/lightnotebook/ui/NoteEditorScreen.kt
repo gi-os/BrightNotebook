@@ -5,9 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -152,22 +150,29 @@ fun NoteEditorScreen(
                     }
                     inner()
                 },
+                // No outer verticalScroll: a multi-line BasicTextField scrolls itself and
+                // keeps the cursor on screen, and wrapping it in a scrollable parent is
+                // what stops that happening — press return near the bottom and the new
+                // line is written somewhere you cannot see.
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 0.8f.verticalGridUnitsAsDp())
-                    .verticalScroll(rememberScrollState()),
+                    .padding(top = 0.8f.verticalGridUnitsAsDp()),
             )
         }
 
-        LightRule()
-        // Formatting sits on the action bar, where LightOS puts the verbs.
-        LightBottomBar(
-            items = listOf(
-                LightBarItem.Text("B", onClick = { format(NoteMarkdown::toggleBold) }),
-                LightBarItem.Text("•", onClick = { format(NoteMarkdown::toggleBullet) }),
-                LightBarItem.Text("1.", onClick = { format(NoteMarkdown::toggleNumbered) }),
-            ),
-        )
+        // Formatting appears only when there is something selected to format. It used to
+        // sit there permanently, taking four grid units off every note for three verbs
+        // that only apply to a selection.
+        if (!body.selection.collapsed) {
+            LightRule()
+            LightBottomBar(
+                items = listOf(
+                    LightBarItem.Text("B", onClick = { format(NoteMarkdown::toggleBold) }),
+                    LightBarItem.Text("•", onClick = { format(NoteMarkdown::toggleBullet) }),
+                    LightBarItem.Text("1.", onClick = { format(NoteMarkdown::toggleNumbered) }),
+                ),
+            )
+        }
     }
 
     if (showActions) {

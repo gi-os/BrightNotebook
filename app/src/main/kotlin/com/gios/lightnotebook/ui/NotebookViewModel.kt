@@ -1,19 +1,26 @@
 package com.gios.lightnotebook.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gios.lightnotebook.ai.ParsedEvent
 import com.gios.lightnotebook.ai.ReadMode
 import com.gios.lightnotebook.ai.Vision
 import com.gios.lightnotebook.ai.VisionParser
+import com.gios.lightnotebook.data.CalendarEntity
 import com.gios.lightnotebook.data.DayEntryEntity
+import com.gios.lightnotebook.data.DeviceCalendar
+import com.gios.lightnotebook.data.DeviceCalendars
 import com.gios.lightnotebook.data.FolderEntity
+import com.gios.lightnotebook.data.ImportResult
 import com.gios.lightnotebook.data.LightPassBridge
 import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
 import com.gios.lightnotebook.data.PassShowing
 import com.gios.lightnotebook.data.SystemCalendar
+import com.gios.lightnotebook.notify.Reminders
+import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.Dispatchers
@@ -185,7 +192,11 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             showings.filter { it.epochDay == day }.sortedBy { it.startMinutes ?: -1 }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val upcoming: StateFlow<List<DayEntryEntity>> = repo.observeUpcoming(NoteDates.today(), 8)
+    /**
+     * Everything ahead, for the agenda screen. Sixty rows rather than a handful: it is a
+     * whole screen now, and scrolling it is the point.
+     */
+    val upcoming: StateFlow<List<DayEntryEntity>> = repo.observeUpcoming(NoteDates.today(), 60)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun stepMonth(delta: Long) {
@@ -207,16 +218,47 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             if (text.isBlank()) return@launch
             val eventId = mirror(text, epochDay, startMinutes, null)
-            repo.addDayEntry(
+            // A timed entry gets the default lead automatically. Being told about something
+            // you wrote a time on is the point of writing the time.
+            val entry = repo.addDayEntry(
                 epochDay = epochDay,
                 text = text,
                 startMinutes = startMinutes,
                 systemEventId = eventId,
+                reminderMinutes = repo.defaultReminderMinutes(),
             )
+            Reminders.schedule(getApplication(), entry)
         }
 
     fun updateDayEntry(entry: DayEntryEntity, text: String) = viewModelScope.launch {
-        repo.updateDayEntry(entry.copy(text = text.trim()))
+        val updated = repo.updateDayEntry(entry.copy(text = text.trim()))
+        Reminders.schedule(getApplication(), updated)
+    }
+
+    /** Changing the lead re-arms the alarm; null takes it away. */
+    fun setEntryReminder(entry: DayEntryEntity, minutes: Int?) = viewModelScope.launch {
+        val updated = repo.updateDayEntry(entry.copy(reminderMinutes = minutes))
+        if (minutes == null) {
+            Reminders.cancel(getApplication(), updated.id)
+        } else {
+            Reminders.schedule(getApplication(), updated)
+        }
+    }
+
+    fun setEntryTime(entry: DayEntryEntity, startMinutes: Int?) = viewModelScope.launch {
+        val updated = repo.updateDayEntry(
+            entry.copy(
+                startMinutes = startMinutes,
+                // A reminder with nothing to count back from is dropped rather than kept
+                // as a surprise for the next time a time is set.
+                reminderMinutes = if (startMinutes == null) null else entry.reminderMinutes,
+            ),
+        )
+        if (updated.reminderMinutes == null) {
+            Reminders.cancel(getApplication(), updated.id)
+        } else {
+            Reminders.schedule(getApplication(), updated)
+        }
     }
 
     /** Removing an entry removes the copy in the phone's calendar too, if there is one. */
@@ -224,7 +266,113 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         entry.systemEventId?.let { id ->
             withContext(Dispatchers.IO) { SystemCalendar.delete(getApplication(), id) }
         }
+        Reminders.cancel(getApplication(), entry.id)
         repo.deleteDayEntry(entry.id)
+    }
+
+    /**
+     * Re-arms every future reminder. Called at launch as well as from boot: a force-stop
+     * clears an app's alarms, and nothing tells the app that happened.
+     */
+    fun rearmReminders() = viewModelScope.launch {
+        val entries = repo.entriesWithReminders(NoteDates.today())
+        withContext(Dispatchers.IO) { Reminders.rearmAll(getApplication(), entries) }
+    }
+
+    /* ---------------- calendars and importing ---------------- */
+
+    val calendars: StateFlow<List<CalendarEntity>> = repo.observeCalendars()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _importStatus = MutableStateFlow<String?>(null)
+
+    /** One line about the last import, shown on the calendars screen and then cleared. */
+    val importStatus: StateFlow<String?> = _importStatus.asStateFlow()
+
+    fun clearImportStatus() {
+        _importStatus.value = null
+    }
+
+    fun calendarLabel(calendarId: String?): String? =
+        calendarId?.let { id -> calendars.value.firstOrNull { it.id == id }?.label }
+
+    fun setCalendarVisible(calendar: CalendarEntity, visible: Boolean) = viewModelScope.launch {
+        repo.setCalendarVisible(calendar, visible)
+    }
+
+    fun renameCalendar(calendar: CalendarEntity, label: String) = viewModelScope.launch {
+        if (label.isNotBlank()) repo.renameCalendar(calendar, label)
+    }
+
+    fun deleteCalendar(calendar: CalendarEntity) = viewModelScope.launch {
+        // Take the alarms down before the rows go, or they fire for events that don't exist.
+        val doomed = repo.entriesWithReminders(0L).filter { it.calendarId == calendar.id }
+        doomed.forEach { Reminders.cancel(getApplication(), it.id) }
+        repo.deleteCalendar(calendar.id)
+    }
+
+    /** Reads an .ics the document picker handed over. */
+    fun importIcs(uri: Uri) = viewModelScope.launch {
+        val outcome = withContext(Dispatchers.IO) {
+            val text = repo.readText(uri)
+            when {
+                text == null -> null to "Could not open that file."
+                !IcsParser.looksLikeIcs(text) -> null to "That is not a calendar file."
+                else -> {
+                    val events = IcsParser.parse(text)
+                    if (events.isEmpty()) {
+                        null to "No events in that file."
+                    } else {
+                        repo.importEvents(
+                            label = repo.displayName(uri),
+                            kind = CalendarEntity.KIND_ICS,
+                            sourceRef = uri.toString(),
+                            events = events,
+                            reminderMinutes = repo.defaultReminderMinutes(),
+                        ) to null
+                    }
+                }
+            }
+        }
+        finishImport(outcome.first, outcome.second)
+    }
+
+    fun deviceCalendars(): List<DeviceCalendar> = DeviceCalendars.available(getApplication())
+
+    /** Copies a window of one phone calendar in, replacing whatever a previous run left. */
+    fun importDeviceCalendar(calendar: DeviceCalendar) = viewModelScope.launch {
+        val outcome = withContext(Dispatchers.IO) {
+            val events = DeviceCalendars.events(getApplication(), calendar.id)
+            if (events.isEmpty()) {
+                null to "Nothing in ${calendar.label} to import."
+            } else {
+                repo.importEvents(
+                    label = calendar.label,
+                    kind = CalendarEntity.KIND_DEVICE,
+                    sourceRef = calendar.id.toString(),
+                    events = events,
+                    reminderMinutes = repo.defaultReminderMinutes(),
+                ) to null
+            }
+        }
+        finishImport(outcome.first, outcome.second)
+    }
+
+    private suspend fun finishImport(result: ImportResult?, error: String?) {
+        if (result == null) {
+            _importStatus.value = error ?: "Nothing imported."
+            return
+        }
+        withContext(Dispatchers.IO) {
+            Reminders.rearmAll(getApplication(), result.entries.filter { it.epochDay >= NoteDates.today() })
+        }
+        refreshShowings()
+        _importStatus.value = buildString {
+            append(if (result.replaced) "Refreshed " else "Imported ")
+            append("${result.entries.size} event")
+            if (result.entries.size != 1) append("s")
+            append(" into ${result.calendar.label}.")
+        }
     }
 
     /* ---------------- settings ---------------- */
@@ -234,6 +382,16 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _mirrorEvents = MutableStateFlow(repo.mirrorToSystemCalendar())
     val mirrorEvents: StateFlow<Boolean> = _mirrorEvents.asStateFlow()
+
+    private val _defaultLead = MutableStateFlow(repo.defaultReminderMinutes())
+
+    /** Lead time a new timed entry is given, in minutes. Null is no reminder. */
+    val defaultLead: StateFlow<Int?> = _defaultLead.asStateFlow()
+
+    fun setDefaultLead(minutes: Int?) {
+        repo.setDefaultReminderMinutes(minutes)
+        _defaultLead.value = minutes
+    }
 
     fun setApiKey(key: String) {
         repo.setApiKey(key)
@@ -311,6 +469,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     fun commitEvents(events: List<ParsedEvent>, onDone: (Int, Boolean) -> Unit) =
         viewModelScope.launch {
             var mirrored = 0
+            val lead = repo.defaultReminderMinutes()
             events.forEach { event ->
                 val eventId = mirror(
                     event.title,
@@ -319,14 +478,16 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                     event.endMinutes,
                 )
                 if (eventId != null) mirrored++
-                repo.addDayEntry(
+                val entry = repo.addDayEntry(
                     epochDay = event.epochDay,
                     text = event.title,
                     startMinutes = event.startMinutes,
                     endMinutes = event.endMinutes,
                     fromPhoto = true,
                     systemEventId = eventId,
+                    reminderMinutes = lead,
                 )
+                Reminders.schedule(getApplication(), entry)
             }
             events.minByOrNull { it.epochDay }?.let { selectDay(it.epochDay) }
             clearCapture()

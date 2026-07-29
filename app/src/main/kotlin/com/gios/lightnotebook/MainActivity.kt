@@ -1,5 +1,6 @@
 package com.gios.lightnotebook
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -22,7 +24,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gios.lightnotebook.ai.ReadMode
+import com.gios.lightnotebook.notify.Notifier
+import com.gios.lightnotebook.ui.AgendaScreen
 import com.gios.lightnotebook.ui.CalendarScreen
+import com.gios.lightnotebook.ui.CalendarsScreen
 import com.gios.lightnotebook.ui.CameraScreen
 import com.gios.lightnotebook.ui.CaptureScreen
 import com.gios.lightnotebook.ui.DayScreen
@@ -39,14 +44,44 @@ import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightNotebookTheme
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * A day asked for from outside the app — a tapped reminder. Held in a flow rather than
+     * read straight off the intent so a second tap while the app is open still lands.
+     */
+    private val pendingDay = MutableStateFlow<Long?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingDay.value = dayIn(intent)
+    }
+
+    private fun dayIn(intent: Intent?): Long? =
+        intent?.getLongExtra(Notifier.EXTRA_EPOCH_DAY, 0L)?.takeIf { it != 0L }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Notifier.ensureChannel(this)
+        pendingDay.value = dayIn(intent)
         setContent {
             LightNotebookTheme {
                 val nav = rememberNavController()
                 val vm: NotebookViewModel = viewModel()
+
+                // A force-stop cancels every alarm an app owns and says nothing about it,
+                // so reminders are re-armed on the way in as well as after a reboot.
+                LaunchedEffect(Unit) { vm.rearmReminders() }
+
+                val requestedDay by pendingDay.collectAsStateWithLifecycle()
+                LaunchedEffect(requestedDay) {
+                    val day = requestedDay ?: return@LaunchedEffect
+                    nav.navigate("day/$day")
+                    pendingDay.value = null
+                }
 
                 Box(
                     Modifier
@@ -60,6 +95,7 @@ class MainActivity : ComponentActivity() {
                                 vm = vm,
                                 onOpenNote = { id -> nav.navigate("note/$id") },
                                 onOpenDay = { day -> nav.navigate("day/$day") },
+                                onOpenAgenda = { nav.navigate("agenda") },
                                 onSettings = { nav.navigate("settings") },
                                 onCamera = { mode ->
                                     vm.setReadMode(mode)
@@ -124,8 +160,19 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen(
                                 vm = vm,
                                 onScanQr = { nav.navigate("scan") },
+                                onCalendars = { nav.navigate("calendars") },
                                 onBack = { nav.popBackStack() },
                             )
+                        }
+                        composable("agenda") {
+                            AgendaScreen(
+                                vm = vm,
+                                onOpenDay = { day -> nav.navigate("day/$day") },
+                                onBack = { nav.popBackStack() },
+                            )
+                        }
+                        composable("calendars") {
+                            CalendarsScreen(vm = vm, onBack = { nav.popBackStack() })
                         }
                         composable("scan") {
                             KeyScanScreen(
@@ -153,6 +200,7 @@ private fun HomeShell(
     vm: NotebookViewModel,
     onOpenNote: (String) -> Unit,
     onOpenDay: (Long) -> Unit,
+    onOpenAgenda: () -> Unit,
     onSettings: () -> Unit,
     onCamera: (ReadMode) -> Unit,
 ) {
@@ -163,7 +211,11 @@ private fun HomeShell(
         Box(Modifier.weight(1f)) {
             when (tab) {
                 0 -> NotesScreen(vm = vm, onOpenNote = onOpenNote, onSettings = onSettings)
-                else -> CalendarScreen(vm = vm, onOpenDay = onOpenDay)
+                else -> CalendarScreen(
+                    vm = vm,
+                    onOpenDay = onOpenDay,
+                    onOpenAgenda = onOpenAgenda,
+                )
             }
         }
         LightRule()

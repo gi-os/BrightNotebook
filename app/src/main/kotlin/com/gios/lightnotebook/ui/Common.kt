@@ -258,6 +258,8 @@ fun LightNameSheet(
     title: String,
     initial: String,
     confirmLabel: String = "SAVE",
+    /** For fields where empty is a real answer — a blank time means all day. */
+    allowBlank: Boolean = false,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -281,7 +283,7 @@ fun LightNameSheet(
                 placeholder = "Name",
                 autoFocus = true,
                 modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
-                onDone = { if (text.isNotBlank()) onConfirm(text.trim()) },
+                onDone = { if (allowBlank || text.isNotBlank()) onConfirm(text.trim()) },
             )
             Row(
                 Modifier
@@ -297,7 +299,7 @@ fun LightNameSheet(
                 )
                 LightWideButton(
                     label = confirmLabel,
-                    enabled = text.isNotBlank(),
+                    enabled = allowBlank || text.isNotBlank(),
                     modifier = Modifier.weight(1f),
                     onClick = { onConfirm(text.trim()) },
                 )

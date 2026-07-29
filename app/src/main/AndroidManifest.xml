@@ -3,9 +3,25 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Parsed events are mirrored into the phone's own calendar when one exists. -->
+    <!-- Parsed events are mirrored into the phone's own calendar when one exists, and its
+         calendars can be imported. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+
+    <!-- Reminders. USE_EXACT_ALARM is granted at install and is exactly the calendar case
+         it exists for; SCHEDULE_EXACT_ALARM covers builds older than 33. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Alarms do not survive a reboot; this is what re-arms them. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Not for drawing over anything: on 14 this appop is what lets a reminder start the
+         alert activity from a broadcast and light the panel. Grant is adb-only on LightOS:
+         adb shell appops set com.gios.lightnotebook SYSTEM_ALERT_WINDOW allow -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
@@ -35,6 +51,7 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="Notebook"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.LightNotebook">
             <intent-filter>
@@ -42,5 +59,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The box a reminder puts on screen. showWhenLocked + turnScreenOn are what wake
+             the panel; an overlay window sits below the keyguard and cannot. -->
+        <activity
+            android:name=".ui.ReminderAlertActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.LightNotebook.Alert" />
+
+        <receiver
+            android:name=".notify.ReminderReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".notify.ReminderBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
