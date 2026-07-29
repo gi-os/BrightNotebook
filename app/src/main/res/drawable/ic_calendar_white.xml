@@ -1,0 +1,36 @@
+<!--
+  Calendar. LightOS's icon set has no calendar glyph, so this one is drawn to match it:
+  a 30-unit viewport, 2.6-unit strokes with round joins, and a solid band rather than a
+  grid of dots — at 26dp on the LPIII a dot grid turns to mush.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30.0dp"
+    android:height="30.0dp"
+    android:viewportWidth="30.0"
+    android:viewportHeight="30.0">
+    <!-- Body. -->
+    <path
+        android:pathData="M5,6 H25 A2.5,2.5 0 0 1 27.5,8.5 V25 A2.5,2.5 0 0 1 25,27.5 H5 A2.5,2.5 0 0 1 2.5,25 V8.5 A2.5,2.5 0 0 1 5,6 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Header band: the month row, filled so it still reads at a glance. -->
+    <path
+        android:pathData="M5,6 H25 A2.5,2.5 0 0 1 27.5,8.5 V12 H2.5 V8.5 A2.5,2.5 0 0 1 5,6 Z"
+        android:fillColor="#FFFFFFFF" />
+    <!-- The two rings at the top. -->
+    <path
+        android:pathData="M10,2.6 V7.5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M20,2.6 V7.5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+</vector>

@@ -3,11 +3,14 @@ package com.gios.lightnotebook.ui.theme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,6 +45,10 @@ sealed interface LightBarItem {
     data class Icon(
         val icon: LightIconSpec,
         val sizeUnits: Float = 2f,
+        /** Tab bars only: the destination you are on is lit and underscored. */
+        val active: Boolean = false,
+        /** Tab bars only: destinations you are not on recede. */
+        val lighten: Boolean = false,
         override val onClick: (() -> Unit)?,
     ) : LightBarItem
 }
@@ -144,11 +151,35 @@ private fun BarItemView(item: LightBarItem?, barHeight: Dp) {
             )
         }
 
-        is LightBarItem.Icon -> LightIcon(
-            icon = item.icon,
-            size = item.sizeUnits,
-            modifier = Modifier.let { m -> item.onClick?.let { m.lightClickable(onClick = it) } ?: m },
-        )
+        is LightBarItem.Icon -> Column(
+            modifier = Modifier
+                .let { m -> item.onClick?.let { m.lightClickable(onClick = it) } ?: m }
+                .height(barHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            LightIcon(
+                icon = item.icon,
+                size = item.sizeUnits,
+                tint = if (item.lighten && !item.active) {
+                    LightThemeTokens.colors.contentSecondary
+                } else {
+                    null
+                },
+            )
+            // An icon cannot be bracketed the way a label can, so the current destination
+            // gets a rule under it. On a matte greyscale panel a shade change alone is not
+            // enough to say where you are.
+            if (item.active) {
+                Spacer(Modifier.height(0.35f.verticalGridUnitsAsDp()))
+                Box(
+                    Modifier
+                        .width(item.sizeUnits.gridUnitsAsDp())
+                        .height(3f.designVerticalPxToDp())
+                        .background(LightThemeTokens.colors.content),
+                )
+            }
+        }
     }
 }
 

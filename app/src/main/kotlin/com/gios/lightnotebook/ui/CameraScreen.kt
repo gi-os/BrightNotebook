@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightBottomBar
+import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightText
 import com.gios.lightnotebook.ui.theme.LightTextVariant
@@ -63,7 +64,13 @@ fun CameraScreen(
         Column(Modifier.fillMaxSize()) {
             LightEmptyState("Notebook needs the camera to read a page.", Modifier.weight(1f))
             LightRule()
-            LightBottomBar(listOf(LightBarItem.Text("BACK", onClick = onCancel), null, null))
+            LightBottomBar(
+                listOf(
+                    LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.9f, onClick = onCancel),
+                    null,
+                    null,
+                ),
+            )
         }
         return
     }
@@ -111,9 +118,12 @@ fun CameraScreen(
         LightRule()
         LightBottomBar(
             items = listOf(
-                LightBarItem.Text("CANCEL", onClick = onCancel),
-                LightBarItem.Text(
-                    text = if (captured) "READING" else "CAPTURE",
+                LightBarItem.Icon(LightIcons.Close, sizeUnits = 1.9f, onClick = onCancel),
+                LightBarItem.Icon(
+                    icon = LightIcons.Camera,
+                    sizeUnits = 2.4f,
+                    // Dimmed once the shutter has gone, so a second tap is visibly a no-op.
+                    lighten = captured,
                     onClick = ::capture,
                 ),
                 null,

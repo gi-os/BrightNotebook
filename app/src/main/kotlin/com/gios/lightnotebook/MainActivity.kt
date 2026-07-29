@@ -35,6 +35,7 @@ import com.gios.lightnotebook.ui.NotesScreen
 import com.gios.lightnotebook.ui.SettingsScreen
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightBottomBar
+import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightNotebookTheme
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
@@ -166,11 +167,23 @@ private fun HomeShell(
             }
         }
         LightRule()
+        // Icons, not labels: three words at the Button variant's 15% tracking filled the
+        // bar edge to edge, and LightOS's own action bar is icons wherever a glyph exists.
         LightBottomBar(
             items = listOf(
-                LightBarItem.Text("NOTES", active = tab == 0, lighten = true) { tab = 0 },
-                LightBarItem.Text("ADD", lighten = true) { addSheet = true },
-                LightBarItem.Text("CALENDAR", active = tab == 1, lighten = true) { tab = 1 },
+                LightBarItem.Icon(
+                    icon = LightIcons.List,
+                    sizeUnits = 1.9f,
+                    active = tab == 0,
+                    lighten = true,
+                ) { tab = 0 },
+                LightBarItem.Icon(icon = LightIcons.Add, sizeUnits = 1.9f) { addSheet = true },
+                LightBarItem.Icon(
+                    icon = LightIcons.Calendar,
+                    sizeUnits = 1.9f,
+                    active = tab == 1,
+                    lighten = true,
+                ) { tab = 1 },
             ),
         )
     }

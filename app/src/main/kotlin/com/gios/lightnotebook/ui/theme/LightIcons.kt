@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import com.gios.lightnotebook.R
 
@@ -17,6 +18,7 @@ class LightIconSpec(val name: String, @DrawableRes val res: Int)
 
 object LightIcons {
     val Back = LightIconSpec("back", R.drawable.ic_back_white)
+    val Calendar = LightIconSpec("calendar", R.drawable.ic_calendar_white)
     val Forward = LightIconSpec("forward", R.drawable.ic_arrow_right_white)
     val Add = LightIconSpec("add", R.drawable.ic_add_white)
     val Camera = LightIconSpec("camera", R.drawable.ic_camera)
@@ -42,18 +44,23 @@ object LightIcons {
 
 private const val DEFAULT_SIZE_UNITS = 2f
 
-/** Icons are sized in grid units and always take the content colour, as in LightOS. */
+/**
+ * Icons are sized in grid units and take the content colour, as in LightOS. [tint] exists
+ * only for the one case the SDK doesn't have: a tab bar, where the destinations you are
+ * not on have to recede.
+ */
 @Composable
 fun LightIcon(
     icon: LightIconSpec,
     modifier: Modifier = Modifier,
     size: Float = DEFAULT_SIZE_UNITS,
+    tint: Color? = null,
     contentDescription: String? = icon.name,
 ) {
     Icon(
         painter = painterResource(icon.res),
         contentDescription = contentDescription?.takeIf { it.isNotBlank() },
-        tint = LightThemeTokens.colors.content,
+        tint = tint ?: LightThemeTokens.colors.content,
         modifier = modifier.size(size.gridUnitsAsDp()),
     )
 }

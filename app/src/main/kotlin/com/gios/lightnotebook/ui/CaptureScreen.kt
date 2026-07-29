@@ -80,7 +80,13 @@ private fun ReadingView(onCancel: () -> Unit) {
             }
         }
         LightRule()
-        LightBottomBar(listOf(LightBarItem.Text("CANCEL", onClick = onCancel), null, null))
+        LightBottomBar(
+            listOf(
+                LightBarItem.Icon(LightIcons.Close, sizeUnits = 1.9f, onClick = onCancel),
+                null,
+                null,
+            ),
+        )
     }
 }
 
@@ -249,8 +255,8 @@ private fun FailedView(message: String, onRetry: () -> Unit, onCancel: () -> Uni
         LightRule()
         LightBottomBar(
             items = listOf(
-                LightBarItem.Text("CANCEL", onClick = onCancel),
-                LightBarItem.Text("TRY AGAIN", onClick = onRetry),
+                LightBarItem.Icon(LightIcons.Close, sizeUnits = 1.9f, onClick = onCancel),
+                LightBarItem.Icon(LightIcons.Refresh, sizeUnits = 1.9f, onClick = onRetry),
                 null,
             ),
         )

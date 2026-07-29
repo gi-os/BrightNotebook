@@ -3,10 +3,12 @@
 A notes app and calendar for the **Light Phone III**, built in the LightOS design
 language. Launcher label: **Notebook**.
 
-Three buttons at the bottom, and that is the whole app:
+Three buttons at the bottom, and that is the whole app: a list, a plus, a calendar. The
+one you are on is lit and underscored; the others recede.
 
 ```
-[ NOTES ]        ADD        CALENDAR
+   ≡            +            ▤
+  ───
 ```
 
 ## Notes
@@ -25,8 +27,9 @@ Three buttons at the bottom, and that is the whole app:
 
 ## Calendar
 
-- A month at a time. Today is inverted, the open day is outlined, a day with anything on
-  it carries a dot.
+- A month at a time. The day you are looking at is inverted, today is outlined, and a day
+  with anything on it carries a dot — three different kinds of mark, so they stack on one
+  square without ambiguity.
 - Tap a day and type. `9:30 dentist` files itself at half past nine; `dentist` is an
   all-day line. That is the entire time picker.
 - Entries are also written to the phone's own calendar when there is a writable one

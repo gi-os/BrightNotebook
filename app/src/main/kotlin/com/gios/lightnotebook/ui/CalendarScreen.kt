@@ -124,8 +124,13 @@ fun CalendarScreen(
 }
 
 /**
- * One square. Today is inverted, the selected day is outlined, and a day with anything
- * written on it carries a dot — three states that all survive a greyscale matte panel.
+ * One square.
+ *
+ * The day you are looking at is **inverted** — a filled block with the number knocked out
+ * — because that is the one piece of state you need to find without hunting. Today is
+ * outlined instead: worth marking, but you already know what today is. A day with
+ * anything written on it carries a dot. All three read on a matte greyscale panel, and no
+ * two of them are the same kind of mark, so they can stack on the same square.
  */
 @Composable
 private fun DayCell(
@@ -137,14 +142,15 @@ private fun DayCell(
     onClick: () -> Unit,
 ) {
     val colors = LightThemeTokens.colors
+    val ink = if (isSelected) colors.background else colors.content
     Box(
         modifier
             .height(3.4f.verticalGridUnitsAsDp())
             .padding(0.1f.gridUnitsAsDp())
-            .background(if (isToday) colors.content else colors.background)
+            .background(if (isSelected) colors.content else colors.background)
             .border(
-                width = if (isSelected && !isToday) 1.dp else 0.dp,
-                color = if (isSelected && !isToday) colors.content else colors.background,
+                width = if (isToday && !isSelected) 1.dp else 0.dp,
+                color = if (isToday && !isSelected) colors.content else colors.background,
             )
             .let { if (epochDay != null) it.lightClickable(onClick = onClick) else it },
         contentAlignment = Alignment.Center,
@@ -157,7 +163,7 @@ private fun DayCell(
             LightText(
                 text = NoteDates.of(epochDay).dayOfMonth.toString(),
                 variant = LightTextVariant.Detail,
-                color = if (isToday) colors.background else colors.content,
+                color = ink,
             )
             Spacer(Modifier.height(0.15f.verticalGridUnitsAsDp()))
             Box(
@@ -165,14 +171,7 @@ private fun DayCell(
                 contentAlignment = Alignment.Center,
             ) {
                 if (entries > 0) {
-                    Box(
-                        Modifier
-                            .size(0.24f.gridUnitsAsDp())
-                            .background(
-                                if (isToday) colors.background else colors.content,
-                                CircleShape,
-                            ),
-                    )
+                    Box(Modifier.size(0.24f.gridUnitsAsDp()).background(ink, CircleShape))
                 }
             }
         }
