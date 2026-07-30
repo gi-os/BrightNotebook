@@ -204,6 +204,35 @@ object CanvasMath {
         return offsetX.coerceIn(viewportWidth - contentWidth, 0f)
     }
 
+    /* ---------- how much detail fits ---------- */
+
+    /**
+     * Detail is decided by how many days are across the screen, not by the zoom number.
+     *
+     * That is the thing a person is actually looking at, and it holds however wide the panel is:
+     * "I can see four days, so I should be able to read them" is a sentence about days across.
+     */
+    fun daysAcross(cellSpan: Float, viewportWidth: Float): Float =
+        if (cellSpan <= 0f) 7f else viewportWidth / cellSpan
+
+    /** Titles appear once a day is wide enough for a couple of words. */
+    fun showsEntries(daysAcross: Float): Boolean = daysAcross <= ENTRIES_FROM_DAYS_ACROSS
+
+    /**
+     * Times wait until closer in. At four days across a title uses the whole width, and
+     * prefixing "9:30" to it just eats the words that say what the thing is.
+     */
+    fun showsTimes(daysAcross: Float): Boolean = daysAcross <= TIMES_FROM_DAYS_ACROSS
+
+    /** How many lines of text a cell that tall can honestly show. */
+    fun linesFor(cellHeight: Float, lineHeight: Float): Int {
+        if (lineHeight <= 0f) return 0
+        return ((cellHeight * 0.62f) / lineHeight).toInt().coerceIn(0, 6)
+    }
+
+    private const val ENTRIES_FROM_DAYS_ACROSS = 5.2f
+    private const val TIMES_FROM_DAYS_ACROSS = 2.6f
+
     /* ---------- sliding between days, with a day filling the screen ---------- */
 
     /**

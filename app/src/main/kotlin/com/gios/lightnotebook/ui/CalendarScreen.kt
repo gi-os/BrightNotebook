@@ -62,7 +62,7 @@ fun CalendarScreen(
     val density = LocalDensity.current
     // The bars float over the planner, so the canvas needs their heights to know where the
     // clear band is. Measured rather than assumed: the bars are sized in grid units.
-    val topBarHeight = 3f.gridUnitsAsDp() + 1.4f.verticalGridUnitsAsDp()
+    val topBarHeight = 3f.gridUnitsAsDp()
 
     Box(modifier.fillMaxSize()) {
         var dayOpen by remember { mutableStateOf(false) }
@@ -117,27 +117,9 @@ fun CalendarScreen(
                         dayOpen = false
                     },
                 )
-                // The columns keep their meaning at every zoom, and this is the one thing that
-                // says which way is Wednesday once the numbers are the size of a thumbnail.
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = lightInset(),
-                            end = lightInset(),
-                            bottom = 0.3f.verticalGridUnitsAsDp(),
-                        ),
-                ) {
-                    NoteDates.weekdayInitials.forEach { initial ->
-                        LightText(
-                            text = initial,
-                            variant = LightTextVariant.Superfine,
-                            lighten = true,
-                            align = TextAlign.Center,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+                // The weekday letters are the canvas's own — drawn in the transform so they line
+                // up with the columns and grow with them, which a fixed seven-way Row cannot do
+                // once a single day is wider than the screen.
                 LightRule()
             }
 

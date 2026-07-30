@@ -146,6 +146,47 @@ class CanvasMathTest {
         assertEquals(cellW * 7f, cellSpan, 0.01f)
     }
 
+    /* ---------- level of detail ---------- */
+
+    @Test
+    fun daysAcrossIsTheThingDetailDependsOn() {
+        assertEquals(7f, CanvasMath.daysAcross(viewportW / 7f, viewportW), 0.01f)
+        assertEquals(4f, CanvasMath.daysAcross(viewportW / 4f, viewportW), 0.01f)
+        assertEquals(1f, CanvasMath.daysAcross(viewportW, viewportW), 0.01f)
+    }
+
+    @Test
+    fun fourDaysAcrossIsEnoughToReadWhatIsOn() {
+        assertTrue(CanvasMath.showsEntries(4f))
+        assertTrue(CanvasMath.showsEntries(5f))
+        // A whole month across is dots only.
+        assertFalse(CanvasMath.showsEntries(7f))
+    }
+
+    @Test
+    fun timesWaitUntilCloserIn() {
+        assertFalse(CanvasMath.showsTimes(4f))
+        assertTrue(CanvasMath.showsTimes(2.5f))
+        assertTrue(CanvasMath.showsTimes(1f))
+    }
+
+    @Test
+    fun timesNeverAppearBeforeTitlesDo() {
+        var across = 7f
+        while (across > 0.5f) {
+            if (CanvasMath.showsTimes(across)) assertTrue(CanvasMath.showsEntries(across))
+            across -= 0.1f
+        }
+    }
+
+    @Test
+    fun lineCountFollowsTheHeightAvailable() {
+        assertEquals(0, CanvasMath.linesFor(cellHeight = 10f, lineHeight = 20f))
+        assertEquals(3, CanvasMath.linesFor(cellHeight = 100f, lineHeight = 20f))
+        assertEquals(6, CanvasMath.linesFor(cellHeight = 1000f, lineHeight = 20f))
+        assertEquals(0, CanvasMath.linesFor(cellHeight = 100f, lineHeight = 0f))
+    }
+
     @Test
     fun theOpenColumnIsTheOffsetMeasuredInScreens() {
         val span = 420f

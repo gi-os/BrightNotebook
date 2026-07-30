@@ -37,6 +37,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightTextVariant
@@ -51,6 +52,7 @@ import com.gios.lightnotebook.util.ZoomLevel
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -114,6 +116,7 @@ fun CalendarCanvas(
     val dayNumberStyle = lightTextStyle(LightTextVariant.Detail)
     val entryStyle = lightTextStyle(LightTextVariant.Superfine)
     val monthStyle = lightTextStyle(LightTextVariant.Micro)
+    val weekdayStyle = lightTextStyle(LightTextVariant.Superfine)
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val viewportWidth = with(density) { maxWidth.toPx() }
@@ -123,12 +126,15 @@ fun CalendarCanvas(
         // what makes the home position look like the grid it replaces.
         val cellHeight = cellWidth
 
+        // The weekday letters are drawn by the canvas rather than laid out above it, so they
+        // track the columns and grow with them. That band is part of the top inset.
+        val headerHeight = with(density) { HEADER_DP.dp.toPx() }
         val home = remember(anchorDay, cellHeight, topInset, bottomInset, viewportHeight) {
             CanvasMath.homeOffset(
                 anchorDay = anchorDay,
                 cellHeight = cellHeight,
                 originWeekStart = originWeekStart,
-                topInset = topInset,
+                topInset = topInset + headerHeight,
                 bottomInset = bottomInset,
                 viewportHeight = viewportHeight,
             )
@@ -440,10 +446,15 @@ fun CalendarCanvas(
                     }
                 },
         ) {
-            val level = CanvasMath.levelFor(scale)
             val weeks = CanvasMath.visibleWeeks(offset.y, scale, viewportHeight, cellHeight)
             val cellW = cellWidth * scale
             val cellH = cellHeight * scale
+
+            // Detail follows how many days are across the screen, not the zoom number: four days
+            // across means four days you should be able to read.
+            val across = CanvasMath.daysAcross(cellW, viewportWidth)
+            val showEntries = CanvasMath.showsEntries(across)
+            val showTimes = CanvasMath.showsTimes(across)
 
             // The month the middle of the screen is in. Everything outside it is drawn down in
             // the secondary colour, so a wall planner that runs on forever still reads as
@@ -478,7 +489,8 @@ fun CalendarCanvas(
                         top = top,
                         width = cellW,
                         height = cellH,
-                        level = level,
+                        showEntries = showEntries,
+                        showTimes = showTimes,
                         scale = scale,
                         measurer = measurer,
                         dayNumberStyle = dayNumberStyle,
@@ -494,6 +506,44 @@ fun CalendarCanvas(
                     )
                 }
             }
+
+            // The weekday letters, over the top of the surface and lined up with the columns
+            // underneath — so at seven days across there are seven of them, and zoomed in there
+            // are two, wide apart, over the days they belong to.
+            drawRect(
+                color = colors.background.copy(alpha = HEADER_ALPHA),
+                topLeft = Offset(0f, topInset),
+                size = Size(viewportWidth, headerHeight),
+            )
+            val letterSize = (weekdayStyle.fontSize.value * (1f + (scale - 1f) * 0.35f))
+                .coerceIn(MIN_WEEKDAY_SP, MAX_WEEKDAY_SP)
+            val firstColumn = floor(-offset.x / cellW).toInt().coerceAtLeast(0)
+            val lastColumn = floor((viewportWidth - offset.x) / cellW).toInt().coerceAtMost(6)
+            for (column in firstColumn..lastColumn) {
+                val initial = NoteDates.weekdayInitials.getOrNull(column) ?: continue
+                val measured = measurer.measure(
+                    text = initial,
+                    style = weekdayStyle.copy(
+                        color = colors.contentSecondary,
+                        fontSize = letterSize.sp,
+                    ),
+                    maxLines = 1,
+                )
+                val centre = column * cellW + offset.x + cellW / 2f
+                drawText(
+                    textLayoutResult = measured,
+                    topLeft = Offset(
+                        x = centre - measured.size.width / 2f,
+                        y = topInset + (headerHeight - measured.size.height) / 2f,
+                    ),
+                )
+            }
+            drawLine(
+                color = colors.rule,
+                start = Offset(0f, topInset + headerHeight),
+                end = Offset(viewportWidth, topInset + headerHeight),
+                strokeWidth = 2f,
+            )
         }
 
         // The day, drawn as the cell it came out of.
@@ -555,9 +605,11 @@ private const val SLIDE_SETTLE_MS = 130
 /** How far sideways counts as turning the page rather than a stray drag. */
 private const val PAGE_FRACTION = 0.16f
 
-/** Below this cell width there is no room for words, whatever the zoom says. */
-private const val TEXT_MIN_CELL_PX = 150f
-private const val MAX_LINES_PER_CELL = 4
+/** The weekday letters' band, in dp. Part of the top inset, drawn over the surface. */
+private const val HEADER_DP = 18
+private const val HEADER_ALPHA = 0.82f
+private const val MIN_WEEKDAY_SP = 10f
+private const val MAX_WEEKDAY_SP = 22f
 
 private fun DrawScope.drawDay(
     day: Long,
@@ -568,7 +620,8 @@ private fun DrawScope.drawDay(
     top: Float,
     width: Float,
     height: Float,
-    level: ZoomLevel,
+    showEntries: Boolean,
+    showTimes: Boolean,
     scale: Float,
     measurer: TextMeasurer,
     dayNumberStyle: TextStyle,
@@ -581,7 +634,7 @@ private fun DrawScope.drawDay(
 ) {
     val date = LocalDate.ofEpochDay(day)
     val inset = width * 0.06f
-    val zoomedIn = level != ZoomLevel.Month
+    val zoomedIn = showEntries
 
     // Cell borders instead of a background: at any zoom the grid has to stay a grid. Zoomed
     // in they brighten, because once a cell is the size of a card the thing you need to see
@@ -620,7 +673,7 @@ private fun DrawScope.drawDay(
     )
     drawText(number, topLeft = Offset(left + inset, top + inset))
 
-    if (level == ZoomLevel.Month || width < TEXT_MIN_CELL_PX) {
+    if (!showEntries) {
         // Just a dot: something is written here.
         if (rows.isNotEmpty()) {
             drawCircle(
@@ -648,10 +701,13 @@ private fun DrawScope.drawDay(
     val available = top + height - inset
     val textSize = (entryStyle.fontSize.value * scale * 0.75f)
         .coerceIn(MIN_ENTRY_SP, MAX_ENTRY_SP)
+    val lines = CanvasMath.linesFor(cellHeight = height, lineHeight = textSize * 1.6f)
 
-    rows.take(MAX_LINES_PER_CELL).forEach { row ->
+    rows.take(lines).forEach { row ->
         if (y >= available) return@forEach
-        val clock = NoteDates.clock(row.minutes)
+        // The time is dropped until the cell is wide enough to carry it without eating the
+        // words that say what the thing actually is.
+        val clock = if (showTimes) NoteDates.clock(row.minutes) else null
         val line = listOfNotNull(clock, row.title).joinToString(" ")
         val measured = measurer.measure(
             text = line,
@@ -665,7 +721,7 @@ private fun DrawScope.drawDay(
         y += measured.size.height * 1.1f
     }
 
-    val hidden = rows.size - MAX_LINES_PER_CELL
+    val hidden = rows.size - lines
     if (hidden > 0 && y < available) {
         val more = measurer.measure(
             text = "+$hidden",
