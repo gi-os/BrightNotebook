@@ -34,6 +34,8 @@ data class NoteEntity(
     val body: String = "",
     val folderId: String? = null,
     val pinned: Boolean = false,
+    /** The photograph this was transcribed from, kept so the original can be read back. */
+    val imagePath: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )
@@ -83,6 +85,8 @@ data class DayEntryEntity(
     val reminderMinutes: Int? = null,
     /** The source's own identifier (ICS `UID`, or a device event id), for re-imports. */
     val sourceUid: String? = null,
+    /** The photograph this was read off, so a transcription can be checked against it. */
+    val imagePath: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {
@@ -110,6 +114,13 @@ interface NotebookDao {
 
     @Query("SELECT * FROM notes WHERE id = :id LIMIT 1")
     suspend fun getNote(id: String): NoteEntity?
+
+    // Used before deleting a capture: a photo may be shared by a note and several events.
+    @Query("SELECT COUNT(*) FROM notes WHERE imagePath = :path")
+    suspend fun countNotesWithImage(path: String): Int
+
+    @Query("SELECT COUNT(*) FROM day_entries WHERE imagePath = :path")
+    suspend fun countEntriesWithImage(path: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putNote(note: NoteEntity)
@@ -260,6 +271,19 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * Version 3 keeps the photograph a transcription came from.
+ *
+ * The capture used to be deleted the moment Claude had read it, which made a wrong
+ * transcription impossible to check. Both notes and day entries can now point at one.
+ */
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `notes` ADD COLUMN `imagePath` TEXT")
+        db.execSQL("ALTER TABLE `day_entries` ADD COLUMN `imagePath` TEXT")
+    }
+}
+
 @Database(
     entities = [
         NoteEntity::class,
@@ -267,7 +291,7 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
         DayEntryEntity::class,
         CalendarEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class NotebookDatabase : RoomDatabase() {
@@ -283,7 +307,7 @@ abstract class NotebookDatabase : RoomDatabase() {
                 NotebookDatabase::class.java,
                 "lightnotebook.db",
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 // Upgrades migrate; only a downgrade — installing an older APK over a
                 // newer database — starts over, and that is a choice the user made.
                 .fallbackToDestructiveMigrationOnDowngrade()

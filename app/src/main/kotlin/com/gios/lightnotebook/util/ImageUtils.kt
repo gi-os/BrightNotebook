@@ -27,11 +27,12 @@ object ImageUtils {
     }
 
     /**
-     * Cap the long edge. Handwriting needs more resolution than a receipt does — a
-     * month grid packs a lot of small words — but past about 2000px the extra pixels
-     * cost tokens and latency without making a single word more legible.
+     * Cap the long edge. Handwriting is the demanding case — a wall planner packs a lot of
+     * small biro into each square, and the difference between a 3 and an 8 is a few pixels —
+     * so this is deliberately higher than a printed receipt would need. Past this the extra
+     * pixels cost tokens and latency without making a single word more legible.
      */
-    fun downscaled(src: Bitmap, maxEdge: Int = 1800): Bitmap {
+    fun downscaled(src: Bitmap, maxEdge: Int = 2200): Bitmap {
         val longest = maxOf(src.width, src.height)
         if (longest <= maxEdge) return src
         val scale = maxEdge.toFloat() / longest

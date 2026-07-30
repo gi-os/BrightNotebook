@@ -59,7 +59,7 @@ fun CaptureScreen(
     when (val s = state) {
         is CaptureState.Idle, is CaptureState.Reading -> ReadingView(onCancel)
         is CaptureState.NoteRead -> NoteDestinationView(vm, s, onOpenNote, onCancel)
-        is CaptureState.EventsRead -> EventReviewView(vm, s.events, onOpenDay, onCancel)
+        is CaptureState.EventsRead -> EventReviewView(vm, s, onOpenDay, onCancel)
         is CaptureState.Failed -> FailedView(s.message, onRetry, onCancel)
     }
 }
@@ -150,7 +150,9 @@ private fun NoteDestinationView(
                     sub = read.title.ifBlank { NoteMarkdown.firstLine(read.body, 40) },
                     leading = LightIcons.Compose,
                     onClick = {
-                        vm.captureToNewNote(read.title, read.body) { id -> onOpenNote(id) }
+                        vm.captureToNewNote(read.title, read.body, read.imagePath) { id ->
+                            onOpenNote(id)
+                        }
                     },
                 )
                 LightRule()
@@ -162,7 +164,9 @@ private fun NoteDestinationView(
                         .ifBlank { "Untitled" },
                     sub = NoteMarkdown.preview(note.body, 60),
                     onClick = {
-                        vm.captureToExistingNote(note.id, read.body) { id -> onOpenNote(id) }
+                        vm.captureToExistingNote(note.id, read.body, read.imagePath) { id ->
+                            onOpenNote(id)
+                        }
                     },
                 )
                 LightRule()
@@ -179,13 +183,21 @@ private fun NoteDestinationView(
 @Composable
 private fun EventReviewView(
     vm: NotebookViewModel,
-    events: List<ParsedEvent>,
+    read: CaptureState.EventsRead,
     onOpenDay: (Long) -> Unit,
     onCancel: () -> Unit,
 ) {
     val context = LocalContext.current
     val mirror by vm.mirrorEvents.collectAsStateWithLifecycle()
-    var dropped by remember(events) { mutableStateOf(setOf<Int>()) }
+    // Editable, because a model reading biro gets a date or a time wrong often enough that
+    // "drop it and type it again" is the wrong only option.
+    var events by remember(read) { mutableStateOf(read.events) }
+    var dropped by remember(read) { mutableStateOf(setOf<Int>()) }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    var editingText by remember { mutableStateOf<Int?>(null) }
+    var editingDay by remember { mutableStateOf<Int?>(null) }
+    var editingTime by remember { mutableStateOf<Int?>(null) }
+    var showPhoto by remember { mutableStateOf(false) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
 
     // Ask for the calendar only once there is something to write into it.
@@ -208,6 +220,7 @@ private fun EventReviewView(
         LightTopBar(
             title = "${events.size} FOUND",
             left = LightBarItem.Icon(LightIcons.Close, sizeUnits = 1.6f, onClick = onCancel),
+            right = LightBarItem.Icon(LightIcons.Camera, sizeUnits = 1.6f) { showPhoto = true },
         )
         LightRule()
 
@@ -221,9 +234,10 @@ private fun EventReviewView(
                     detail = NoteDates.clock(event.startMinutes) ?: "All day",
                     trailing = if (on) LightIcons.SelectOn else LightIcons.SelectOff,
                     lighten = !on,
-                    onClick = {
-                        dropped = if (on) dropped + index else dropped - index
-                    },
+                    // Tap to correct it, long press to keep or drop it. Correcting is the common
+                    // case with handwriting, so it gets the tap.
+                    onClick = { editing = index },
+                    onLongClick = { dropped = if (on) dropped + index else dropped - index },
                 )
                 LightRule()
             }
@@ -253,9 +267,106 @@ private fun EventReviewView(
             ),
             onClick = {
                 val first = kept.minByOrNull { it.epochDay }?.epochDay
-                vm.commitEvents(kept) { _, _ -> if (first != null) onOpenDay(first) }
+                vm.commitEvents(kept, read.imagePath) { _, _ ->
+                    if (first != null) onOpenDay(first)
+                }
             },
         )
+    }
+
+    /* ---- corrections ---- */
+
+    editing?.let { index ->
+        val event = events.getOrNull(index)
+        if (event == null) {
+            editing = null
+            return@let
+        }
+        LightActionSheet(
+            heading = event.title.take(34).uppercase(),
+            onDismiss = { editing = null },
+        ) {
+            LightSheetAction("Edit the words", sub = event.title) {
+                editingText = index
+                editing = null
+            }
+            LightSheetAction("Change the day", sub = NoteDates.dayTitle(event.epochDay)) {
+                editingDay = index
+                editing = null
+            }
+            LightSheetAction(
+                label = "Change the time",
+                sub = NoteDates.clock(event.startMinutes) ?: "All day",
+            ) {
+                editingTime = index
+                editing = null
+            }
+            LightSheetAction("See the photo", sub = "Check it against the page") {
+                showPhoto = true
+                editing = null
+            }
+            LightSheetAction(
+                label = if (index in dropped) "Add this one after all" else "Don't add this one",
+            ) {
+                dropped = if (index in dropped) dropped - index else dropped + index
+                editing = null
+            }
+        }
+    }
+
+    editingText?.let { index ->
+        LightNameSheet(
+            title = "WHAT IT SAYS",
+            initial = events.getOrNull(index)?.title.orEmpty(),
+            onConfirm = { typed ->
+                events = events.mapIndexed { i, e ->
+                    if (i == index) e.copy(title = typed) else e
+                }
+                editingText = null
+            },
+            onDismiss = { editingText = null },
+        )
+    }
+
+    editingDay?.let { index ->
+        LightNameSheet(
+            title = "WHICH DAY · YYYY-MM-DD",
+            initial = events.getOrNull(index)?.epochDay?.let { NoteDates.isoDate(it) }.orEmpty(),
+            confirmLabel = "SET",
+            onConfirm = { typed ->
+                NoteDates.parseIsoDate(typed)?.let { day ->
+                    events = events.mapIndexed { i, e ->
+                        if (i == index) e.copy(epochDay = day) else e
+                    }
+                }
+                editingDay = null
+            },
+            onDismiss = { editingDay = null },
+        )
+    }
+
+    editingTime?.let { index ->
+        LightNameSheet(
+            title = "WHAT TIME · 9:30, 9PM, BLANK FOR ALL DAY",
+            initial = events.getOrNull(index)?.startMinutes
+                ?.let { NoteDates.clock(it) }
+                .orEmpty(),
+            confirmLabel = "SET",
+            allowBlank = true,
+            onConfirm = { typed ->
+                val minutes = NoteDates.parseClock(typed)
+                events = events.mapIndexed { i, e ->
+                    // An end time from a start that just moved would be a guess, so it goes.
+                    if (i == index) e.copy(startMinutes = minutes, endMinutes = null) else e
+                }
+                editingTime = null
+            },
+            onDismiss = { editingTime = null },
+        )
+    }
+
+    if (showPhoto) {
+        PhotoSheet(path = read.imagePath, onDismiss = { showPhoto = false })
     }
 }
 

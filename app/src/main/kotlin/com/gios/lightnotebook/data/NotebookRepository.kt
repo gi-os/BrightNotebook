@@ -77,14 +77,25 @@ class NotebookRepository(private val context: Context) {
 
     /* ---- capture files ---- */
 
-    /** Captures live in cache: once the model has read the page the pixels are litter. */
+    /**
+     * Captures are **kept**, in files rather than cache.
+     *
+     * They used to be deleted as soon as Claude had read them, which meant a transcription
+     * that got a word wrong could never be checked against the page it came from. A JPEG of a
+     * sheet of paper is a couple of hundred kilobytes; the answer to "was that a 3 or an 8" is
+     * worth more than that.
+     */
     fun newCaptureFile(): File {
-        val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+        val dir = File(context.filesDir, "captures").apply { mkdirs() }
         return File(dir, "capture-${System.currentTimeMillis()}.jpg")
     }
 
-    fun clearCaptures() {
-        File(context.cacheDir, "captures").listFiles()?.forEach { it.delete() }
+    /** Deletes a capture no row points at any more. */
+    suspend fun forgetCapture(path: String?) {
+        val target = path?.takeIf { it.isNotBlank() } ?: return
+        if (dao.countNotesWithImage(target) > 0) return
+        if (dao.countEntriesWithImage(target) > 0) return
+        runCatching { File(target).delete() }
     }
 
     /* ---- notes ---- */
@@ -102,6 +113,7 @@ class NotebookRepository(private val context: Context) {
         title: String = "",
         body: String = "",
         folderId: String? = null,
+        imagePath: String? = null,
     ): String {
         val id = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -111,6 +123,7 @@ class NotebookRepository(private val context: Context) {
                 title = title,
                 body = body,
                 folderId = folderId,
+                imagePath = imagePath,
                 createdAt = now,
                 updatedAt = now,
             ),
@@ -122,10 +135,18 @@ class NotebookRepository(private val context: Context) {
         dao.putNote(note.copy(updatedAt = System.currentTimeMillis()))
 
     /** Appends photographed text under whatever is already in the note. */
-    suspend fun appendToNote(id: String, text: String): Boolean {
+    suspend fun appendToNote(id: String, text: String, imagePath: String? = null): Boolean {
         val note = dao.getNote(id) ?: return false
         val joined = if (note.body.isBlank()) text else note.body.trimEnd() + "\n\n" + text
-        dao.putNote(note.copy(body = joined, updatedAt = System.currentTimeMillis()))
+        dao.putNote(
+            note.copy(
+                body = joined,
+                // The newest photograph wins: it is the one that produced the text at the
+                // bottom, which is the part somebody would want to check.
+                imagePath = imagePath ?: note.imagePath,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
         return true
     }
 
@@ -177,6 +198,7 @@ class NotebookRepository(private val context: Context) {
         fromPhoto: Boolean = false,
         systemEventId: Long? = null,
         reminderMinutes: Int? = null,
+        imagePath: String? = null,
     ): DayEntryEntity {
         val entry = DayEntryEntity(
             id = UUID.randomUUID().toString(),
@@ -186,6 +208,7 @@ class NotebookRepository(private val context: Context) {
             endMinutes = endMinutes,
             fromPhoto = fromPhoto,
             systemEventId = systemEventId,
+            imagePath = imagePath,
             // A reminder on something with no time has nothing to count back from.
             reminderMinutes = reminderMinutes?.takeIf { startMinutes != null },
         )

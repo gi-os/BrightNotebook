@@ -27,6 +27,7 @@ import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
+import com.gios.lightnotebook.util.NoteMarkdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -48,8 +49,18 @@ import java.time.YearMonth
 sealed interface CaptureState {
     data object Idle : CaptureState
     data object Reading : CaptureState
-    data class NoteRead(val title: String, val body: String) : CaptureState
-    data class EventsRead(val events: List<ParsedEvent>) : CaptureState
+    data class NoteRead(
+        val title: String,
+        val body: String,
+        val imagePath: String,
+    ) : CaptureState
+
+    /** Events as read, still editable — the model gets dates and times wrong sometimes. */
+    data class EventsRead(
+        val events: List<ParsedEvent>,
+        val imagePath: String,
+    ) : CaptureState
+
     data class Failed(val message: String) : CaptureState
 }
 
@@ -119,7 +130,12 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         repo.setFolder(noteId, folderId)
     }
 
-    fun deleteNote(id: String) = viewModelScope.launch { repo.deleteNote(id) }
+    fun deleteNote(id: String) = viewModelScope.launch {
+        val image = repo.getNote(id)?.imagePath
+        repo.deleteNote(id)
+        // The photograph goes only once nothing else points at it.
+        withContext(Dispatchers.IO) { repo.forgetCapture(image) }
+    }
 
     /* ---------------- folders ---------------- */
 
@@ -325,6 +341,40 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Moves an entry to another day — the correction a misread date needs. */
+    fun setEntryDay(entry: DayEntryEntity, epochDay: Long) = viewModelScope.launch {
+        val updated = repo.updateDayEntry(entry.copy(epochDay = epochDay))
+        Reminders.schedule(getApplication(), updated)
+        selectDay(epochDay)
+    }
+
+    /**
+     * Turns a note into an event on a day, leaving the note alone.
+     *
+     * The note keeps its photograph and the event borrows it, so a film title read off a
+     * ticket stub can still be checked from either side.
+     */
+    fun noteToEvent(
+        note: NoteEntity,
+        epochDay: Long,
+        startMinutes: Int?,
+        onDone: (Long) -> Unit,
+    ) = viewModelScope.launch {
+        val text = note.title.ifBlank { NoteMarkdown.firstLine(note.body) }.ifBlank { "Note" }
+        val eventId = mirror(text, epochDay, startMinutes, null)
+        val entry = repo.addDayEntry(
+            epochDay = epochDay,
+            text = text,
+            startMinutes = startMinutes,
+            systemEventId = eventId,
+            reminderMinutes = repo.defaultReminderMinutes(),
+            imagePath = note.imagePath,
+        )
+        Reminders.schedule(getApplication(), entry)
+        selectDay(epochDay)
+        onDone(epochDay)
+    }
+
     fun setEntryTime(entry: DayEntryEntity, startMinutes: Int?) = viewModelScope.launch {
         val updated = repo.updateDayEntry(
             entry.copy(
@@ -348,6 +398,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         }
         Reminders.cancel(getApplication(), entry.id)
         repo.deleteDayEntry(entry.id)
+        withContext(Dispatchers.IO) { repo.forgetCapture(entry.imagePath) }
     }
 
     /**
@@ -528,11 +579,16 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 ImageUtils.prepareForUpload(file)
                 VisionParser.read(file, key, mode)
             }
-            file.delete()
+            // The photograph is kept, not deleted: whatever it produced can be checked against
+            // it later, which is the only way to settle a misread word.
+            val path = file.absolutePath
             _capture.value = when (result) {
-                is Vision.Note -> CaptureState.NoteRead(result.title, result.body)
-                is Vision.Events -> CaptureState.EventsRead(result.events)
-                is Vision.Failed -> CaptureState.Failed(result.reason)
+                is Vision.Note -> CaptureState.NoteRead(result.title, result.body, path)
+                is Vision.Events -> CaptureState.EventsRead(result.events, path)
+                is Vision.Failed -> {
+                    withContext(Dispatchers.IO) { file.delete() }
+                    CaptureState.Failed(result.reason)
+                }
             }
         }
     }
@@ -542,31 +598,44 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         pendingMode = ReadMode.AUTO
     }
 
-    /** Photographed page becomes a new note. */
-    fun captureToNewNote(title: String, body: String, onCreated: (String) -> Unit) =
-        viewModelScope.launch {
-            val id = repo.createNote(
-                title = title,
-                body = body,
-                folderId = _folderFilter.value,
-            )
-            clearCapture()
-            onCreated(id)
-        }
+    /** Photographed page becomes a new note, carrying the photograph with it. */
+    fun captureToNewNote(
+        title: String,
+        body: String,
+        imagePath: String?,
+        onCreated: (String) -> Unit,
+    ) = viewModelScope.launch {
+        val id = repo.createNote(
+            title = title,
+            body = body,
+            folderId = _folderFilter.value,
+            imagePath = imagePath,
+        )
+        clearCapture()
+        onCreated(id)
+    }
 
     /** Photographed page is appended to the bottom of an existing note. */
-    fun captureToExistingNote(noteId: String, body: String, onDone: (String) -> Unit) =
-        viewModelScope.launch {
-            repo.appendToNote(noteId, body)
-            clearCapture()
-            onDone(noteId)
-        }
+    fun captureToExistingNote(
+        noteId: String,
+        body: String,
+        imagePath: String?,
+        onDone: (String) -> Unit,
+    ) = viewModelScope.launch {
+        repo.appendToNote(noteId, body, imagePath)
+        clearCapture()
+        onDone(noteId)
+    }
 
     /**
      * Commits the events the user kept. Each one becomes a day entry, and — unless the
      * mirror is switched off — a real event in the phone's calendar as well.
      */
-    fun commitEvents(events: List<ParsedEvent>, onDone: (Int, Boolean) -> Unit) =
+    fun commitEvents(
+        events: List<ParsedEvent>,
+        imagePath: String?,
+        onDone: (Int, Boolean) -> Unit,
+    ) =
         viewModelScope.launch {
             var mirrored = 0
             val lead = repo.defaultReminderMinutes()
@@ -586,6 +655,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                     fromPhoto = true,
                     systemEventId = eventId,
                     reminderMinutes = lead,
+                    imagePath = imagePath,
                 )
                 Reminders.schedule(getApplication(), entry)
             }

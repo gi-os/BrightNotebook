@@ -95,11 +95,28 @@ object VisionParser {
             - Where the page has a bulleted list, start those lines with "- ".
             - Where the page has a numbered list, start those lines with "1. ", "2. " and so on.
             - Where words are underlined, circled or clearly emphasised, wrap them in **like this**.
-            - Use [?] for a word you cannot make out. Never guess at it.
             - title is your own short summary, or the heading if the page has one.
 
+            This is usually handwriting, so:
+            - Read it as handwriting first. Cursive, print and a mix of both are all normal, and
+              so are letters that join or break in the middle of a word.
+            - Use the rest of the line, and the rest of the page, to settle an ambiguous letter.
+              Handwriting is only legible in context: the same mark is an 'a' in one word and an
+              'o' in another, and a word you have already read elsewhere on the page is the best
+              evidence for what this one says.
+            - Keep the writer's own spelling, abbreviations and shorthand — "w/", "Tues", "&",
+              "appt". Do not expand or tidy them.
+            - Faint pencil, biro that skips, and writing over ruled or squared lines are all
+              still readable. Try before giving up on a word.
+            - Crossed-out words are not part of the text. Skip them.
+            - Words squeezed in above a line, or in a margin with an arrow, belong where the
+              writer pointed them.
+            - Use [?] for a word you genuinely cannot make out, and only then. One [?] per
+              unreadable word, not per line. Never invent a plausible word to fill a gap.
+
             Calendar rules:
-            - One entry per dated thing written on the page.
+            - One entry per dated thing written on the page, handwriting included: a wall
+              planner is mostly biro, and a day's square may hold two or three scrawled lines.
             - date must be YYYY-MM-DD. If the page shows a month and year, use them.
               If it shows only a day number, use the month and year visible elsewhere on
               the page. If nothing on the page gives a year, pick the occurrence nearest

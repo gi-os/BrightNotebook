@@ -105,6 +105,8 @@ fun DayPane(
     var actionsFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var remindingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var timingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    var movingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    var photoFor by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
     WheelScroll(listState)
@@ -237,6 +239,16 @@ fun DayPane(
                 timingFor = entry
                 actionsFor = null
             }
+            LightSheetAction(label = "Day", sub = NoteDates.dayTitle(entry.epochDay)) {
+                movingFor = entry
+                actionsFor = null
+            }
+            if (entry.imagePath != null) {
+                LightSheetAction("See the photo", sub = "The page this was read off") {
+                    photoFor = entry.imagePath
+                    actionsFor = null
+                }
+            }
             if (!entry.isImported) {
                 LightSheetAction("Edit text") {
                     editing = entry
@@ -313,5 +325,22 @@ fun DayPane(
             },
             onDismiss = { editing = null },
         )
+    }
+
+    movingFor?.let { entry ->
+        LightNameSheet(
+            title = "WHICH DAY · YYYY-MM-DD",
+            initial = NoteDates.isoDate(entry.epochDay),
+            confirmLabel = "MOVE",
+            onConfirm = { typed ->
+                NoteDates.parseIsoDate(typed)?.let { vm.setEntryDay(entry, it) }
+                movingFor = null
+            },
+            onDismiss = { movingFor = null },
+        )
+    }
+
+    if (photoFor != null) {
+        PhotoSheet(path = photoFor, onDismiss = { photoFor = null })
     }
 }

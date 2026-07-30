@@ -30,6 +30,7 @@ import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.lightTextStyle
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.Edit
+import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.NoteMarkdown
 
 /**
@@ -51,6 +52,10 @@ fun NoteEditorScreen(
     var loaded by remember(noteId) { mutableStateOf(false) }
     var showActions by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf(false) }
+    var makingEvent by remember { mutableStateOf(false) }
+    var pickingDate by remember { mutableStateOf(false) }
+    var eventDay by remember { mutableStateOf<Long?>(null) }
+    var showPhoto by remember { mutableStateOf(false) }
 
     // Load once. Re-syncing from the database on every emission would fight the cursor.
     val current = note
@@ -187,6 +192,19 @@ fun NoteEditorScreen(
                     moving = true
                     showActions = false
                 }
+                LightSheetAction(
+                    label = "Put it on the calendar",
+                    sub = "Keeps the note as well",
+                ) {
+                    makingEvent = true
+                    showActions = false
+                }
+                if (n.imagePath != null) {
+                    LightSheetAction("See the photo", sub = "The page this was read off") {
+                        showPhoto = true
+                        showActions = false
+                    }
+                }
                 LightSheetAction("Delete note") {
                     vm.deleteNote(n.id)
                     showActions = false
@@ -194,6 +212,59 @@ fun NoteEditorScreen(
                 }
             }
         }
+    }
+
+    // Turning a note into an event is two questions — which day, then what time — because a
+    // note does not carry either, and guessing at them would be worse than asking.
+    if (makingEvent) {
+        LightActionSheet(heading = "WHICH DAY", onDismiss = { makingEvent = false }) {
+            LightSheetAction("Today") {
+                eventDay = NoteDates.today()
+                makingEvent = false
+            }
+            LightSheetAction("Tomorrow") {
+                eventDay = NoteDates.today() + 1
+                makingEvent = false
+            }
+            LightSheetAction("Another day", sub = "Type the date") {
+                pickingDate = true
+                makingEvent = false
+            }
+        }
+    }
+
+    if (pickingDate) {
+        LightNameSheet(
+            title = "WHICH DAY · YYYY-MM-DD",
+            initial = NoteDates.isoDate(NoteDates.today()),
+            confirmLabel = "NEXT",
+            onConfirm = { typed ->
+                eventDay = NoteDates.parseIsoDate(typed)
+                pickingDate = false
+            },
+            onDismiss = { pickingDate = false },
+        )
+    }
+
+    eventDay?.let { day ->
+        val n = note
+        LightNameSheet(
+            title = "WHAT TIME · BLANK FOR ALL DAY",
+            initial = "",
+            confirmLabel = "ADD",
+            allowBlank = true,
+            onConfirm = { typed ->
+                if (n != null) {
+                    vm.noteToEvent(n, day, NoteDates.parseClock(typed)) { }
+                }
+                eventDay = null
+            },
+            onDismiss = { eventDay = null },
+        )
+    }
+
+    if (showPhoto) {
+        PhotoSheet(path = note?.imagePath, onDismiss = { showPhoto = false })
     }
 
     if (moving) {

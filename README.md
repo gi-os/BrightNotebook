@@ -97,6 +97,22 @@ importing other calendars — works with none.
   (`3 loads of laundry` is not an appointment at three).
 - Photographing from the CALENDAR tab tells the model to expect dates; from NOTES it
   decides for itself between transcription and event extraction.
+- **The photograph is kept.** It used to be deleted the moment Claude had read it, which
+  made a misread word impossible to settle. Any note or event that came from the camera
+  can show the page it was read off — from its actions sheet, or the camera icon while
+  reviewing what was found. The file is deleted only when nothing points at it any more.
+- Parsed events are editable before they land: tap one to fix what it says, which day it
+  is on, or what time. Long-press keeps or drops it. A model reading biro gets one of
+  those wrong often enough that "drop it and retype it" is the wrong only option.
+- A day entry can be moved to another day after the fact, and a note can become an event
+  from MORE → *Put it on the calendar*, which asks for a day and a time and leaves the
+  note where it is.
+- The vision prompt is written for handwriting first: cursive, print and a mix; the
+  writer's own abbreviations kept as written; crossed-out words skipped; margin
+  insertions placed where the arrow points; and `[?]` only for a word that genuinely
+  cannot be read, never a plausible guess. Captures are sent at a higher resolution than
+  a printed page would need, because the difference between a 3 and an 8 in biro is a
+  few pixels.
 
 ## Build and test
 
