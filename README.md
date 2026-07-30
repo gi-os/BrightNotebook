@@ -32,12 +32,15 @@ It is one endless wall planner rather than a page of months: seven columns, week
 downwards, **pinch to zoom and drag to go anywhere in time**.
 
 - Three stops, snapped to on release. **Month** — numbers and a dot, the floor and the home
-  position. **Week** — each day large enough to read what is on it. Keep going and it hands
-  over to the **day screen**, which is a real screen: locked to that one day, swipe left and
-  right between days, pinch out to come back to the planner.
-- Zooming into a day is continuous: the cell grows until it fills the screen and the day
-  screen scales in out of it, so the gesture carries through the screen change rather than
-  cutting. Coming back reverses it.
+  position. **Week** — each day large enough to read what is on it. Keep going and the day
+  opens.
+- **The cell becomes the day.** There is no second screen and no navigation: the day view is
+  composed into the square you were pinching and grown out of it by a layer transform, so at
+  the end of the gesture the rectangle you were looking at *is* the day. Pinch out and it
+  shrinks back into its square.
+- In a day: slide sideways for the day either side, pinch out to leave. The sideways slide is
+  arbitrated in the pointer input's initial pass, which is what makes it work at all — a
+  scrolling list claims the drag first otherwise.
 - Let go near home and it springs exactly back to it, eased rather than linear. TODAY does the
   same from anywhere, and frames the week so it never lands behind the NEXT UP footer.
 - Double-tap zooms in a stop about the point you tapped. At the month stop, where the seven

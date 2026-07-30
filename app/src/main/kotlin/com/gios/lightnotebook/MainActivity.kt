@@ -240,9 +240,9 @@ private fun HomeShell(
                     ),
                 )
 
+                // No onOpenDay: a day is opened by the cell itself growing into one, in place.
                 else -> CalendarScreen(
                     vm = vm,
-                    onOpenDay = onOpenDay,
                     onOpenAgenda = onOpenAgenda,
                     onSwipePage = { direction -> if (direction < 0) tab = 0 },
                 )

@@ -8,8 +8,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -24,6 +25,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 
 /**
  * The Light Phone III design language, ported from `lightphone/light-sdk` (MIT licence,
@@ -298,29 +301,80 @@ fun Modifier.lightHorizontalSwipe(
 
 private const val SWIPE_THRESHOLD_DP = 48
 
+/** How far a pinch has to close before it counts as backing out of something. */
+private const val PINCH_OUT_RATIO = 0.75f
+
 /**
- * A pinch inwards, for backing out of a screen you zoomed into. The counterpart of the
- * planner's zoom-in: whatever gesture took you somewhere should take you back.
+ * The day view's gestures: slide sideways for the next or previous day, pinch out to leave.
+ *
+ * Written against [PointerEventPass.Initial] and arbitrating by hand, which is the point.
+ * A `detectHorizontalDragGestures` on the same node as a scrolling list loses: the list sees
+ * the drag first on the main pass and claims it, so sideways swipes did nothing. Here the
+ * direction is decided once per gesture — past the slop, whichever axis is winning takes the
+ * whole gesture — and a horizontal decision is consumed before the list ever sees it, while a
+ * vertical one is left entirely alone so scrolling still feels native.
  */
-fun Modifier.lightPinchOut(onPinchOut: () -> Unit): Modifier = composed {
+fun Modifier.lightDayGestures(
+    onPrevDay: () -> Unit,
+    onNextDay: () -> Unit,
+    onPinchOut: () -> Unit,
+): Modifier = composed {
+    val density = LocalDensity.current
+    val slop = with(density) { DAY_SLOP_DP.dp.toPx() }
+    val threshold = with(density) { DAY_SWIPE_DP.dp.toPx() }
+
     pointerInput(Unit) {
-        var zoom = 1f
-        var fired = false
-        detectTransformGestures(panZoomLock = false) { _, _, zoomChange, _ ->
-            zoom *= zoomChange
-            if (!fired && zoom < PINCH_OUT_RATIO) {
-                fired = true
-                onPinchOut()
-            }
-            if (zoomChange == 1f && zoom > 1f) {
-                // A drag with no pinch: reset, so a long scroll cannot accumulate into one.
-                zoom = 1f
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            var dx = 0f
+            var dy = 0f
+            var zoom = 1f
+            var axis = Axis.Undecided
+            var fired = false
+
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.changes.none { it.pressed }) break
+
+                val pan = event.calculatePan()
+                dx += pan.x
+                dy += pan.y
+
+                if (event.changes.count { it.pressed } >= 2) {
+                    zoom *= event.calculateZoom()
+                    if (!fired && zoom < PINCH_OUT_RATIO) {
+                        fired = true
+                        onPinchOut()
+                    }
+                    event.changes.forEach { it.consume() }
+                    continue
+                }
+
+                if (axis == Axis.Undecided) {
+                    axis = when {
+                        abs(dx) > slop && abs(dx) > abs(dy) * DAY_AXIS_BIAS -> Axis.Horizontal
+                        abs(dy) > slop -> Axis.Vertical
+                        else -> Axis.Undecided
+                    }
+                }
+
+                if (axis == Axis.Horizontal) {
+                    event.changes.forEach { it.consume() }
+                    if (!fired && abs(dx) > threshold) {
+                        fired = true
+                        if (dx < 0f) onNextDay() else onPrevDay()
+                    }
+                }
             }
         }
     }
 }
 
-private const val PINCH_OUT_RATIO = 0.75f
+private enum class Axis { Undecided, Horizontal, Vertical }
+
+private const val DAY_SLOP_DP = 12
+private const val DAY_SWIPE_DP = 56
+private const val DAY_AXIS_BIAS = 1.3f
 
 /**
  * Same, with a long press. Long press is where a note's own actions live — pin, move,

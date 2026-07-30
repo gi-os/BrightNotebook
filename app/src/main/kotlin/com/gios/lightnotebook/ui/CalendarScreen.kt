@@ -41,7 +41,6 @@ import com.gios.lightnotebook.util.NoteDates
 @Composable
 fun CalendarScreen(
     vm: NotebookViewModel,
-    onOpenDay: (Long) -> Unit,
     onOpenAgenda: () -> Unit,
     onSwipePage: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -66,11 +65,28 @@ fun CalendarScreen(
     val footerHeight = 4.6f.verticalGridUnitsAsDp()
 
     Box(modifier.fillMaxSize()) {
+        var dayOpen by remember { mutableStateOf(false) }
+
         CalendarCanvas(
             rows = rows,
             today = today,
             anchorDay = anchor,
-            onOpenDay = onOpenDay,
+            selectedDay = anchor,
+            // Opening a day is no longer navigation — the cell becomes the day in place, so all
+            // that changes is which day the view model has selected.
+            onOpenDay = { day ->
+                dayOpen = true
+                vm.selectDay(day)
+            },
+            dayPane = { _, close ->
+                DayPane(
+                    vm = vm,
+                    onClose = {
+                        dayOpen = false
+                        close()
+                    },
+                )
+            },
             onWindowChanged = { from, to -> vm.setCanvasWindow(from, to) },
             onFocusDayChanged = { focusDay = it },
             topInset = with(density) { topBarHeight.toPx() },
@@ -81,66 +97,73 @@ fun CalendarScreen(
 
         // Over the top, not above it: the planner slides underneath, which is what makes the
         // surface feel like it carries on past the chrome. Translucent rather than solid so
-        // you can see it doing it.
-        Column(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .background(LightThemeTokens.colors.background.copy(alpha = BAR_ALPHA)),
-        ) {
-            LightTopBar(
-                title = NoteDates.monthTitle(NoteDates.monthOf(focusDay)),
-                left = LightBarItem.Icon(LightIcons.List, sizeUnits = 1.6f, onClick = onOpenAgenda),
-                // The canvas takes its home from the selected day, so this springs it back.
-                right = LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() }),
-            )
-            // The columns keep their meaning at every zoom, and this is the one thing that
-            // says which way is Wednesday once the numbers are the size of a thumbnail.
-            Row(
+        // you can see it doing it. Gone entirely once a day has grown out of the surface —
+        // the day carries its own header, and this one would sit on top of it.
+        if (!dayOpen) {
+            Column(
                 Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .padding(
-                        start = lightInset(),
-                        end = lightInset(),
-                        bottom = 0.3f.verticalGridUnitsAsDp(),
-                    ),
+                    .background(LightThemeTokens.colors.background.copy(alpha = BAR_ALPHA)),
             ) {
-                NoteDates.weekdayInitials.forEach { initial ->
+                LightTopBar(
+                    title = NoteDates.monthTitle(NoteDates.monthOf(focusDay)),
+                    left = LightBarItem.Icon(
+                        icon = LightIcons.List,
+                        sizeUnits = 1.6f,
+                        onClick = onOpenAgenda,
+                    ),
+                    // The canvas takes its home from the selected day, so this springs it back.
+                    right = LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() }),
+                )
+                // The columns keep their meaning at every zoom, and this is the one thing that
+                // says which way is Wednesday once the numbers are the size of a thumbnail.
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = lightInset(),
+                            end = lightInset(),
+                            bottom = 0.3f.verticalGridUnitsAsDp(),
+                        ),
+                ) {
+                    NoteDates.weekdayInitials.forEach { initial ->
+                        LightText(
+                            text = initial,
+                            variant = LightTextVariant.Superfine,
+                            lighten = true,
+                            align = TextAlign.Center,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                LightRule()
+            }
+
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(LightThemeTokens.colors.background.copy(alpha = BAR_ALPHA))
+                    .padding(horizontal = lightInset(), vertical = 0.6f.verticalGridUnitsAsDp()),
+                verticalArrangement = Arrangement.spacedBy(0.4f.verticalGridUnitsAsDp()),
+            ) {
+                LightWideButton(
+                    label = "NEXT UP",
+                    filled = anythingAhead,
+                    onClick = onOpenAgenda,
+                )
+                if (next != null) {
+                    // One line of what is actually next, so the button is not a mystery box.
                     LightText(
-                        text = initial,
-                        variant = LightTextVariant.Superfine,
+                        text = listOfNotNull(NoteDates.clock(next.startMinutes), next.text)
+                            .joinToString(" · "),
+                        variant = LightTextVariant.Detail,
                         lighten = true,
-                        align = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-            }
-            LightRule()
-        }
-
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(LightThemeTokens.colors.background.copy(alpha = BAR_ALPHA))
-                .padding(horizontal = lightInset(), vertical = 0.6f.verticalGridUnitsAsDp()),
-            verticalArrangement = Arrangement.spacedBy(0.4f.verticalGridUnitsAsDp()),
-        ) {
-            LightWideButton(
-                label = "NEXT UP",
-                filled = anythingAhead,
-                onClick = onOpenAgenda,
-            )
-            if (next != null) {
-                // One line of what is actually next, so the button is not a mystery box.
-                LightText(
-                    text = listOfNotNull(NoteDates.clock(next.startMinutes), next.text)
-                        .joinToString(" · "),
-                    variant = LightTextVariant.Detail,
-                    lighten = true,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
         }
     }

@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,12 +29,12 @@ import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightText
 import com.gios.lightnotebook.ui.theme.LightTextVariant
+import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.LightTopBar
 import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.lightClickable
-import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
+import com.gios.lightnotebook.ui.theme.lightDayGestures
 import com.gios.lightnotebook.ui.theme.lightInset
-import com.gios.lightnotebook.ui.theme.lightPinchOut
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.NoteDates
 
@@ -47,8 +48,24 @@ fun DayScreen(
     vm: NotebookViewModel,
     onBack: () -> Unit,
 ) {
-    // The open day comes from the view model, not from the route: swiping moves it, and
-    // pushing a new screen on the stack for every day you flick past would be absurd.
+    DayPane(vm = vm, onClose = onBack)
+}
+
+/**
+ * The day itself, as a pane rather than a screen.
+ *
+ * The same composable serves two callers: the route a tapped reminder opens, and the
+ * zoomed-in cell on the planner, where it is drawn *into the cell* and grown to fill the
+ * screen. That is why it takes no bar of its own beyond a header — it may be a cell one
+ * moment and the whole display the next.
+ */
+@Composable
+fun DayPane(
+    vm: NotebookViewModel,
+    onClose: () -> Unit,
+) {
+    // The open day comes from the view model, not from a route argument: sliding moves it, and
+    // pushing a screen on the stack for every day you flick past would be absurd.
     val epochDay by vm.selectedDay.collectAsStateWithLifecycle()
     val rows by vm.dayRows.collectAsStateWithLifecycle()
     var draft by remember(epochDay) { mutableStateOf("") }
@@ -79,26 +96,31 @@ fun DayScreen(
         draft = ""
     }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(LightThemeTokens.colors.background)
+            .imePadding()
+            // Sideways for the day either side, pinch out to leave. Arbitrated in the initial
+            // pass so the list underneath keeps its vertical scroll — see lightDayGestures.
+            .lightDayGestures(
+                onPrevDay = { vm.stepDay(-1) },
+                onNextDay = { vm.stepDay(1) },
+                onPinchOut = onClose,
+            ),
+    ) {
         LightTopBar(
             title = NoteDates.dayTitle(epochDay),
-            left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onBack),
+            left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onClose),
             right = if (epochDay != NoteDates.today()) {
-                LightBarItem.Text("TODAY", onClick = { vm.jumpToToday(); onBack() })
+                LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() })
             } else {
                 null
             },
         )
         LightRule()
 
-        // Swipe left for tomorrow, right for yesterday — a paper diary is a stack of days,
-        // and going back to the grid to move one square along was a chore.
-        val body = Modifier
-            .weight(1f)
-            .fillMaxWidth()
-            .lightHorizontalSwipe(onLeft = { vm.stepDay(1) }, onRight = { vm.stepDay(-1) })
-            // Pinching out is how you got here in reverse, so it takes you back to the planner.
-            .lightPinchOut(onPinchOut = onBack)
+        val body = Modifier.weight(1f).fillMaxWidth()
 
         if (rows.isEmpty()) {
             LightEmptyState("Nothing on this day yet.", body)
