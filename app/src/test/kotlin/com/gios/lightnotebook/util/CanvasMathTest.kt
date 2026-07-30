@@ -177,6 +177,37 @@ class CanvasMathTest {
     }
 
     @Test
+    fun homeKeepsTheAnchorWeekClearOfTheFooter() {
+        // A day late in a long month: framing from the 1st would put its week off the bottom.
+        val lateInMonth = LocalDate.of(2026, 8, 29).toEpochDay()
+        val footer = 200f
+        val home = CanvasMath.homeOffset(
+            anchorDay = lateInMonth,
+            cellHeight = cellH,
+            originWeekStart = origin,
+            topInset = 0f,
+            bottomInset = footer,
+            viewportHeight = 500f,
+        )
+        val weekTop = CanvasMath.weekIndexOf(lateInMonth, origin) * cellH + home.y
+        assertTrue("week starts above the footer", weekTop + cellH <= 500f - footer + 0.01f)
+    }
+
+    @Test
+    fun homeStillFramesTheMonthWhenItFits() {
+        val plain = CanvasMath.homeOffset(wednesday, cellH, origin)
+        val withRoom = CanvasMath.homeOffset(
+            anchorDay = wednesday,
+            cellHeight = cellH,
+            originWeekStart = origin,
+            topInset = 0f,
+            bottomInset = 100f,
+            viewportHeight = 2000f,
+        )
+        assertEquals(plain.y, withRoom.y, 0.01f)
+    }
+
+    @Test
     fun nearHomeIsForgivingButNotBlind() {
         val home = Pt(0f, 80f)
         assertTrue(CanvasMath.isNearHome(1f, home, home, cellW))

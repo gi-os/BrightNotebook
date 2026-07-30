@@ -1,6 +1,7 @@
 package com.gios.lightnotebook.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -42,7 +43,9 @@ import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Pt
 import com.gios.lightnotebook.util.ZoomLevel
 import java.time.LocalDate
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -67,6 +70,12 @@ fun CalendarCanvas(
     onOpenDay: (Long) -> Unit,
     onWindowChanged: (Long, Long) -> Unit,
     onFocusDayChanged: (Long) -> Unit,
+    /** Height of the bar floating over the canvas, so home starts clear of it. */
+    topInset: Float = 0f,
+    /** Height of the footer under it, so a jump to today never lands behind NEXT UP. */
+    bottomInset: Float = 0f,
+    /** A sideways swipe at the month stop, where there is nowhere to pan: -1 back, +1 on. */
+    onSwipePage: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = LightThemeTokens.colors
@@ -90,8 +99,15 @@ fun CalendarCanvas(
         // what makes the home position look like the grid it replaces.
         val cellHeight = cellWidth
 
-        val home = remember(anchorDay, cellHeight) {
-            CanvasMath.homeOffset(anchorDay, cellHeight, originWeekStart)
+        val home = remember(anchorDay, cellHeight, topInset, bottomInset, viewportHeight) {
+            CanvasMath.homeOffset(
+                anchorDay = anchorDay,
+                cellHeight = cellHeight,
+                originWeekStart = originWeekStart,
+                topInset = topInset,
+                bottomInset = bottomInset,
+                viewportHeight = viewportHeight,
+            )
         }
 
         var scale by remember { mutableFloatStateOf(ZoomLevel.Month.scale) }
@@ -113,12 +129,18 @@ fun CalendarCanvas(
             )
         }
 
-        /** Animates to a scale and offset — the snap, and the spring back home. */
-        suspend fun animateTo(targetScale: Float, targetOffset: Offset) {
+        /** Animates to a scale and offset — the snap, the spring home, and the hand-over. */
+        suspend fun animateTo(
+            targetScale: Float,
+            targetOffset: Offset,
+            durationMs: Int = SNAP_MS,
+        ) {
             val fromScale = scale
             val fromOffset = offset
             val progress = Animatable(0f)
-            progress.animateTo(1f, tween(durationMillis = SNAP_MS)) {
+            // Eased rather than linear: a snap that decelerates reads as the surface settling,
+            // where a linear one reads as a jump cut.
+            progress.animateTo(1f, tween(durationMillis = durationMs, easing = FastOutSlowInEasing)) {
                 val t = value
                 place(
                     fromScale + (targetScale - fromScale) * t,
@@ -130,6 +152,34 @@ fun CalendarCanvas(
             }
         }
 
+        /**
+         * Zooms the chosen day up until its cell fills the screen, then opens it.
+         *
+         * The point is that the day screen appears to be the cell you were pinching, carried
+         * on by the screen's own scale-in transition. Cutting straight from a half-zoomed grid
+         * to a full screen loses the thread of where you are.
+         */
+        fun handOver(day: Long) = scope.launch {
+            val centre = Pt(
+                x = (CanvasMath.columnOf(day) + 0.5f) * cellWidth,
+                y = (CanvasMath.weekIndexOf(day, originWeekStart) + 0.5f) * cellHeight,
+            )
+            val end = CanvasMath.MAX_SCALE
+            animateTo(
+                targetScale = end,
+                targetOffset = Offset(
+                    viewportWidth / 2f - centre.x * end,
+                    viewportHeight / 2f - centre.y * end,
+                ),
+                durationMs = HANDOVER_MS,
+            )
+            onOpenDay(day)
+            // Reset behind the day screen, while nothing here is visible, so coming back
+            // lands on the week stop instead of immediately handing over again.
+            delay(RESET_DELAY_MS)
+            place(ZoomLevel.Week.scale, offset)
+        }
+
         /** Runs when the fingers leave: snap to a stop, spring home, or hand over to a day. */
         fun settle() {
             val target = CanvasMath.snapTarget(scale)
@@ -139,8 +189,8 @@ fun CalendarCanvas(
                     animateTo(ZoomLevel.Month.scale, Offset(home.x, home.y))
                 }
 
-                target >= ZoomLevel.Day.scale -> {
-                    val day = CanvasMath.focusedDay(
+                target >= ZoomLevel.Day.scale -> handOver(
+                    CanvasMath.focusedDay(
                         offset = pt,
                         scale = scale,
                         viewportWidth = viewportWidth,
@@ -148,12 +198,8 @@ fun CalendarCanvas(
                         cellWidth = cellWidth,
                         cellHeight = cellHeight,
                         originWeekStart = originWeekStart,
-                    )
-                    // Drop back to the week stop first, so returning from the day screen does
-                    // not immediately trigger another hand-over.
-                    place(ZoomLevel.Week.scale, offset)
-                    onOpenDay(day)
-                }
+                    ),
+                )
 
                 target != scale -> scope.launch {
                     val focus = Offset(viewportWidth / 2f, viewportHeight / 2f)
@@ -207,6 +253,8 @@ fun CalendarCanvas(
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { position ->
+                            // Tapping a day zooms into it as well, rather than cutting: same
+                            // gesture, same thread of where you are.
                             CanvasMath.dayAtScreen(
                                 point = Pt(position.x, position.y),
                                 offset = Pt(offset.x, offset.y),
@@ -214,7 +262,7 @@ fun CalendarCanvas(
                                 cellWidth = cellWidth,
                                 cellHeight = cellHeight,
                                 originWeekStart = originWeekStart,
-                            )?.let(onOpenDay)
+                            )?.let { handOver(it) }
                         },
                         onDoubleTap = { position ->
                             // Double tap zooms one stop in about the point tapped, which is
@@ -240,25 +288,40 @@ fun CalendarCanvas(
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var moved = false
+                        var pagingX = 0f
+                        var paged = false
                         do {
                             val event = awaitPointerEvent()
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
                             if (zoom != 1f || pan != Offset.Zero) {
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                val nextScale = CanvasMath.clampScale(scale * zoom)
-                                val zoomed = CanvasMath.offsetForZoom(
-                                    Pt(offset.x, offset.y),
-                                    scale,
-                                    nextScale,
-                                    Pt(centroid.x, centroid.y),
-                                )
-                                place(nextScale, Offset(zoomed.x + pan.x, zoomed.y + pan.y))
-                                moved = true
-                                event.changes.forEach { it.consume() }
+                                // At the month stop the seven columns already fill the width, so
+                                // a sideways drag has nowhere to pan — it changes page instead.
+                                val atMonth = scale <= ZoomLevel.Month.scale + 0.01f
+                                val sideways = abs(pan.x) > abs(pan.y) * 1.5f
+                                if (atMonth && zoom == 1f && sideways) {
+                                    pagingX += pan.x
+                                    if (!paged && abs(pagingX) > viewportWidth * PAGE_FRACTION) {
+                                        paged = true
+                                        onSwipePage(if (pagingX < 0f) 1 else -1)
+                                    }
+                                    event.changes.forEach { it.consume() }
+                                } else {
+                                    val centroid = event.calculateCentroid(useCurrent = true)
+                                    val nextScale = CanvasMath.clampScale(scale * zoom)
+                                    val zoomed = CanvasMath.offsetForZoom(
+                                        Pt(offset.x, offset.y),
+                                        scale,
+                                        nextScale,
+                                        Pt(centroid.x, centroid.y),
+                                    )
+                                    place(nextScale, Offset(zoomed.x + pan.x, zoomed.y + pan.y))
+                                    moved = true
+                                    event.changes.forEach { it.consume() }
+                                }
                             }
                         } while (event.changes.any { it.pressed })
-                        if (moved) settle()
+                        if (moved && !paged) settle()
                     }
                 },
         ) {
@@ -299,6 +362,13 @@ fun CalendarCanvas(
 }
 
 private const val SNAP_MS = 220
+private const val HANDOVER_MS = 190
+
+/** Long enough for the day screen's own scale-in to cover the canvas before it resets. */
+private const val RESET_DELAY_MS = 320L
+
+/** How far sideways counts as turning the page rather than a stray drag. */
+private const val PAGE_FRACTION = 0.16f
 
 /** Below this cell width there is no room for words, whatever the zoom says. */
 private const val TEXT_MIN_CELL_PX = 150f
@@ -324,14 +394,16 @@ private fun DrawScope.drawDay(
 ) {
     val date = LocalDate.ofEpochDay(day)
     val inset = width * 0.06f
+    val zoomedIn = level != ZoomLevel.Month
 
-    // Cell borders instead of a background: at any zoom the grid has to stay a grid, and a
-    // hairline is the cheapest thing on this panel that says so.
+    // Cell borders instead of a background: at any zoom the grid has to stay a grid. Zoomed
+    // in they brighten, because once a cell is the size of a card the thing you need to see
+    // at a glance is where one day stops and the next starts.
     drawRect(
-        color = rule,
+        color = if (zoomedIn) rule.copy(alpha = 1f) else rule,
         topLeft = Offset(left, top),
         size = Size(width, height),
-        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = if (zoomedIn) 2f else 1f),
     )
 
     if (isToday) {
@@ -367,9 +439,19 @@ private fun DrawScope.drawDay(
         return
     }
 
+    // A rule under the number turns the cell into a little page with a heading — the clearest
+    // way to say "this is a different day" once there is text in both of them.
+    val headerY = top + inset + number.size.height + inset * 0.4f
+    drawLine(
+        color = if (isToday) background else rule,
+        start = Offset(left + inset, headerY),
+        end = Offset(left + width - inset, headerY),
+        strokeWidth = 2f,
+    )
+
     if (rows.isEmpty()) return
 
-    var y = top + inset + number.size.height + inset * 0.5f
+    var y = headerY + inset * 0.6f
     val available = top + height - inset
     val textSize = (entryStyle.fontSize.value * scale * 0.75f)
         .coerceIn(MIN_ENTRY_SP, MAX_ENTRY_SP)

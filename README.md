@@ -35,8 +35,15 @@ downwards, **pinch to zoom and drag to go anywhere in time**.
   position. **Week** — each day large enough to read what is on it. Keep going and it hands
   over to the **day screen**, which is a real screen: locked to that one day, swipe left and
   right between days, pinch out to come back to the planner.
-- Let go near home and it springs exactly back to it. TODAY does the same from anywhere.
-- Double-tap zooms in a stop about the point you tapped.
+- Zooming into a day is continuous: the cell grows until it fills the screen and the day
+  screen scales in out of it, so the gesture carries through the screen change rather than
+  cutting. Coming back reverses it.
+- Let go near home and it springs exactly back to it, eased rather than linear. TODAY does the
+  same from anywhere, and frames the week so it never lands behind the NEXT UP footer.
+- Double-tap zooms in a stop about the point you tapped. At the month stop, where the seven
+  columns already fill the width, a sideways drag turns the page to Notes instead of panning.
+- The bars float over the planner at 82% black, so the surface visibly carries on underneath
+  them.
 - The whole surface is drawn in a single `Canvas` against a `TextMeasurer`. Six visible weeks
   is forty-two cells with a number and up to four lines each, and recomposing that on every
   frame of a drag is not something this phone would do smoothly.
@@ -174,7 +181,7 @@ python3 scripts/generate_icon.py      # launcher icon, needs Pillow
 ```
 
 The markdown, date, QR-payload, iCalendar, agenda-merge, planner-geometry and
-reminder-timing code is deliberately free of Android imports, so all of it is unit tested off-device — 88 tests covering list
+reminder-timing code is deliberately free of Android imports, so all of it is unit tested off-device — 90 tests covering list
 round-trips, return-key behaviour, month grids, clock parsing, which scanned payloads count
 as a key, timezone handling and line folding in .ics files, when an alarm should fire, which rows fold
 together, and every piece of the planner's zoom arithmetic.

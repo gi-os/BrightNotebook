@@ -9,11 +9,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +50,7 @@ import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightNotebookTheme
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
+import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
@@ -119,6 +126,13 @@ class MainActivity : ComponentActivity() {
                         composable(
                             "day/{epochDay}",
                             arguments = listOf(navArgument("epochDay") { type = NavType.LongType }),
+                            // The day grows out of the cell you were pinching and shrinks back
+                            // into it, so the planner's zoom carries on through the screen
+                            // change instead of cutting.
+                            enterTransition = { scaleIn(initialScale = 0.86f) + fadeIn() },
+                            exitTransition = { scaleOut(targetScale = 0.86f) + fadeOut() },
+                            popEnterTransition = { scaleIn(initialScale = 0.94f) + fadeIn() },
+                            popExitTransition = { scaleOut(targetScale = 0.86f) + fadeOut() },
                         ) { entry ->
                             val day = entry.arguments!!.getLong("epochDay")
                             // The route only seeds the selection; the day screen reads it
@@ -207,17 +221,30 @@ private fun HomeShell(
     onSettings: () -> Unit,
     onCamera: (ReadMode) -> Unit,
 ) {
-    var tab by remember { mutableStateOf(0) }
+    // Saveable, not just remembered: leaving for a day screen disposes this, and a plain
+    // remember meant coming back from a day landed you on the notes page.
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var addSheet by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (tab) {
-                0 -> NotesScreen(vm = vm, onOpenNote = onOpenNote, onSettings = onSettings)
+                0 -> NotesScreen(
+                    vm = vm,
+                    onOpenNote = onOpenNote,
+                    onSettings = onSettings,
+                    // Swipe across to the calendar, the same way the planner pages back here.
+                    modifier = Modifier.lightHorizontalSwipe(
+                        onLeft = { tab = 1 },
+                        onRight = {},
+                    ),
+                )
+
                 else -> CalendarScreen(
                     vm = vm,
                     onOpenDay = onOpenDay,
                     onOpenAgenda = onOpenAgenda,
+                    onSwipePage = { direction -> if (direction < 0) tab = 0 },
                 )
             }
         }

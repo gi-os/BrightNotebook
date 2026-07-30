@@ -152,10 +152,20 @@ object CanvasMath {
         cellHeight: Float,
         originWeekStart: Long,
         topInset: Float = 0f,
+        bottomInset: Float = 0f,
+        viewportHeight: Float = 0f,
     ): Pt {
         val firstOfMonth = LocalDate.ofEpochDay(anchorDay).withDayOfMonth(1).toEpochDay()
-        val week = weekIndexOf(firstOfMonth, originWeekStart)
-        return Pt(x = 0f, y = topInset - week * cellHeight)
+        val monthTop = topInset - weekIndexOf(firstOfMonth, originWeekStart) * cellHeight
+
+        // Framing the month from its first week is the nicer view, but it can push the
+        // anchor's own week down behind the NEXT UP footer — a "jump to today" that leaves
+        // today under a button is not a jump to today. Slide up only as far as needed.
+        if (viewportHeight <= 0f) return Pt(0f, monthTop)
+        val anchorWeekTop = weekIndexOf(anchorDay, originWeekStart) * cellHeight + monthTop
+        val floor = viewportHeight - bottomInset - cellHeight
+        val y = if (anchorWeekTop > floor) monthTop - (anchorWeekTop - floor) else monthTop
+        return Pt(x = 0f, y = y)
     }
 
     /**
