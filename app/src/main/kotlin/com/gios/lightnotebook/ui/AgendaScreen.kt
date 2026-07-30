@@ -4,11 +4,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -31,6 +33,8 @@ fun AgendaScreen(
 ) {
     val rows by vm.agendaRows.collectAsStateWithLifecycle()
     val today = NoteDates.today()
+    val listState = rememberLazyListState()
+    WheelScroll(listState)
 
     LaunchedEffect(Unit) { vm.refreshShowings() }
 
@@ -44,7 +48,7 @@ fun AgendaScreen(
         if (rows.isEmpty()) {
             LightEmptyState("Nothing ahead.\nTap a day to write on it.", Modifier.weight(1f))
         } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState) {
                 // One heading per day, so the eye gets the date once instead of on every row.
                 var lastDay: Long? = null
                 rows.forEach { row ->

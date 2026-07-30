@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.DayEntryEntity
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
@@ -104,6 +106,9 @@ fun DayPane(
     var remindingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var timingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
 
+    val listState = rememberLazyListState()
+    WheelScroll(listState)
+
     // Tickets can be added, re-dated or deleted while this app was in the background.
     LaunchedEffect(epochDay) { vm.refreshShowings() }
 
@@ -149,7 +154,7 @@ fun DayPane(
         if (rows.isEmpty()) {
             LightEmptyState("Nothing on this day yet.", body)
         } else {
-            LazyColumn(body) {
+            LazyColumn(body, state = listState) {
                 items(rows, key = { it.id }) { row ->
                     val entry = vm.entryById(row.entryId)
                     LightListRow(

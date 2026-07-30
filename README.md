@@ -65,6 +65,36 @@ downwards, **pinch to zoom and drag to go anywhere in time**.
   (Settings → PHONE CALENDAR). The notebook is the source of truth; the mirror is a
   bonus, and deleting an entry removes both.
 
+## The wheel
+
+The brightness wheel scrolls, everywhere there is something to scroll: the notes list, a
+day, the agenda, settings, the list of calendars, the transcription of a photographed page.
+On the planner it pans the surface — weeks downwards, endlessly — which is the one place
+where a scroll is the whole interaction and a thumb has to leave the glass to do it. Zoom
+stays with the fingers; a wheel has two directions and panning is what you do constantly.
+
+Only the turns. The click and the camera button belong to
+[LightControl](https://github.com/gi-os/LightControl), which owns them phone-wide and
+passes bare notches through to `com.gios.*` for exactly this.
+
+It works because the wheel is an ordinary key event: Light patched
+`/system/usr/keylayout/Generic.kl` to label scancodes 19 and 20 `WHEEL_CCW`/`WHEEL_CW`, and
+nothing in `PhoneWindowManager` intercepts them, so they reach the focused window like any
+other key — which is why an app that ignores the keycode looks like it has a dead wheel.
+`hw/LightKeys.kt` resolves those labels at runtime and falls back to the raw scancode, gated
+on the sensor's device name so a paired keyboard's `r` cannot scroll your notes. The handler
+sits in `dispatchKeyEvent`, above the view hierarchy, so a turn still moves the day while
+the add-a-line field has focus and the keyboard is up.
+
+Notches are frame-timed rather than applied as they land — the sensor fires every ~35 ms,
+faster than a frame — and the first notch after a pause is held until a second confirms it,
+because the wheel sits under a thumb. `hw/Wheel.kt` has the numbers; LightNews has the long
+version.
+
+The note editor is the exception. Its body is a `BasicTextField` that scrolls itself to keep
+the cursor visible and exposes no scroll state to drive, and wrapping it in a scrollable
+parent is exactly what breaks that.
+
 ## Reminders
 
 Anything with a time gets one. The lead time is Settings → REMIND ME (default ten minutes

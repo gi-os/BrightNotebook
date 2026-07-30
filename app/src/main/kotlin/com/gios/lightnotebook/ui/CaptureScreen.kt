@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.ai.ParsedEvent
 import com.gios.lightnotebook.data.SystemCalendar
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightBottomBar
 import com.gios.lightnotebook.ui.theme.LightIcons
@@ -101,6 +103,15 @@ private fun NoteDestinationView(
     val notes by vm.notesUnfiltered.collectAsStateWithLifecycle()
     val colors = LightThemeTokens.colors
 
+    // Two scrollers share this screen, so the wheel reads the page first and then runs on
+    // into the list of places to put it. Checking the transcription is what you came here
+    // to do; once the page has bottomed out there is nothing else the notch could mean.
+    val transcript = rememberScrollState()
+    val destinations = rememberLazyListState()
+    val readingPage = transcript.value < transcript.maxValue
+    WheelScroll(transcript, active = readingPage)
+    WheelScroll(destinations, active = !readingPage)
+
     Column(Modifier.fillMaxSize()) {
         LightTopBar(
             title = "READ",
@@ -121,7 +132,7 @@ private fun NoteDestinationView(
                     modifier = Modifier.padding(top = 0.8f.verticalGridUnitsAsDp()),
                 )
             }
-            Box(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Box(Modifier.weight(1f).verticalScroll(transcript)) {
                 LightText(
                     text = styledNote(read.body, colors.contentFaint, colors.content),
                     variant = LightTextVariant.Paragraph,
@@ -132,7 +143,7 @@ private fun NoteDestinationView(
 
         LightRule()
         LightSectionLabel("PUT IT")
-        LazyColumn(Modifier.fillMaxWidth().weight(0.9f)) {
+        LazyColumn(Modifier.fillMaxWidth().weight(0.9f), state = destinations) {
             item {
                 LightListRow(
                     title = "In a new note",
@@ -190,6 +201,8 @@ private fun EventReviewView(
     }
 
     val kept = events.filterIndexed { i, _ -> i !in dropped }
+    val listState = rememberLazyListState()
+    WheelScroll(listState)
 
     Column(Modifier.fillMaxSize()) {
         LightTopBar(
@@ -198,7 +211,7 @@ private fun EventReviewView(
         )
         LightRule()
 
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState) {
             itemsIndexed(events) { index, event ->
                 val on = index !in dropped
                 LightListRow(

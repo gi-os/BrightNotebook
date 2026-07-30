@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.SystemCalendar
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
@@ -44,6 +45,8 @@ fun SettingsScreen(
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
     var leadSheet by remember { mutableStateOf(false) }
+    val scroll = rememberScrollState()
+    WheelScroll(scroll)
 
     val askCalendar = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -60,7 +63,7 @@ fun SettingsScreen(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(horizontal = lightInset()),
         ) {
             LightText(

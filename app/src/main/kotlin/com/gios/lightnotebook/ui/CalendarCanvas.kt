@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightTextVariant
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightDayGestures
@@ -147,6 +149,25 @@ fun CalendarCanvas(
                 nextOffset.y,
             )
         }
+
+        /**
+         * The wheel, panning the planner.
+         *
+         * There is no scroller here to hand [WheelScroll] — the planner is one Canvas with a
+         * transform of its own — so the vertical offset is dressed up as a [ScrollableState]
+         * instead. The surface is endless downwards, so every notch is consumed and there is
+         * no edge to run out at. Zoom is left to the fingers: a wheel with two directions
+         * cannot both pan and zoom, and panning is the thing you do constantly.
+         *
+         * Off while a day is open, because the pane on top of the surface has its own list.
+         */
+        val surface = remember(viewportWidth, cellWidth) {
+            ScrollableState { delta ->
+                place(scale, Offset(offset.x, offset.y - delta))
+                delta
+            }
+        }
+        WheelScroll(surface, active = !dayOpen)
 
         /** Animates to a scale and offset — the snap, the spring home, and the hand-over. */
         suspend fun animateTo(

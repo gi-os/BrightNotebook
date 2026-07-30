@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.CalendarEntity
 import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.SystemCalendar
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -49,6 +51,9 @@ fun CalendarsScreen(
     var actionsFor by remember { mutableStateOf<CalendarEntity?>(null) }
     var renaming by remember { mutableStateOf<CalendarEntity?>(null) }
     var devicePicker by remember { mutableStateOf<List<DeviceCalendar>?>(null) }
+
+    val listState = rememberLazyListState()
+    WheelScroll(listState)
 
     // Any document type: exporters hand out text/calendar, application/ics, octet-stream
     // and sometimes nothing at all, and refusing the file for its MIME type would be a
@@ -80,7 +85,7 @@ fun CalendarsScreen(
         )
         LightRule()
 
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState) {
             item {
                 LightListRow(
                     title = "Notebook",

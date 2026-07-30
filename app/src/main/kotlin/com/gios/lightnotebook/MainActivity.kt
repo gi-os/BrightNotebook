@@ -2,6 +2,7 @@ package com.gios.lightnotebook
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -14,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,6 +32,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gios.lightnotebook.ai.ReadMode
+import com.gios.lightnotebook.hw.LightKey
+import com.gios.lightnotebook.hw.LightKeys
+import com.gios.lightnotebook.hw.LocalWheelBus
+import com.gios.lightnotebook.hw.WheelBus
 import com.gios.lightnotebook.notify.Notifier
 import com.gios.lightnotebook.ui.AgendaScreen
 import com.gios.lightnotebook.ui.CalendarScreen
@@ -60,6 +66,32 @@ class MainActivity : ComponentActivity() {
      * read straight off the intent so a second tap while the app is open still lands.
      */
     private val pendingDay = MutableStateFlow<Long?>(null)
+
+    /** Wheel notches on their way to whichever screen is up. */
+    private val wheel = WheelBus()
+
+    /**
+     * Every hardware key arrives here first — `DecorView` hands the event to the window
+     * callback before it walks the view hierarchy — so a turn still scrolls the day while
+     * the add-a-line field holds focus and the keyboard is up.
+     *
+     * Both halves of the pair are swallowed: one notch is a complete DOWN+UP, and letting
+     * the UP through would let a text field take it as a keypress.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        when (LightKeys.of(event)) {
+            LightKey.WheelUp -> {
+                if (event.action == KeyEvent.ACTION_DOWN) wheel.send(1)
+                return true
+            }
+            LightKey.WheelDown -> {
+                if (event.action == KeyEvent.ACTION_DOWN) wheel.send(-1)
+                return true
+            }
+            else -> Unit
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -93,112 +125,116 @@ class MainActivity : ComponentActivity() {
                     pendingDay.value = null
                 }
 
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(LightThemeTokens.colors.background)
-                        .systemBarsPadding(),
-                ) {
-                    NavHost(nav, startDestination = "home") {
-                        composable("home") {
-                            HomeShell(
-                                vm = vm,
-                                onOpenNote = { id -> nav.navigate("note/$id") },
-                                onOpenDay = { day -> nav.navigate("day/$day") },
-                                onOpenAgenda = { nav.navigate("agenda") },
-                                onSettings = { nav.navigate("settings") },
-                                onCamera = { mode ->
-                                    vm.setReadMode(mode)
-                                    nav.navigate("camera")
-                                },
-                            )
-                        }
-                        composable(
-                            "note/{id}",
-                            arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                        ) { entry ->
-                            NoteEditorScreen(
-                                vm = vm,
-                                noteId = entry.arguments!!.getString("id")!!,
-                                onBack = { nav.popBackStack() },
-                            )
-                        }
-                        composable(
-                            "day/{epochDay}",
-                            arguments = listOf(navArgument("epochDay") { type = NavType.LongType }),
-                            // The day grows out of the cell you were pinching and shrinks back
-                            // into it, so the planner's zoom carries on through the screen
-                            // change instead of cutting.
-                            enterTransition = { scaleIn(initialScale = 0.86f) + fadeIn() },
-                            exitTransition = { scaleOut(targetScale = 0.86f) + fadeOut() },
-                            popEnterTransition = { scaleIn(initialScale = 0.94f) + fadeIn() },
-                            popExitTransition = { scaleOut(targetScale = 0.86f) + fadeOut() },
-                        ) { entry ->
-                            val day = entry.arguments!!.getLong("epochDay")
-                            // The route only seeds the selection; the day screen reads it
-                            // from the view model afterwards, so swiping can move it without
-                            // pushing a screen per day.
-                            LaunchedEffect(day) { vm.selectDay(day) }
-                            DayScreen(vm = vm, onBack = { nav.popBackStack() })
-                        }
-                        composable("camera") {
-                            CameraScreen(
-                                hint = "A page of writing, or a calendar.",
-                                newFile = { vm.newCaptureFile() },
-                                onCaptured = { file ->
-                                    vm.readCapture(file)
-                                    nav.navigate("capture") {
-                                        popUpTo("home")
-                                    }
-                                },
-                                onCancel = { nav.popBackStack() },
-                            )
-                        }
-                        composable("capture") {
-                            CaptureScreen(
-                                vm = vm,
-                                onOpenNote = { id ->
-                                    nav.navigate("note/$id") { popUpTo("home") }
-                                },
-                                onOpenDay = { day ->
-                                    nav.navigate("day/$day") { popUpTo("home") }
-                                },
-                                onRetry = {
-                                    vm.clearCapture()
-                                    nav.navigate("camera") { popUpTo("home") }
-                                },
-                                onCancel = {
-                                    vm.clearCapture()
-                                    nav.popBackStack("home", false)
-                                },
-                            )
-                        }
-                        composable("settings") {
-                            SettingsScreen(
-                                vm = vm,
-                                onScanQr = { nav.navigate("scan") },
-                                onCalendars = { nav.navigate("calendars") },
-                                onBack = { nav.popBackStack() },
-                            )
-                        }
-                        composable("agenda") {
-                            AgendaScreen(
-                                vm = vm,
-                                onOpenDay = { day -> nav.navigate("day/$day") },
-                                onBack = { nav.popBackStack() },
-                            )
-                        }
-                        composable("calendars") {
-                            CalendarsScreen(vm = vm, onBack = { nav.popBackStack() })
-                        }
-                        composable("scan") {
-                            KeyScanScreen(
-                                onKey = { key ->
-                                    vm.setApiKey(key)
-                                    nav.popBackStack()
-                                },
-                                onBack = { nav.popBackStack() },
-                            )
+                // Every screen below can reach the wheel; which scroller answers a notch
+                // is decided down there, by whatever is actually on the panel.
+                CompositionLocalProvider(LocalWheelBus provides wheel) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(LightThemeTokens.colors.background)
+                            .systemBarsPadding(),
+                    ) {
+                        NavHost(nav, startDestination = "home") {
+                            composable("home") {
+                                HomeShell(
+                                    vm = vm,
+                                    onOpenNote = { id -> nav.navigate("note/$id") },
+                                    onOpenDay = { day -> nav.navigate("day/$day") },
+                                    onOpenAgenda = { nav.navigate("agenda") },
+                                    onSettings = { nav.navigate("settings") },
+                                    onCamera = { mode ->
+                                        vm.setReadMode(mode)
+                                        nav.navigate("camera")
+                                    },
+                                )
+                            }
+                            composable(
+                                "note/{id}",
+                                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                            ) { entry ->
+                                NoteEditorScreen(
+                                    vm = vm,
+                                    noteId = entry.arguments!!.getString("id")!!,
+                                    onBack = { nav.popBackStack() },
+                                )
+                            }
+                            composable(
+                                "day/{epochDay}",
+                                arguments = listOf(navArgument("epochDay") { type = NavType.LongType }),
+                                // The day grows out of the cell you were pinching and shrinks back
+                                // into it, so the planner's zoom carries on through the screen
+                                // change instead of cutting.
+                                enterTransition = { scaleIn(initialScale = 0.86f) + fadeIn() },
+                                exitTransition = { scaleOut(targetScale = 0.86f) + fadeOut() },
+                                popEnterTransition = { scaleIn(initialScale = 0.94f) + fadeIn() },
+                                popExitTransition = { scaleOut(targetScale = 0.86f) + fadeOut() },
+                            ) { entry ->
+                                val day = entry.arguments!!.getLong("epochDay")
+                                // The route only seeds the selection; the day screen reads it
+                                // from the view model afterwards, so swiping can move it without
+                                // pushing a screen per day.
+                                LaunchedEffect(day) { vm.selectDay(day) }
+                                DayScreen(vm = vm, onBack = { nav.popBackStack() })
+                            }
+                            composable("camera") {
+                                CameraScreen(
+                                    hint = "A page of writing, or a calendar.",
+                                    newFile = { vm.newCaptureFile() },
+                                    onCaptured = { file ->
+                                        vm.readCapture(file)
+                                        nav.navigate("capture") {
+                                            popUpTo("home")
+                                        }
+                                    },
+                                    onCancel = { nav.popBackStack() },
+                                )
+                            }
+                            composable("capture") {
+                                CaptureScreen(
+                                    vm = vm,
+                                    onOpenNote = { id ->
+                                        nav.navigate("note/$id") { popUpTo("home") }
+                                    },
+                                    onOpenDay = { day ->
+                                        nav.navigate("day/$day") { popUpTo("home") }
+                                    },
+                                    onRetry = {
+                                        vm.clearCapture()
+                                        nav.navigate("camera") { popUpTo("home") }
+                                    },
+                                    onCancel = {
+                                        vm.clearCapture()
+                                        nav.popBackStack("home", false)
+                                    },
+                                )
+                            }
+                            composable("settings") {
+                                SettingsScreen(
+                                    vm = vm,
+                                    onScanQr = { nav.navigate("scan") },
+                                    onCalendars = { nav.navigate("calendars") },
+                                    onBack = { nav.popBackStack() },
+                                )
+                            }
+                            composable("agenda") {
+                                AgendaScreen(
+                                    vm = vm,
+                                    onOpenDay = { day -> nav.navigate("day/$day") },
+                                    onBack = { nav.popBackStack() },
+                                )
+                            }
+                            composable("calendars") {
+                                CalendarsScreen(vm = vm, onBack = { nav.popBackStack() })
+                            }
+                            composable("scan") {
+                                KeyScanScreen(
+                                    onKey = { key ->
+                                        vm.setApiKey(key)
+                                        nav.popBackStack()
+                                    },
+                                    onBack = { nav.popBackStack() },
+                                )
+                            }
                         }
                     }
                 }

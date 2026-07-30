@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.FolderEntity
 import com.gios.lightnotebook.data.NoteEntity
+import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -54,6 +56,11 @@ fun NotesScreen(
     var movingNote by remember { mutableStateOf<NoteEntity?>(null) }
     var folderActions by remember { mutableStateOf<FolderEntity?>(null) }
     var renaming by remember { mutableStateOf<FolderEntity?>(null) }
+
+    // The wheel moves the notes, not the folder strip: the strip is a row of chips a thumb
+    // reaches anyway, and turning a vertical wheel to go sideways reads as a bug.
+    val listState = rememberLazyListState()
+    WheelScroll(listState)
 
     val visible = remember(notes, query) {
         val q = query.trim()
@@ -127,7 +134,7 @@ fun NotesScreen(
                 },
             )
         } else {
-            LazyColumn(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 if (pinned.isNotEmpty()) {
                     item { LightSectionLabel("PINNED") }
                     items(pinned, key = { it.id }) { note ->
