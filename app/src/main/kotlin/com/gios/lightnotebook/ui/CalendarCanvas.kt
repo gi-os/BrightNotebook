@@ -87,6 +87,13 @@ fun CalendarCanvas(
     dayPane: @Composable (progress: Float, gestures: Modifier, onClose: () -> Unit) -> Unit,
     onWindowChanged: (Long, Long) -> Unit,
     onFocusDayChanged: (Long) -> Unit,
+    /**
+     * Whether a day is currently grown out of the surface. The canvas owns this — it is the
+     * thing that opens and closes days — and the screen hides its floating bars from it.
+     * Pinching out closes a day without going through the screen at all, which is how the bars
+     * came back missing when it tried to track this itself.
+     */
+    onDayOpenChanged: (Boolean) -> Unit = {},
     /** Height of the bar floating over the canvas, so home starts clear of it. */
     topInset: Float = 0f,
     /** Height of the footer under it, so a jump to today never lands behind NEXT UP. */
@@ -199,6 +206,7 @@ fun CalendarCanvas(
         fun openDay(day: Long) {
             onOpenDay(day)
             dayOpen = true
+            onDayOpenChanged(true)
             scope.launch {
                 val end = ZoomLevel.Day.scale
                 animateTo(
@@ -257,6 +265,9 @@ fun CalendarCanvas(
         fun closeDay() {
             if (!dayOpen) return
             val day = selectedDay
+            // Announced up front, not after the animation: the bars belong to the planner, and
+            // they should be back on their way in rather than appearing once it has finished.
+            onDayOpenChanged(false)
             scope.launch {
                 val centre = Pt(
                     x = (CanvasMath.columnOf(day) + 0.5f) * cellWidth,
@@ -315,6 +326,7 @@ fun CalendarCanvas(
         // selects it, zooming in fired this and threw the view straight back out to the month.
         LaunchedEffect(anchorDay, homeRequest) {
             dayOpen = false
+            onDayOpenChanged(false)
             animateTo(ZoomLevel.Month.scale, Offset(home.x, home.y))
         }
 

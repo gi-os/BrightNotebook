@@ -1,7 +1,6 @@
 package com.gios.lightnotebook.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,8 +46,6 @@ fun CalendarScreen(
     modifier: Modifier = Modifier,
 ) {
     val rows by vm.canvasRows.collectAsStateWithLifecycle()
-    val upcoming by vm.upcoming.collectAsStateWithLifecycle()
-    val showings by vm.showings.collectAsStateWithLifecycle()
     val anchor by vm.selectedDay.collectAsStateWithLifecycle()
     val today = NoteDates.today()
 
@@ -61,14 +58,11 @@ fun CalendarScreen(
     // zoom-in would immediately be undone.
     var homeAnchor by remember { mutableStateOf(today) }
     var homeRequest by remember { mutableIntStateOf(0) }
-    val anythingAhead = upcoming.isNotEmpty() || showings.any { it.epochDay >= today }
-    val next = upcoming.firstOrNull()
 
     val density = LocalDensity.current
     // The bars float over the planner, so the canvas needs their heights to know where the
     // clear band is. Measured rather than assumed: the bars are sized in grid units.
     val topBarHeight = 3f.gridUnitsAsDp() + 1.4f.verticalGridUnitsAsDp()
-    val footerHeight = 4.6f.verticalGridUnitsAsDp()
 
     Box(modifier.fillMaxSize()) {
         var dayOpen by remember { mutableStateOf(false) }
@@ -81,24 +75,16 @@ fun CalendarScreen(
             selectedDay = anchor,
             // Opening a day is no longer navigation — the cell becomes the day in place, so all
             // that changes is which day the view model has selected.
-            onOpenDay = { day ->
-                dayOpen = true
-                vm.selectDay(day)
-            },
+            onOpenDay = { day -> vm.selectDay(day) },
+            onDayOpenChanged = { dayOpen = it },
             dayPane = { _, gestures, close ->
-                DayPane(
-                    vm = vm,
-                    onClose = {
-                        dayOpen = false
-                        close()
-                    },
-                    gestures = gestures,
-                )
+                DayPane(vm = vm, onClose = close, gestures = gestures)
             },
             onWindowChanged = { from, to -> vm.setCanvasWindow(from, to) },
             onFocusDayChanged = { focusDay = it },
             topInset = with(density) { topBarHeight.toPx() },
-            bottomInset = with(density) { footerHeight.toPx() },
+            // Nothing floats over the bottom any more, so nothing to keep clear of.
+            bottomInset = 0f,
             onSwipePage = onSwipePage,
             modifier = Modifier.fillMaxSize(),
         )
@@ -155,31 +141,6 @@ fun CalendarScreen(
                 LightRule()
             }
 
-            Column(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(LightThemeTokens.colors.background.copy(alpha = BAR_ALPHA))
-                    .padding(horizontal = lightInset(), vertical = 0.6f.verticalGridUnitsAsDp()),
-                verticalArrangement = Arrangement.spacedBy(0.4f.verticalGridUnitsAsDp()),
-            ) {
-                LightWideButton(
-                    label = "NEXT UP",
-                    filled = anythingAhead,
-                    onClick = onOpenAgenda,
-                )
-                if (next != null) {
-                    // One line of what is actually next, so the button is not a mystery box.
-                    LightText(
-                        text = listOfNotNull(NoteDates.clock(next.startMinutes), next.text)
-                            .joinToString(" · "),
-                        variant = LightTextVariant.Detail,
-                        lighten = true,
-                        maxLines = 1,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
         }
     }
 }
