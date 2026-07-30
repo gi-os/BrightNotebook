@@ -46,6 +46,7 @@ import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Pt
 import com.gios.lightnotebook.util.ZoomLevel
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -74,6 +75,8 @@ fun CalendarCanvas(
     onOpenDay: (Long) -> Unit,
     /** The day currently open, which the pane's own sliding moves. */
     selectedDay: Long,
+    /** Bumped to ask for a spring back home even when [anchorDay] has not changed. */
+    homeRequest: Int = 0,
     /**
      * The day itself, drawn into the cell and grown out of it. Given how far the zoom has
      * gone (0 at the week stop, 1 filling the screen) and a way to close.
@@ -245,8 +248,13 @@ fun CalendarCanvas(
             }
         }
 
-        // TODAY, or any other jump, re-anchors home and pulls the surface back to it.
-        LaunchedEffect(anchorDay) {
+        // TODAY re-anchors home and pulls the surface back to it.
+        //
+        // Keyed on [anchorDay], which changes *only* when somebody asks to go somewhere —
+        // not when a day is opened. It used to be the selected day, and since opening a day
+        // selects it, zooming in fired this and threw the view straight back out to the month.
+        LaunchedEffect(anchorDay, homeRequest) {
+            dayOpen = false
             animateTo(ZoomLevel.Month.scale, Offset(home.x, home.y))
         }
 
@@ -365,6 +373,23 @@ fun CalendarCanvas(
             val cellW = cellWidth * scale
             val cellH = cellHeight * scale
 
+            // The month the middle of the screen is in. Everything outside it is drawn down in
+            // the secondary colour, so a wall planner that runs on forever still reads as
+            // "this is August" rather than as one undifferentiated ladder of numbers.
+            val focusMonth = YearMonth.from(
+                LocalDate.ofEpochDay(
+                    CanvasMath.focusedDay(
+                        offset = Pt(offset.x, offset.y),
+                        scale = scale,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        cellWidth = cellWidth,
+                        cellHeight = cellHeight,
+                        originWeekStart = originWeekStart,
+                    ),
+                ),
+            )
+
             for (week in weeks) {
                 for (column in 0..6) {
                     val day = CanvasMath.dayAt(column, week, originWeekStart)
@@ -376,6 +401,7 @@ fun CalendarCanvas(
                         day = day,
                         rows = rows[day].orEmpty(),
                         isToday = day == today,
+                        inFocusMonth = YearMonth.from(LocalDate.ofEpochDay(day)) == focusMonth,
                         left = left,
                         top = top,
                         width = cellW,
@@ -387,6 +413,7 @@ fun CalendarCanvas(
                         entryStyle = entryStyle,
                         monthStyle = monthStyle,
                         content = colors.content,
+                        contentSecondary = colors.contentSecondary,
                         background = colors.background,
                         rule = colors.rule,
                     )
@@ -448,6 +475,7 @@ private fun DrawScope.drawDay(
     day: Long,
     rows: List<AgendaRow>,
     isToday: Boolean,
+    inFocusMonth: Boolean,
     left: Float,
     top: Float,
     width: Float,
@@ -459,6 +487,7 @@ private fun DrawScope.drawDay(
     entryStyle: TextStyle,
     monthStyle: TextStyle,
     content: androidx.compose.ui.graphics.Color,
+    contentSecondary: androidx.compose.ui.graphics.Color,
     background: androidx.compose.ui.graphics.Color,
     rule: androidx.compose.ui.graphics.Color,
 ) {
@@ -480,7 +509,13 @@ private fun DrawScope.drawDay(
         drawRect(color = content, topLeft = Offset(left, top), size = Size(width, height))
     }
 
-    val ink = if (isToday) background else content
+    // Days spilling in from the months either side are drawn down rather than hidden: they
+    // are still real days you can write on, just not the one you are reading.
+    val ink = when {
+        isToday -> background
+        inFocusMonth -> content
+        else -> contentSecondary
+    }
 
     // The 1st carries its month, so panning through a year never loses the place.
     val heading = if (date.dayOfMonth == 1) {

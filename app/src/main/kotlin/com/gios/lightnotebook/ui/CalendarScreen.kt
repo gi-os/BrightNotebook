@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +56,11 @@ fun CalendarScreen(
     LaunchedEffect(Unit) { vm.refreshShowings() }
 
     var focusDay by remember { mutableStateOf(today) }
+    // What "home" means, and the only thing that springs the planner back. Kept apart from
+    // the selected day on purpose: opening a day selects it, and if that moved home the
+    // zoom-in would immediately be undone.
+    var homeAnchor by remember { mutableStateOf(today) }
+    var homeRequest by remember { mutableIntStateOf(0) }
     val anythingAhead = upcoming.isNotEmpty() || showings.any { it.epochDay >= today }
     val next = upcoming.firstOrNull()
 
@@ -70,7 +76,8 @@ fun CalendarScreen(
         CalendarCanvas(
             rows = rows,
             today = today,
-            anchorDay = anchor,
+            anchorDay = homeAnchor,
+            homeRequest = homeRequest,
             selectedDay = anchor,
             // Opening a day is no longer navigation — the cell becomes the day in place, so all
             // that changes is which day the view model has selected.
@@ -113,8 +120,15 @@ fun CalendarScreen(
                         sizeUnits = 1.6f,
                         onClick = onOpenAgenda,
                     ),
-                    // The canvas takes its home from the selected day, so this springs it back.
-                    right = LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() }),
+                    right = LightBarItem.Text("TODAY") {
+                        vm.jumpToToday()
+                        // Moving home is what springs the planner back; nothing else does.
+                        // The nonce is here because tapping TODAY while already anchored on
+                        // today has to work too, and the day alone wouldn't have changed.
+                        homeAnchor = NoteDates.today()
+                        homeRequest++
+                        dayOpen = false
+                    },
                 )
                 // The columns keep their meaning at every zoom, and this is the one thing that
                 // says which way is Wednesday once the numbers are the size of a thumbnail.
