@@ -180,8 +180,8 @@ class MainActivity : ComponentActivity() {
                                 CameraScreen(
                                     hint = "A page of writing, or a calendar.",
                                     newFile = { vm.newCaptureFile() },
-                                    onCaptured = { file ->
-                                        vm.readCapture(file)
+                                    onCaptured = { file, rotation ->
+                                        vm.readCapture(file, rotation)
                                         nav.navigate("capture") {
                                             popUpTo("home")
                                         }

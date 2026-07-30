@@ -570,13 +570,13 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         pendingMode = mode
     }
 
-    fun readCapture(file: File) {
+    fun readCapture(file: File, rotationDegrees: Int = 0) {
         _capture.value = CaptureState.Reading
         val key = _apiKey.value
         val mode = pendingMode
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                ImageUtils.prepareForUpload(file)
+                ImageUtils.prepareForUpload(file, rotationDegrees)
                 VisionParser.read(file, key, mode)
             }
             // The photograph is kept, not deleted: whatever it produced can be checked against

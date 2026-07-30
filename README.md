@@ -97,6 +97,13 @@ importing other calendars — works with none.
   (`3 loads of laundry` is not an appointment at three).
 - Photographing from the CALENDAR tab tells the model to expect dates; from NOTES it
   decides for itself between transcription and event extraction.
+- The camera is a real capture, not a grab of the preview frame: `camera/PageCamera.kt` is
+  LightCamera's engine cut down to this one job — an `ImageCapture` asking for a ~3000px
+  long edge, tap-to-focus with the bracket driven by the camera's own `CONTROL_AF_STATE`,
+  and flash off/auto/on. The old path grabbed `PreviewView.bitmap`, which is preview
+  resolution focused on whatever the camera guessed at, and is why biro came back `[?]`.
+  Deliberately not `CAPTURE_MODE_ZERO_SHUTTER_LAG`: this camera accepts it, binds, then
+  fails every `takePicture`.
 - **The photograph is kept.** It used to be deleted the moment Claude had read it, which
   made a misread word impossible to settle. Any note or event that came from the camera
   can show the page it was read off — from its actions sheet, or the camera icon while

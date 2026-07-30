@@ -9,20 +9,27 @@ import java.io.File
 
 object ImageUtils {
 
-    /** Rotate upright per EXIF so the pixels we send match what was on screen. */
-    fun normalizeUpright(bytes: ByteArray): Bitmap {
+    /**
+     * Rotate upright so the pixels sent match what was on screen.
+     *
+     * EXIF first, and [fallbackRotation] when there is none — the capture callback reports the
+     * rotation it applied in `imageInfo`, and not every HAL also writes it into the file. A page
+     * photographed in landscape and sent sideways is a page the model reads sideways.
+     */
+    fun normalizeUpright(bytes: ByteArray, fallbackRotation: Int = 0): Bitmap {
         val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val orientation = runCatching {
             ExifInterface(ByteArrayInputStream(bytes))
                 .getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
         }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-        val m = Matrix()
-        when (orientation) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> m.postRotate(90f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> m.postRotate(180f)
-            ExifInterface.ORIENTATION_ROTATE_270 -> m.postRotate(270f)
-            else -> return bmp
+        val degrees = when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> (fallbackRotation % 360).toFloat()
         }
+        if (degrees == 0f) return bmp
+        val m = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
     }
 
@@ -50,10 +57,10 @@ object ImageUtils {
     }
 
     /** Reads the capture back off disk, straightens it and shrinks it in place. */
-    fun prepareForUpload(file: File) {
+    fun prepareForUpload(file: File, fallbackRotation: Int = 0) {
         runCatching {
             val bytes = file.readBytes()
-            val upright = normalizeUpright(bytes)
+            val upright = normalizeUpright(bytes, fallbackRotation)
             saveJpeg(downscaled(upright), file)
         }
     }
