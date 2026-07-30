@@ -1,259 +1,172 @@
 # LightNotebook
 
-A notes app and calendar for the **Light Phone III**, built in the LightOS design
-language. Launcher label: **Notebook**.
+Notes and a calendar for the Light Phone III, built against the real LightOS design
+tokens rather than an approximation of them. Launcher label **Notebook**, package
+`com.gios.lightnotebook`. Current release: **v1.0.16**.
 
-Three buttons at the bottom, and that is the whole app: a list, a plus, a calendar. The
-one you are on is lit and underscored; the others recede.
+Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
+plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
+anywhere it ends up. The calendar is a single zoomable wall planner — weeks running
+downward, epoch-day entries, pinch to zoom between Month/Week/Day — rather than a page
+of months. A camera button feeds a photographed page or planner to Claude Haiku, which
+either transcribes it into a note or extracts it into calendar events. If
+[LightPass](https://github.com/gi-os/LightPass) is installed, its ticket stubs show up
+on the day they screen.
 
-```
-   ≡            +            ▤
-  ───
-```
+This is a **plain sideloaded APK, not a Light SDK tool** — the SDK's dependency
+allowlist has no CameraX, so nothing that photographs a page can be built against it.
+See [gi-os/LightPass](https://github.com/gi-os/LightPass) for the shared skeleton this
+repo (and every other camera-carrying Light* app) is built from.
 
-## Notes
+## Quick start
 
-- Folders, and pinning to the top of the list. Long-press any note for pin / move /
-  delete; long-press the folder chip you are in for rename / delete.
-- **Bold**, bullets and numbered lists, from three keys — `B`, `•`, `1.` — which appear on
-  the action bar only while text is selected, since that is the only time they apply.
-- Press return on a list line and the marker carries down. Press return on an empty one
-  and the list ends. No menus.
-- Search across titles and bodies.
-- Notes are stored as plain text with `**bold**`, `- ` and `1. ` markers, so a note is
-  still readable anywhere it ends up. The editor styles them live without hiding them,
-  which is why the cursor never lands in the wrong place.
-- Open a note and it is already editable. Leave one untouched and it deletes itself
-  instead of leaving an "Untitled" behind.
-
-## Calendar
-
-It is one endless wall planner rather than a page of months: seven columns, weeks running
-downwards, **pinch to zoom and drag to go anywhere in time**.
-
-- Three stops, snapped to on release. **Month** — numbers and a dot, the floor and the home
-  position. **Week** — each day large enough to read what is on it. Keep going and the day
-  opens.
-- **The cell becomes the day.** There is no second screen and no navigation: the day view is
-  composed into the square you were pinching and grown out of it by a layer transform, so at
-  the end of the gesture the rectangle you were looking at *is* the day. Pinch out and it
-  shrinks back into its square.
-- In a day: slide sideways and **the planner itself moves**. The day stop is exactly 7x, so one
-  cell is one screen wide — the open day slides off, the neighbour's own square arrives behind
-  it, and the pane rides along because it is glued to the cell. Slide off the end of a week and
-  the surface goes diagonally to the row above or below, which is where that day actually is on
-  a wall planner. Pinch out to leave.
-- The slide is arbitrated in the pointer input's initial pass, which is what makes it work at
-  all — a scrolling list claims the drag first otherwise.
-- Let go near home and it springs exactly back to it, eased rather than linear. TODAY does the
-  same from anywhere, and frames the week so it never lands behind the NEXT UP footer.
-- Double-tap zooms in a stop about the point you tapped. At the month stop, where the seven
-  columns already fill the width, a sideways drag turns the page to Notes instead of panning.
-- The bars float over the planner at 82% black, so the surface visibly carries on underneath
-  them.
-- The whole surface is drawn in a single `Canvas` against a `TextMeasurer`. Six visible weeks
-  is forty-two cells with a number and up to four lines each, and recomposing that on every
-  frame of a drag is not something this phone would do smoothly.
-- Today is inverted, a day with anything on it carries a dot, the 1st of a month carries its
-  name so panning through a year never loses the place.
-- Tap a day and type. `9:30 dentist` files itself at half past nine; `dentist` is an
-  all-day line. That is the entire time picker — and any row's time can be changed later
-  from its own sheet.
-- **NEXT UP** is a button, not a strip. It opens the agenda on its own screen: a day at a
-  time, in order, times and labels legible, films included.
-- Entries are also written to the phone's own calendar when there is a writable one
-  (Settings → PHONE CALENDAR). The notebook is the source of truth; the mirror is a
-  bonus, and deleting an entry removes both.
-
-## The wheel
-
-The brightness wheel scrolls, everywhere there is something to scroll: the notes list, a
-day, the agenda, settings, the list of calendars, the transcription of a photographed page.
-On the planner it pans the surface — weeks downwards, endlessly — which is the one place
-where a scroll is the whole interaction and a thumb has to leave the glass to do it. Zoom
-stays with the fingers; a wheel has two directions and panning is what you do constantly.
-
-Nothing else has to be installed for that — no companion service, no permission, no root.
-The app reads the keys itself.
-
-It works because the wheel is an ordinary key event: Light patched
-`/system/usr/keylayout/Generic.kl` to label scancodes 19 and 20 `WHEEL_CCW`/`WHEEL_CW`, and
-nothing in `PhoneWindowManager` intercepts them, so they reach the focused window like any
-other key — which is why an app that ignores the keycode looks like it has a dead wheel.
-`hw/LightKeys.kt` resolves those labels at runtime and falls back to the raw scancode, gated
-on the sensor's device name so a paired keyboard's `r` cannot scroll your notes. The handler
-sits in `dispatchKeyEvent`, above the view hierarchy, so a turn still moves the day while
-the add-a-line field has focus and the keyboard is up.
-
-Notches are frame-timed rather than applied as they land — the sensor fires every ~35 ms,
-faster than a frame — and the first notch after a pause is held until a second confirms it,
-because the wheel sits under a thumb. `hw/Wheel.kt` has the numbers; LightNews has the long
-version.
-
-The note editor is the exception. Its body is a `BasicTextField` that scrolls itself to keep
-the cursor visible and exposes no scroll state to drive, and wrapping it in a scrollable
-parent is exactly what breaks that.
-
-Only the turns are handled here; a click or the camera button does nothing in the notebook.
-The rest of the wheel is [LightControl](https://github.com/gi-os/LightControl), a separate
-and optional app: hold the wheel in and turn for brightness, tap it for the flashlight, the
-camera button for the camera, and any of those rebindable — tap and hold as two separate
-gestures — to any app on the phone. It also gives brightness or a synthetic-swipe scroll to
-apps carrying no wheel code of their own.
-
-Installing it takes nothing away from the section above. It's a phone-wide key filter, and
-bare turns are deliberately passed through to `com.gios.*` (as well as LightFastread,
-LightRSS and LightPhono), because panning the planner a notch at a time is something only the
-app itself can do.
-
-```bash
-# Optional: LightControl, for brightness, the flashlight and the camera button
-adb install -r LightControl-v1.0.x.apk
-
-# The key service. NOTE: this setting is a list, and this command REPLACES it —
-# if you also run LightVoice's push-to-talk, colon-join both components instead.
-adb shell settings put secure enabled_accessibility_services \
-  com.gios.lightcontrol/com.gios.lightcontrol.keys.ControlService
-adb shell settings put secure accessibility_enabled 1
-
-# Brightness, and the level readout + opening apps from the service
-adb shell appops set com.gios.lightcontrol WRITE_SETTINGS allow
-adb shell appops set com.gios.lightcontrol SYSTEM_ALERT_WINDOW allow
+```sh
+git clone https://github.com/gi-os/LightNotebook.git
+cd LightNotebook
+./gradlew :app:assembleRelease
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-Latest APK: https://github.com/gi-os/LightControl/releases/latest
+You need JDK 17 and the Android SDK (`compileSdk` 35, `minSdk` 29). The keystore is
+committed at `keystore/lightnotebook.jks` on purpose — see
+[Signing](#signing-and-releases) below — so a release build made from a fresh checkout
+installs over an existing one instead of failing with Obtainium's `Failure: Invalid`.
 
-## Reminders
+To pick up notes, calendar entries and Claude vision parsing with no further setup, that
+first install is already the whole app. The camera page needs an Anthropic key (see
+[Configuration](#configuration)); everything else — notes, the wall planner, reminders,
+importing other calendars — works with none.
 
-Anything with a time gets one. The lead time is Settings → REMIND ME (default ten minutes
-before, or never), and any single entry can be changed from its row.
+## Configuration
 
-When one comes due you get three things: a notification, a buzz, and a box that lights the
-panel. The alarm is `setExactAndAllowWhileIdle`, which is the only kind that fires on time
-through Doze — `setAndAllowWhileIdle` is throttled to roughly once every nine minutes,
-which for "tell me at 08:50" is the same as not firing. Alarms don't survive a reboot and a
-force-stop clears them, so everything is re-armed at boot and again at every launch.
+- **Anthropic API key.** Settings → paste it, or **SCAN QR**: put your key into
+  <https://gi-os.github.io/LightNotebook/> (client-side, generated in the browser, the
+  key never leaves the page) and point the camera at the resulting code. The scanner is
+  [gi-os/LightQR](https://github.com/gi-os/LightQR)'s CameraX analyzer, wrapped in a
+  Light-styled screen. Typing and the calendar work with no key at all; only the camera
+  page needs one, at roughly a fraction of a cent per photograph.
+- **Reminders.** Settings → REMIND ME sets the default lead time (ten minutes, or
+  never); any entry's own row can override it. Reminders are
+  `setExactAndAllowWhileIdle` (the throttled `setAndAllowWhileIdle` fires roughly once
+  every nine minutes under Doze, which is useless for a fixed time), re-armed at boot
+  and at every launch since alarms don't survive a reboot or a force-stop. The
+  notification box that lights the panel needs one manual grant, because Android 14
+  gates it behind an appop LightOS has no settings screen for:
 
-The box needs one adb grant, because LightOS has no settings screen for it and Android 14
-uses that appop to decide whether a broadcast may start an activity:
+  ```sh
+  adb shell appops set com.gios.lightnotebook SYSTEM_ALERT_WINDOW allow
+  ```
 
+  Without it the notification and the buzz still arrive; only the panel stays dark.
+- **Importing calendars.** Settings → CALENDARS. Import a `.ics` file (parsed directly,
+  recurrence deliberately not expanded — a weekly meeting arrives as its first
+  occurrence) or import from the phone's own calendar provider via
+  `CalendarContract.Instances` (recurrence expansion comes from the provider itself).
+  Each import is a labelled, hideable, removable source; re-importing the same source
+  **replaces** its events rather than duplicating them.
+- **Mirroring to the phone's calendar.** Entries are written into a writable
+  `CalendarContract` calendar when one exists; the notebook stays the source of truth,
+  so deleting an entry removes both copies. The LPIII has no Play Services, so this is
+  silently a no-op if there is nothing to write to.
+- **LightControl** (optional, separate app) rebinds the wheel click and camera button
+  phone-wide — brightness, flashlight, camera — and passes bare wheel turns straight
+  through to `com.gios.*` so LightNotebook keeps handling its own scrolling and planner
+  panning:
+
+  ```sh
+  adb install -r LightControl-v1.0.x.apk
+  adb shell settings put secure enabled_accessibility_services \
+    com.gios.lightcontrol/com.gios.lightcontrol.keys.ControlService
+  adb shell settings put secure accessibility_enabled 1
+  adb shell appops set com.gios.lightcontrol WRITE_SETTINGS allow
+  adb shell appops set com.gios.lightcontrol SYSTEM_ALERT_WINDOW allow
+  ```
+
+## Usage notes worth knowing
+
+- The wheel scrolls whatever is on screen — notes, a day, the agenda, settings, the
+  list of calendars, a photographed page's transcription — and pans the wall planner
+  when nothing is being pinched. It works with nothing else installed: LightOS relabels
+  the optical sensor's scancodes `WHEEL_CCW`/`WHEEL_CW` in a patched
+  `Generic.kl`, and the app claims them in `dispatchKeyEvent`, ahead of the view
+  hierarchy, so a turn still pans the day while a text field has focus.
+- The calendar's Month/Week/Day zoom stops are snapped to, not free scroll; the open day
+  is composed into the exact cell you pinched, so pinching out returns to that same
+  square instead of navigating to a separate screen.
+- Typing `9:30 dentist` sets a time; a bare leading number is deliberately not a time
+  (`3 loads of laundry` is not an appointment at three).
+- Photographing from the CALENDAR tab tells the model to expect dates; from NOTES it
+  decides for itself between transcription and event extraction.
+
+## Build and test
+
+```sh
+./gradlew :app:assembleRelease        # signed release APK
+./gradlew :app:testDebugUnitTest      # markdown, date, planner-geometry logic
+python3 scripts/generate_icon.py      # regenerate the launcher icon (needs Pillow)
 ```
-adb shell appops set com.gios.lightnotebook SYSTEM_ALERT_WINDOW allow
-```
 
-Without it the notification and the buzz still arrive; only the panel stays dark. The
-notifier, the wake-the-screen activity and the buzz pattern are ported from
-[LightChat](https://github.com/gi-os/LightChat).
+97 unit tests cover the markdown/list round-trip, date and reminder-timing parsing,
+QR-payload validation, `.ics` folding and timezone handling, and the planner's zoom
+arithmetic — all of it in code deliberately free of Android imports
+(`util/NoteMarkdown.kt`, `util/NoteDates.kt`, `util/CanvasMath.kt`) so it runs off-device.
+CI runs this suite before assembling, which is also what exercises Room's KSP codegen.
 
-## Calendars and importing
+The Room schema migrates rather than resets — version 2 added calendars, reminders and
+import provenance as a real `Migration` — because `fallbackToDestructiveMigration` is
+only harmless until somebody's notes are in the database.
 
-Settings → CALENDARS. Each one carries a label, can be hidden from the grid, and can be
-removed with its events.
+## Signing and releases
 
-- **Import a .ics file** — an export or an invite, from anywhere. The parser reads
-  `VEVENT` blocks and unfolds long lines properly; `TZID` and UTC stamps are converted to
-  the phone's own day, so a 01:30 UTC call doesn't land on tomorrow. Recurrence is
-  deliberately not expanded: a weekly meeting arrives as its first occurrence rather than
-  as a series this parser would get subtly wrong.
-- **Import from this phone** — whatever LightOS already syncs, read through
-  `CalendarContract.Instances`, so the provider's own recurrence expansion is used instead.
+Every push to `main` runs `:app:testDebugUnitTest`, assembles, verifies the signing
+certificate against `signing-fingerprint.txt`, verifies a launcher icon is present, and
+publishes a signed GitHub Release — **a push is a release trigger, not a cosmetic
+action.** `versionCode`/`versionName` are not fixed in the committed
+`app/build.gradle.kts` (which carries a `1.0.0` placeholder); CI stamps
+`versionCode = <run number>` and `versionName = 1.0.<run number>` on every run, which is
+why release tags are `v1.0.<n>` in strict sequence. Point
+[Obtainium](https://github.com/ImranR98/Obtainium) at this repo, or install by hand:
 
-Imports are snapshots. Re-importing the same source **replaces** its events, so something
-moved at the source moves here rather than appearing twice.
-
-## Films from LightPass
-
-If [Movie Tickets](https://github.com/gi-os/LightPass) is installed, its tickets show up on
-the day they screen — a dot on the grid, a ticket-stub row on the day, a line in NEXT UP —
-and tapping one opens the stub in LightPass, where the barcode is.
-
-Nothing is copied. LightNotebook reads LightPass's content provider (title, cinema, seat,
-day, start and end), so a ticket deleted or re-dated over there is right over here on the
-next look, and the film rows are not editable in the notebook. If LightPass isn't
-installed, or is an older build with no provider, the calendar is simply films-free — no
-message, no setup step.
-
-## Camera
-
-ADD → Camera photographs a page and Claude Haiku reads it. One request does the
-classification and the extraction:
-
-- **A page of writing** → transcribed, with bullets, numbering and emphasis preserved.
-  Then it goes into a new note, or onto the end of any note you pick.
-- **A calendar, planner or list of dates** → parsed into events, each with a date and an
-  optional time. Everything is kept by default; tap a line to drop it. Confirmed events
-  land on the calendar, and in the phone's calendar too.
-
-Photographing from the CALENDAR tab tells the model to expect dates. From NOTES it
-decides for itself.
-
-The key is yours and stays on the phone. Settings → paste it, or **SCAN QR**: put your key
-into <https://gi-os.github.io/LightNotebook/> (client-side, the key never leaves the page)
-and point the phone at the code rather than typing a hundred characters on a phone
-keyboard.
-
-The scanner is the one from [gi-os/LightQR](https://github.com/gi-os/LightQR) — a CameraX
-analyzer decoding the luminance plane with ZXing core, wrapped in a Light-styled screen
-with a reticle and nothing else. No Play Services, and no borrowed Material activity
-flashing up mid-flow. A code that isn't shaped like a key is refused with a line of text
-and the camera keeps scanning, so a poster in frame can't be saved as your API key.
-
-Typing and the calendar work with no key at all — only the camera needs one, at a fraction
-of a cent a page.
-
-## Design
-
-The look is ported from Light's own SDK rather than approximated:
-
-- **A 27 × 31 grid.** Bar heights, insets and icon sizes are fractions of the screen, not
-  fixed dp.
-- **LightOS's named type scale** (`title` … `micro`), scaled against a 600px baseline, set
-  in Akkurat pulled out of `SystemFonts` so the app matches the system chrome.
-- **Three colours**: background, content, secondary. State is carried by inversion and by
-  brackets around the active label, because a tint does not read on a greyscale matte
-  panel.
-- **No ripples.** Taps buzz on finger-down, 45ms, tuned for the LP3's slow motor.
-- LightOS's own icons, from the SDK.
-
-`app/src/main/kotlin/.../ui/theme/` holds the ported design system —
-`Theme.kt` (grid, tokens, haptics), `LightText.kt`, `LightIcons.kt`, `LightBars.kt`.
-Vector drawables in `res/drawable/ic_*` and the design tokens come from
-[lightphone/light-sdk](https://github.com/lightphone/light-sdk), MIT licensed; see
-`LICENSE-light-sdk`.
-
-This is a **plain sideloaded APK, not an SDK tool** — the SDK's dependency allowlist has
-no CameraX, so nothing that photographs a page can be built against it.
-
-## Install
-
-Every push to `main` publishes a signed release APK. Point Obtainium at this repo, or:
-
-```
+```sh
 adb install -r LightNotebook-v1.0.<run>.apk
 ```
 
-The keystore is committed at `keystore/lightnotebook.jks` on purpose: one stable key
-means every build upgrades in place instead of failing with Obtainium's opaque
-`Failure: Invalid`. CI pins the certificate SHA-256 in `signing-fingerprint.txt` and
-fails if it ever drifts.
+## Contributing
 
-## Build
+Issues and pull requests welcome. Keep new logic that doesn't need `android.*` (parsing,
+date math, geometry) in the Android-free `util/` files so it stays unit-testable
+off-device, and add tests alongside it. Don't reintroduce
+`fallbackToDestructiveMigration` on the Room schema. If you touch the calendar's
+gesture handling, note that the pan/zoom loop is hand-rolled (not
+`detectTransformGestures`) specifically because that API has no end-of-gesture hook and
+the snap-to-stop behavior needs one.
 
-```
-./gradlew :app:assembleRelease        # APK
-./gradlew :app:testDebugUnitTest      # markdown + date logic
-python3 scripts/generate_icon.py      # launcher icon, needs Pillow
-```
+## Version history
 
-The markdown, date, QR-payload, iCalendar, agenda-merge, planner-geometry and
-reminder-timing code is deliberately free of Android imports, so all of it is unit tested off-device — 97 tests covering list
-round-trips, return-key behaviour, month grids, clock parsing, which scanned payloads count
-as a key, timezone handling and line folding in .ics files, when an alarm should fire, which rows fold
-together, and every piece of the planner's zoom arithmetic.
+Tags are stamped by CI (`v1.0.<run number>`) on every push to `main`; each one below is
+a real tag against the commit shown.
 
-The database migrates rather than resets: version 2 added calendars, reminders and import
-provenance as a real `Migration`, because `fallbackToDestructiveMigration` is only harmless
-until somebody's notes are in there.
+| Version | Commit | Change |
+| --- | --- | --- |
+| v1.0.16 | `dd4a3c2` | Separate what the notebook does with the wheel from what LightControl does |
+| v1.0.15 | `74028be` | Weekday letters live on the surface, and detail arrives earlier |
+| v1.0.14 | `398578f` | Drop the NEXT UP footer, and fix the bars vanishing after a pinch out |
+| v1.0.13 | `e601d6d` | Dim the neighbouring months by half |
+| v1.0.12 | `40897d5` | Scroll with the wheel |
+| v1.0.11 | `8cd4273` | Sliding between days moves the planner, not just the contents |
+| v1.0.10 | `0923bf4` | Opening a day no longer throws the planner back out to the month |
+| v1.0.9  | `525ead5` | The cell becomes the day: no second screen, sliding between days works |
+| v1.0.8  | `ad2a13c` | Make the zoom carry through, float the bars, fix back landing on Notes |
+| v1.0.7  | `b8641bd` | The calendar is a zoomable wall planner |
+| v1.0.6  | `022c641` | Fix the agenda crash, fold tickets into their calendar entries, sync hourly |
+| v1.0.5  | `db438ae` | Times with reminders, labelled calendars you can import into, agenda screen |
+| v1.0.4  | `d4f52d6` | Show LightPass films on the calendar, open the stub when tapped |
+| v1.0.3  | `6a1ca4d` | Icons on the bottom bar, and highlight the day you are looking at |
+| v1.0.2  | `253b8f7` | Scan the API key in-app, with LightQR's scanner |
+| v1.0.1  | `6106690` | Initial release: notes, folders and a calendar for the Light Phone III |
 
-Requires the camera, and calendar read/write only if mirroring is on. Everything else is
-local: Room on the phone, no account, no sync.
+## License
+
+MIT. Vector drawables and design tokens in `ui/theme/` are ported from
+[lightphone/light-sdk](https://github.com/lightphone/light-sdk) (MIT); see
+`LICENSE-light-sdk`.
