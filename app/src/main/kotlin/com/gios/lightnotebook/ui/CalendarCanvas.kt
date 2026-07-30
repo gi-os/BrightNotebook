@@ -473,7 +473,10 @@ fun CalendarCanvas(
                         entryStyle = entryStyle,
                         monthStyle = monthStyle,
                         content = colors.content,
-                        contentSecondary = colors.contentSecondary,
+                        // contentFaint, not contentSecondary: half the luminance of #BBBBBB, so
+                        // the neighbouring months sit clearly behind the one you are reading
+                        // instead of competing with it.
+                        dimmed = colors.contentFaint,
                         background = colors.background,
                         rule = colors.rule,
                     )
@@ -560,7 +563,7 @@ private fun DrawScope.drawDay(
     entryStyle: TextStyle,
     monthStyle: TextStyle,
     content: androidx.compose.ui.graphics.Color,
-    contentSecondary: androidx.compose.ui.graphics.Color,
+    dimmed: androidx.compose.ui.graphics.Color,
     background: androidx.compose.ui.graphics.Color,
     rule: androidx.compose.ui.graphics.Color,
 ) {
@@ -587,7 +590,7 @@ private fun DrawScope.drawDay(
     val ink = when {
         isToday -> background
         inFocusMonth -> content
-        else -> contentSecondary
+        else -> dimmed
     }
 
     // The 1st carries its month, so panning through a year never loses the place.
