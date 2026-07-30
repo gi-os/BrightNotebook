@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import com.gios.lightnotebook.ui.theme.LightTextVariant
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
+import com.gios.lightnotebook.ui.theme.lightDayGestures
 import com.gios.lightnotebook.ui.theme.lightTextStyle
 import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.CanvasMath
@@ -81,7 +82,7 @@ fun CalendarCanvas(
      * The day itself, drawn into the cell and grown out of it. Given how far the zoom has
      * gone (0 at the week stop, 1 filling the screen) and a way to close.
      */
-    dayPane: @Composable (progress: Float, onClose: () -> Unit) -> Unit,
+    dayPane: @Composable (progress: Float, gestures: Modifier, onClose: () -> Unit) -> Unit,
     onWindowChanged: (Long, Long) -> Unit,
     onFocusDayChanged: (Long) -> Unit,
     /** Height of the bar floating over the canvas, so home starts clear of it. */
@@ -178,17 +179,55 @@ fun CalendarCanvas(
             onOpenDay(day)
             dayOpen = true
             scope.launch {
-                val centre = Pt(
-                    x = (CanvasMath.columnOf(day) + 0.5f) * cellWidth,
-                    y = (CanvasMath.weekIndexOf(day, originWeekStart) + 0.5f) * cellHeight,
-                )
+                val end = ZoomLevel.Day.scale
                 animateTo(
-                    targetScale = ZoomLevel.Day.scale,
+                    targetScale = end,
+                    // The column is aligned to the viewport rather than centred, because at this
+                    // scale a cell *is* the viewport — that alignment is what makes a slide of
+                    // one screen a slide of exactly one day.
                     targetOffset = Offset(
-                        viewportWidth / 2f - centre.x * ZoomLevel.Day.scale,
-                        viewportHeight / 2f - centre.y * ZoomLevel.Day.scale,
+                        CanvasMath.offsetXForColumn(CanvasMath.columnOf(day), cellWidth * end),
+                        viewportHeight / 2f -
+                            (CanvasMath.weekIndexOf(day, originWeekStart) + 0.5f) *
+                            cellHeight * end,
                     ),
                     durationMs = HANDOVER_MS,
+                )
+            }
+        }
+
+        /**
+         * A day open and being slid sideways.
+         *
+         * At the day stop a cell is exactly a screen wide, so the pan is applied to the surface
+         * untouched: the open day slides off, its neighbour's own square slides in behind it,
+         * and the pane rides along because it is anchored to the cell. Off the end of the week,
+         * the surface goes diagonally to the row above or below, which is where that day
+         * actually lives on a wall planner.
+         */
+        fun slideDay(dx: Float) {
+            if (!dayOpen) return
+            place(scale, Offset(offset.x + dx, offset.y))
+        }
+
+        fun settleSlide() {
+            if (!dayOpen) return
+            val span = cellWidth * scale
+            val week = CanvasMath.weekIndexOf(selectedDay, originWeekStart)
+            val (column, wrappedWeek, day) = CanvasMath.wrapSlide(
+                column = CanvasMath.openColumn(offset.x, span),
+                week = week,
+                originWeekStart = originWeekStart,
+            )
+            onOpenDay(day)
+            scope.launch {
+                animateTo(
+                    targetScale = scale,
+                    targetOffset = Offset(
+                        CanvasMath.offsetXForColumn(column, span),
+                        viewportHeight / 2f - (wrappedWeek + 0.5f) * cellHeight * scale,
+                    ),
+                    durationMs = SLIDE_SETTLE_MS,
                 )
             }
         }
@@ -448,12 +487,22 @@ fun CalendarCanvas(
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = lerp(fromWidth / viewportWidth, 1f, eased)
                         scaleY = lerp(fromHeight / viewportHeight, 1f, eased)
-                        translationX = lerp(cell.x, 0f, eased)
+                        // The x stays glued to the cell even when fully open: at the day stop a
+                        // cell is a screen wide, so this is what carries the pane off-screen as
+                        // the planner slides and lets the next day's square arrive behind it.
+                        translationX = cell.x
                         translationY = lerp(cell.y, 0f, eased)
                         alpha = lerp(0.35f, 1f, eased)
                     },
             ) {
-                dayPane(progress) { closeDay() }
+                dayPane(
+                    progress,
+                    Modifier.lightDayGestures(
+                        onSlide = { dx -> slideDay(dx) },
+                        onSlideEnd = { settleSlide() },
+                        onPinchOut = { closeDay() },
+                    ),
+                ) { closeDay() }
             }
         }
     }
@@ -463,6 +512,9 @@ private fun lerp(from: Float, to: Float, t: Float): Float = from + (to - from) *
 
 private const val SNAP_MS = 220
 private const val HANDOVER_MS = 190
+
+/** Short: the finger has already done most of the travel, this only tidies the last of it. */
+private const val SLIDE_SETTLE_MS = 130
 
 /** How far sideways counts as turning the page rather than a stray drag. */
 private const val PAGE_FRACTION = 0.16f

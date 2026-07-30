@@ -38,9 +38,13 @@ downwards, **pinch to zoom and drag to go anywhere in time**.
   composed into the square you were pinching and grown out of it by a layer transform, so at
   the end of the gesture the rectangle you were looking at *is* the day. Pinch out and it
   shrinks back into its square.
-- In a day: slide sideways for the day either side, pinch out to leave. The sideways slide is
-  arbitrated in the pointer input's initial pass, which is what makes it work at all — a
-  scrolling list claims the drag first otherwise.
+- In a day: slide sideways and **the planner itself moves**. The day stop is exactly 7x, so one
+  cell is one screen wide — the open day slides off, the neighbour's own square arrives behind
+  it, and the pane rides along because it is glued to the cell. Slide off the end of a week and
+  the surface goes diagonally to the row above or below, which is where that day actually is on
+  a wall planner. Pinch out to leave.
+- The slide is arbitrated in the pointer input's initial pass, which is what makes it work at
+  all — a scrolling list claims the drag first otherwise.
 - Let go near home and it springs exactly back to it, eased rather than linear. TODAY does the
   same from anywhere, and frames the week so it never lands behind the NEXT UP footer.
 - Double-tap zooms in a stop about the point you tapped. At the month stop, where the seven
@@ -184,7 +188,7 @@ python3 scripts/generate_icon.py      # launcher icon, needs Pillow
 ```
 
 The markdown, date, QR-payload, iCalendar, agenda-merge, planner-geometry and
-reminder-timing code is deliberately free of Android imports, so all of it is unit tested off-device — 90 tests covering list
+reminder-timing code is deliberately free of Android imports, so all of it is unit tested off-device — 97 tests covering list
 round-trips, return-key behaviour, month grids, clock parsing, which scanned payloads count
 as a key, timezone handling and line folding in .ics files, when an alarm should fire, which rows fold
 together, and every piece of the planner's zoom arithmetic.

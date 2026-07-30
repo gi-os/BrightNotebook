@@ -16,7 +16,14 @@ data class Pt(val x: Float, val y: Float)
 enum class ZoomLevel(val scale: Float) {
     Month(1f),
     Week(2.3f),
-    Day(4.2f),
+
+    /**
+     * Seven, exactly — because there are seven columns, so at this scale one cell is precisely
+     * the width of the viewport. That is what lets a day slide sideways as a real object on the
+     * planner: one cell of pan is one day, and the neighbour arriving is the neighbour's own
+     * square rather than a redrawn panel.
+     */
+    Day(7f),
 }
 
 /**
@@ -40,7 +47,7 @@ object CanvasMath {
     private const val HOME_OFFSET_TOLERANCE_CELLS = 0.6f
 
     val MIN_SCALE = ZoomLevel.Month.scale
-    const val MAX_SCALE = 5.5f
+    val MAX_SCALE = ZoomLevel.Day.scale
 
     /** Sunday-first column, matching the month grid and the LPIII's own calendar. */
     fun columnOf(epochDay: Long): Int = (LocalDate.ofEpochDay(epochDay).dayOfWeek.value % 7)
@@ -123,7 +130,12 @@ object CanvasMath {
      */
     fun snapTarget(scale: Float): Float {
         val clamped = clampScale(scale)
-        val nearest = ZoomLevel.entries.minByOrNull { abs(it.scale - clamped) } ?: return clamped
+        // Past halfway between the week and the day, the day wins outright rather than having
+        // to be pinched all the way to seven. A proportional band would put that boundary at
+        // 5.5, which is a lot of pinching for a phone this size.
+        if (clamped >= (ZoomLevel.Week.scale + ZoomLevel.Day.scale) / 2f) return ZoomLevel.Day.scale
+        val nearest = listOf(ZoomLevel.Month, ZoomLevel.Week)
+            .minByOrNull { abs(it.scale - clamped) } ?: return clamped
         return if (abs(nearest.scale - clamped) / nearest.scale <= SNAP_BAND) {
             nearest.scale
         } else {
@@ -190,6 +202,35 @@ object CanvasMath {
             return (viewportWidth - contentWidth) / 2f
         }
         return offsetX.coerceIn(viewportWidth - contentWidth, 0f)
+    }
+
+    /* ---------- sliding between days, with a day filling the screen ---------- */
+
+    /**
+     * Which column is filling the screen, given how far the planner has been slid.
+     *
+     * At [ZoomLevel.Day] a cell spans the whole viewport, so this is just the offset measured
+     * in screens. May return -1 or 7: sliding off either end of the week is how you reach the
+     * row above or below, and the caller wraps it.
+     */
+    fun openColumn(offsetX: Float, cellSpan: Float): Int {
+        if (cellSpan <= 0f) return 0
+        return Math.round(-offsetX / cellSpan)
+    }
+
+    /** The offset that puts [column] exactly on screen. */
+    fun offsetXForColumn(column: Int, cellSpan: Float): Float = -column * cellSpan
+
+    /**
+     * Where sliding off the end of a week lands: the next row's Sunday, or the previous row's
+     * Saturday. Returns the column, the week and the day, because the surface has to move
+     * diagonally to get there — a wall planner's "tomorrow" after Saturday is at the far left,
+     * one row down.
+     */
+    fun wrapSlide(column: Int, week: Int, originWeekStart: Long): Triple<Int, Int, Long> = when {
+        column > 6 -> Triple(0, week + 1, dayAt(0, week + 1, originWeekStart))
+        column < 0 -> Triple(6, week - 1, dayAt(6, week - 1, originWeekStart))
+        else -> Triple(column, week, dayAt(column, week, originWeekStart))
     }
 
     /** The day nearest the middle of the viewport — what a zoom-in should open. */

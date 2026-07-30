@@ -134,15 +134,80 @@ class CanvasMathTest {
         assertEquals(ZoomLevel.Month, CanvasMath.levelFor(1.5f))
         assertEquals(ZoomLevel.Week, CanvasMath.levelFor(2.3f))
         assertEquals(ZoomLevel.Week, CanvasMath.levelFor(3.5f))
-        assertEquals(ZoomLevel.Day, CanvasMath.levelFor(4.2f))
-        assertEquals(ZoomLevel.Day, CanvasMath.levelFor(5.5f))
+        assertEquals(ZoomLevel.Day, CanvasMath.levelFor(ZoomLevel.Day.scale))
+    }
+
+    @Test
+    fun aDayFillsTheViewportAtTheDayStop() {
+        // Seven columns across the width means the day stop has to be exactly seven, or a
+        // slide of one screen would not be a slide of one day.
+        assertEquals(7f, ZoomLevel.Day.scale)
+        val cellSpan = cellW * ZoomLevel.Day.scale
+        assertEquals(cellW * 7f, cellSpan, 0.01f)
+    }
+
+    @Test
+    fun theOpenColumnIsTheOffsetMeasuredInScreens() {
+        val span = 420f
+        assertEquals(0, CanvasMath.openColumn(0f, span))
+        assertEquals(1, CanvasMath.openColumn(-span, span))
+        assertEquals(3, CanvasMath.openColumn(-span * 3, span))
+        // Mid-drag it rounds to whichever day is more than half on screen.
+        assertEquals(1, CanvasMath.openColumn(-span * 0.6f, span))
+        assertEquals(0, CanvasMath.openColumn(-span * 0.4f, span))
+    }
+
+    @Test
+    fun offsetForColumnIsTheInverse() {
+        val span = 420f
+        for (column in 0..6) {
+            assertEquals(
+                column,
+                CanvasMath.openColumn(CanvasMath.offsetXForColumn(column, span), span),
+            )
+        }
+    }
+
+    @Test
+    fun slidingOffTheEndOfAWeekWrapsToTheNextRow() {
+        val (column, week, day) = CanvasMath.wrapSlide(7, 2, origin)
+        assertEquals(0, column)
+        assertEquals(3, week)
+        assertEquals(CanvasMath.dayAt(0, 3, origin), day)
+        // And the day really is the one after Saturday.
+        assertEquals(CanvasMath.dayAt(6, 2, origin) + 1, day)
+    }
+
+    @Test
+    fun slidingBackOffTheStartWrapsToThePreviousRow() {
+        val (column, week, day) = CanvasMath.wrapSlide(-1, 2, origin)
+        assertEquals(6, column)
+        assertEquals(1, week)
+        assertEquals(CanvasMath.dayAt(0, 2, origin) - 1, day)
+    }
+
+    @Test
+    fun aColumnInsideTheWeekIsLeftAlone() {
+        val (column, week, day) = CanvasMath.wrapSlide(3, 5, origin)
+        assertEquals(3, column)
+        assertEquals(5, week)
+        assertEquals(CanvasMath.dayAt(3, 5, origin), day)
     }
 
     @Test
     fun aPinchThatEndsNearALevelSnapsToIt() {
         assertEquals(1f, CanvasMath.snapTarget(1.1f))
         assertEquals(ZoomLevel.Week.scale, CanvasMath.snapTarget(2.1f))
-        assertEquals(ZoomLevel.Day.scale, CanvasMath.snapTarget(4.0f))
+    }
+
+    @Test
+    fun pinchingPastHalfwayToTheDayOpensIt() {
+        val halfway = (ZoomLevel.Week.scale + ZoomLevel.Day.scale) / 2f
+        assertEquals(ZoomLevel.Day.scale, CanvasMath.snapTarget(halfway))
+        assertEquals(ZoomLevel.Day.scale, CanvasMath.snapTarget(halfway + 1f))
+        // Just short of it is not enough — you get to stay between stops.
+        val short = halfway - 0.2f
+        assertEquals(short, CanvasMath.snapTarget(short))
     }
 
     @Test

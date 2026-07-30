@@ -85,13 +85,14 @@ fun CalendarScreen(
                 dayOpen = true
                 vm.selectDay(day)
             },
-            dayPane = { _, close ->
+            dayPane = { _, gestures, close ->
                 DayPane(
                     vm = vm,
                     onClose = {
                         dayOpen = false
                         close()
                     },
+                    gestures = gestures,
                 )
             },
             onWindowChanged = { from, to -> vm.setCanvasWindow(from, to) },

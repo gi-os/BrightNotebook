@@ -315,13 +315,14 @@ private const val PINCH_OUT_RATIO = 0.75f
  * vertical one is left entirely alone so scrolling still feels native.
  */
 fun Modifier.lightDayGestures(
-    onPrevDay: () -> Unit,
-    onNextDay: () -> Unit,
+    /** Every horizontal pixel of the drag, so the caller can move the planner with it. */
+    onSlide: (Float) -> Unit,
+    /** Fingers up after a horizontal drag: settle on whichever day is now on screen. */
+    onSlideEnd: () -> Unit,
     onPinchOut: () -> Unit,
 ): Modifier = composed {
     val density = LocalDensity.current
     val slop = with(density) { DAY_SLOP_DP.dp.toPx() }
-    val threshold = with(density) { DAY_SWIPE_DP.dp.toPx() }
 
     pointerInput(Unit) {
         awaitEachGesture {
@@ -331,6 +332,7 @@ fun Modifier.lightDayGestures(
             var zoom = 1f
             var axis = Axis.Undecided
             var fired = false
+            var slid = false
 
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -360,12 +362,11 @@ fun Modifier.lightDayGestures(
 
                 if (axis == Axis.Horizontal) {
                     event.changes.forEach { it.consume() }
-                    if (!fired && abs(dx) > threshold) {
-                        fired = true
-                        if (dx < 0f) onNextDay() else onPrevDay()
-                    }
+                    onSlide(pan.x)
+                    slid = true
                 }
             }
+            if (slid) onSlideEnd()
         }
     }
 }
@@ -373,7 +374,6 @@ fun Modifier.lightDayGestures(
 private enum class Axis { Undecided, Horizontal, Vertical }
 
 private const val DAY_SLOP_DP = 12
-private const val DAY_SWIPE_DP = 56
 private const val DAY_AXIS_BIAS = 1.3f
 
 /**

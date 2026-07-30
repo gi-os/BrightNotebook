@@ -21,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.notify.Reminders
@@ -48,8 +50,31 @@ fun DayScreen(
     vm: NotebookViewModel,
     onBack: () -> Unit,
 ) {
-    DayPane(vm = vm, onClose = onBack)
+    // Opened from a reminder rather than from the planner, so there is no surface to slide:
+    // a horizontal drag steps the day once it passes half the screen.
+    var slid by remember { mutableStateOf(0f) }
+    val step = with(LocalDensity.current) { STANDALONE_STEP_DP.dp.toPx() }
+    DayPane(
+        vm = vm,
+        onClose = onBack,
+        gestures = Modifier.lightDayGestures(
+            onSlide = { dx ->
+                slid += dx
+                if (slid <= -step) {
+                    vm.stepDay(1)
+                    slid = 0f
+                } else if (slid >= step) {
+                    vm.stepDay(-1)
+                    slid = 0f
+                }
+            },
+            onSlideEnd = { slid = 0f },
+            onPinchOut = onBack,
+        ),
+    )
 }
+
+private const val STANDALONE_STEP_DP = 72
 
 /**
  * The day itself, as a pane rather than a screen.
@@ -63,6 +88,11 @@ fun DayScreen(
 fun DayPane(
     vm: NotebookViewModel,
     onClose: () -> Unit,
+    /**
+     * The gestures that move between days. Supplied by the planner when the pane is a cell on
+     * it, so that sliding pans the actual surface; the standalone route passes its own.
+     */
+    gestures: Modifier = Modifier,
 ) {
     // The open day comes from the view model, not from a route argument: sliding moves it, and
     // pushing a screen on the stack for every day you flick past would be absurd.
@@ -101,13 +131,7 @@ fun DayPane(
             .fillMaxSize()
             .background(LightThemeTokens.colors.background)
             .imePadding()
-            // Sideways for the day either side, pinch out to leave. Arbitrated in the initial
-            // pass so the list underneath keeps its vertical scroll — see lightDayGestures.
-            .lightDayGestures(
-                onPrevDay = { vm.stepDay(-1) },
-                onNextDay = { vm.stepDay(1) },
-                onPinchOut = onClose,
-            ),
+            .then(gestures),
     ) {
         LightTopBar(
             title = NoteDates.dayTitle(epochDay),
