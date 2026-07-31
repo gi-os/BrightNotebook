@@ -58,6 +58,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!--
+                One note per something another app owns: lightnotebook://note/<key>, which
+                opens that note and makes it if it does not exist yet. LightChat's contact
+                page is the only caller today and asks by the conversation's normalised
+                handles.
+
+                DEFAULT only, no BROWSABLE. This filter creates a database row from an
+                unauthenticated intent, and BROWSABLE would let any web page do it — for
+                the sake of a "tap a lightnotebook:// URL in a browser" case that nothing
+                needs. An app calling startActivity with an implicit ACTION_VIEW gets
+                CATEGORY_DEFAULT added for it, so LightChat is unaffected.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="lightnotebook" android:host="note" />
+            </intent-filter>
         </activity>
 
         <!-- The box a reminder puts on screen. showWhenLocked + turnScreenOn are what wake

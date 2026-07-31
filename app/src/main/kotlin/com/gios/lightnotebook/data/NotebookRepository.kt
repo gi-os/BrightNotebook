@@ -1,6 +1,7 @@
 package com.gios.lightnotebook.data
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.gios.lightnotebook.util.ImportedEvent
@@ -129,6 +130,45 @@ class NotebookRepository(private val context: Context) {
             ),
         )
         return id
+    }
+
+    /**
+     * The note another app owns under [key], creating it the first time it is asked for.
+     *
+     * Create-if-absent rather than a separate "make one" call because the first tap from
+     * LightChat's contact page happens with nothing set up here, and a link that lands on
+     * "no such note" would be a dead end. [title] only seeds a new note — a note that
+     * already exists keeps whatever it was renamed to.
+     *
+     * The unique index on `externalKey` is what makes this safe against two taps at once:
+     * the loser's insert throws and the re-read finds the winner's row. Only that one
+     * failure is caught — a blanket `runCatching` here would swallow a coroutine
+     * cancellation and turn a full disk into a silent no-op.
+     *
+     * A seeded title means an externally-made note is never blank, so the editor's "opened
+     * and never written in, so throw it away" rule cannot apply to it: one stray tap on
+     * LightChat's note row does leave an empty note behind, titled with the contact's name.
+     * That is the trade for the row being able to say whose note it is.
+     */
+    suspend fun noteForExternalKey(key: String, title: String): String? {
+        if (key.isBlank()) return null
+        dao.getNoteByExternalKey(key)?.let { return it.id }
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+        return try {
+            dao.insertNote(
+                NoteEntity(
+                    id = id,
+                    title = title.ifBlank { key },
+                    externalKey = key,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            id
+        } catch (_: SQLiteConstraintException) {
+            dao.getNoteByExternalKey(key)?.id
+        }
     }
 
     suspend fun saveNote(note: NoteEntity) =

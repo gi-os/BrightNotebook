@@ -104,6 +104,18 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * The note another app keeps here under [key], made now if this is the first ask.
+     *
+     * The one entry point for `lightnotebook://note/<key>`. Suspending rather than taking a
+     * callback, unlike [createNote]: the caller is a `LaunchedEffect`, and awaiting it there
+     * means an activity recreated during the lookup cancels the wait instead of navigating a
+     * `NavController` that has since been disposed. Null when the key is blank or the write
+     * failed, which leaves the app where it was rather than on an editor for a note that
+     * does not exist.
+     */
+    suspend fun noteFor(key: String, title: String): String? = repo.noteForExternalKey(key, title)
+
+    /**
      * Saved on a short delay so a burst of typing is one write, then flushed outright
      * when the editor closes — see [flushNote].
      */

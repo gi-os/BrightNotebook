@@ -59,6 +59,16 @@ import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import kotlinx.coroutines.flow.MutableStateFlow
 
+/** A `lightnotebook://note/<key>` link, split into the parts [MainActivity] acts on. */
+private data class NoteLink(val key: String, val title: String)
+
+private const val NOTE_SCHEME = "lightnotebook"
+private const val NOTE_HOST = "note"
+
+/** Generous for a set of handles, small enough that nobody can stuff the database. */
+private const val MAX_KEY = 256
+private const val MAX_TITLE = 128
+
 class MainActivity : ComponentActivity() {
 
     /**
@@ -66,6 +76,14 @@ class MainActivity : ComponentActivity() {
      * read straight off the intent so a second tap while the app is open still lands.
      */
     private val pendingDay = MutableStateFlow<Long?>(null)
+
+    /**
+     * A note asked for from outside the app — LightChat's contact page, which keeps one
+     * note per conversation here and opens it by `lightnotebook://note/<key>`. Held in a
+     * flow for the same reason [pendingDay] is: a second tap while the app is already open
+     * arrives through [onNewIntent], not through [onCreate].
+     */
+    private val pendingNote = MutableStateFlow<NoteLink?>(null)
 
     /** Wheel notches on their way to whichever screen is up. */
     private val wheel = WheelBus()
@@ -97,15 +115,45 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingDay.value = dayIn(intent)
+        noteIn(intent)?.let { pendingNote.value = it }
     }
 
     private fun dayIn(intent: Intent?): Long? =
         intent?.getLongExtra(Notifier.EXTRA_EPOCH_DAY, 0L)?.takeIf { it != 0L }
 
+    /**
+     * `lightnotebook://note/<key>?title=<label>` — the whole external surface of this app.
+     *
+     * The key is opaque and is whatever the calling app can produce again tomorrow;
+     * LightChat sends a conversation's normalised handles. The title only ever seeds a note
+     * that does not exist yet. A malformed link is null, and nothing happens.
+     */
+    private fun noteIn(intent: Intent?): NoteLink? {
+        if (intent?.action != Intent.ACTION_VIEW) return null
+        val uri = intent.data ?: return null
+        if (!uri.scheme.equals(NOTE_SCHEME, ignoreCase = true)) return null
+        if (!uri.host.equals(NOTE_HOST, ignoreCase = true)) return null
+        // Decoded by Uri, and from a *path* segment, where a literal "+" survives —
+        // unlike a query parameter, where Android decodes "+" to a space.
+        val key = uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() } ?: return null
+        // The activity is exported and browsable, so both of these are attacker-chosen
+        // strings. Neither is read back by anything, but a note per distinct key with a
+        // title of arbitrary length is still somebody else's junk in your notebook.
+        if (key.length > MAX_KEY) return null
+        return NoteLink(key = key, title = uri.getQueryParameter("title").orEmpty().take(MAX_TITLE))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Notifier.ensureChannel(this)
         pendingDay.value = dayIn(intent)
+        // Only on a genuinely new launch. `onNewIntent` calls `setIntent`, so the VIEW
+        // intent becomes the activity's permanent intent — and a recreation (a theme or
+        // font-scale change, a restore after process death, "don't keep activities") would
+        // re-parse it and push the note again on top of the back stack that was just
+        // restored with it. Unbounded: it would fire again on every recreation for the life
+        // of the task.
+        pendingNote.value = if (savedInstanceState == null) noteIn(intent) else null
         setContent {
             LightNotebookTheme {
                 val nav = rememberNavController()
@@ -123,6 +171,25 @@ class MainActivity : ComponentActivity() {
                     val day = requestedDay ?: return@LaunchedEffect
                     nav.navigate("day/$day")
                     pendingDay.value = null
+                }
+
+                val requestedNote by pendingNote.collectAsStateWithLifecycle()
+                LaunchedEffect(requestedNote) {
+                    val link = requestedNote ?: return@LaunchedEffect
+                    // Cleared before the lookup, not after: finding or creating the note is
+                    // a database round trip, and leaving the request standing across it
+                    // would re-fire the effect on the next recomposition.
+                    pendingNote.value = null
+                    // Awaited here rather than handed a callback: this effect is scoped to
+                    // the composition, so an activity recreated mid-lookup cancels it
+                    // instead of navigating a NavController that no longer exists.
+                    val id = vm.noteFor(link.key, link.title) ?: return@LaunchedEffect
+                    // Same shape as arriving from the capture screen: one copy of the note
+                    // on the stack however many times the link is tapped.
+                    nav.navigate("note/$id") {
+                        popUpTo("home")
+                        launchSingleTop = true
+                    }
                 }
 
                 // Every screen below can reach the wheel; which scroller answers a notch

@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.0.16**.
+`com.gios.lightnotebook`. Current release: **v1.1.20**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -84,6 +84,15 @@ importing other calendars — works with none.
 
 ## Usage notes worth knowing
 
+- **Another app can keep a note here.** `lightnotebook://note/<key>?title=<label>` opens
+  the note filed under `<key>`, and makes it if this is the first ask. The key is opaque
+  to this app — it only has to find the same row again — and is held in a unique
+  column, so two taps at once cannot produce two notes.
+  [LightChat](https://github.com/gi-os/LightChat)'s contact page is the caller today: it
+  keeps one note per iMessage conversation and asks by the conversation's normalised
+  handles, never by a chat guid, so restoring a Mac backup does not strand every note. The
+  filter is `DEFAULT` and deliberately not `BROWSABLE`: it creates a database row from an
+  unauthenticated intent, and a web page has no business doing that.
 - The wheel scrolls whatever is on screen — notes, a day, the agenda, settings, the
   list of calendars, a photographed page's transcription — and pans the wall planner
   when nothing is being pinched. It works with nothing else installed: LightOS relabels
@@ -166,11 +175,14 @@ the snap-to-stop behavior needs one.
 
 ## Version history
 
-Tags are stamped by CI (`v1.0.<run number>`) on every push to `main`; each one below is
-a real tag against the commit shown.
+Tags are stamped by CI (`v<major>.<minor>.<run number>`) on every push to `main`; each
+one below is a real tag against the commit shown. A branch that is not `main` runs
+`check.yml` instead, which compiles and tests and publishes nothing.
 
 | Version | Commit | Change |
 | --- | --- | --- |
+| v1.1.20 | this commit | One note per thing another app owns: `lightnotebook://note/<key>` |
+| v1.0.17 – v1.0.19 | | Keep the photograph and let a transcription be corrected; LightCamera's capture engine |
 | v1.0.16 | `dd4a3c2` | Separate what the notebook does with the wheel from what LightControl does |
 | v1.0.15 | `74028be` | Weekday letters live on the surface, and detail arrives earlier |
 | v1.0.14 | `398578f` | Drop the NEXT UP footer, and fix the bars vanishing after a pinch out |

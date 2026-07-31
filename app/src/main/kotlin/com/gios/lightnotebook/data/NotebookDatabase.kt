@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
@@ -27,7 +28,13 @@ data class FolderEntity(
  * [com.gios.lightnotebook.util.NoteMarkdown]. Storing text rather than spans means a
  * note survives any future export intact.
  */
-@Entity(tableName = "notes")
+@Entity(
+    tableName = "notes",
+    // Unique so two taps arriving at once cannot leave a conversation with two notes.
+    // SQLite allows any number of NULLs in a unique index, so every ordinary note is
+    // unaffected.
+    indices = [Index(value = ["externalKey"], unique = true)],
+)
 data class NoteEntity(
     @PrimaryKey val id: String,
     val title: String = "",
@@ -36,6 +43,20 @@ data class NoteEntity(
     val pinned: Boolean = false,
     /** The photograph this was transcribed from, kept so the original can be read back. */
     val imagePath: String? = null,
+    /**
+     * The note another app owns this note *for*, or null for a note made here.
+     *
+     * LightChat's contact page keeps one note per conversation and asks for it by the
+     * conversation's normalised handles (`+12125550148`), never by a chat guid — a guid is
+     * local to one Mac's `chat.db`, so a restore or a new Mac would strand every note. The
+     * key is opaque here: this app only has to find the same row again.
+     *
+     * Handles are not free of that problem either, only much better at it: adding or
+     * removing somebody from a group changes the key, and the group's old note stays in the
+     * notes list but stops being reachable from LightChat. A 1:1 — which is what the note
+     * is mostly for — never changes.
+     */
+    val externalKey: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 )
@@ -115,6 +136,10 @@ interface NotebookDao {
     @Query("SELECT * FROM notes WHERE id = :id LIMIT 1")
     suspend fun getNote(id: String): NoteEntity?
 
+    /** The note another app owns, by the key it asks for it with. See [NoteEntity.externalKey]. */
+    @Query("SELECT * FROM notes WHERE externalKey = :key LIMIT 1")
+    suspend fun getNoteByExternalKey(key: String): NoteEntity?
+
     // Used before deleting a capture: a photo may be shared by a note and several events.
     @Query("SELECT COUNT(*) FROM notes WHERE imagePath = :path")
     suspend fun countNotesWithImage(path: String): Int
@@ -124,6 +149,21 @@ interface NotebookDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putNote(note: NoteEntity)
+
+    /**
+     * Insert that fails on a conflict instead of replacing.
+     *
+     * [putNote] is REPLACE, which for a unique-index clash *deletes the row already there*
+     * — so two simultaneous first taps on the same conversation would leave the second
+     * one's note and silently drop the first. Only the externally-keyed create uses this.
+     *
+     * ABORT rather than IGNORE, and that matters: IGNORE returns normally without writing,
+     * so the caller would hand back the id of a row that does not exist and the editor
+     * would open on nothing. ABORT throws `SQLiteConstraintException`, which is what the
+     * caller catches to go and find the row that won.
+     */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertNote(note: NoteEntity)
 
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun deleteNote(id: String)
@@ -284,6 +324,22 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/**
+ * Version 4 lets another app own a note.
+ *
+ * The column and its unique index are created exactly as Room declares them, because Room
+ * validates the schema — including indices — when it opens the database, and a mismatch
+ * only shows up as a crash on the phone. The index name is Room's own generated form.
+ */
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `notes` ADD COLUMN `externalKey` TEXT")
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_notes_externalKey` ON `notes` (`externalKey`)",
+        )
+    }
+}
+
 @Database(
     entities = [
         NoteEntity::class,
@@ -291,7 +347,7 @@ private val MIGRATION_2_3 = object : Migration(2, 3) {
         DayEntryEntity::class,
         CalendarEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class NotebookDatabase : RoomDatabase() {
@@ -307,7 +363,7 @@ abstract class NotebookDatabase : RoomDatabase() {
                 NotebookDatabase::class.java,
                 "lightnotebook.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 // Upgrades migrate; only a downgrade — installing an older APK over a
                 // newer database — starts over, and that is a choice the user made.
                 .fallbackToDestructiveMigrationOnDowngrade()
