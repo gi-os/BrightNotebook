@@ -2,6 +2,7 @@ package com.gios.lightnotebook.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,8 @@ import androidx.compose.ui.geometry.Size
 import com.gios.lightnotebook.util.Steps
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.gios.lightnotebook.util.DayLayout
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.gios.lightnotebook.util.PhotoTiles
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -76,11 +79,9 @@ fun TimelinePhotos(
     val resolved = remember(item, photosById) { item.photos.mapNotNull { photosById[it.id] } }
     if (resolved.isEmpty()) return
 
-    // Asked for at the size it is actually drawn, so a full-width picture gets a bigger
-    // thumbnail than a burst frame and neither is scaled up on a panel this small.
-    val burstEdge = BURST_THUMB_UNITS.verticalGridUnitsAsDp()
+    // Asked for at the size it is actually drawn, so a full-width picture gets a bigger thumbnail
+    // than a tile and neither is scaled up on a panel this small.
     val density = LocalDensity.current
-    val burstPx = with(density) { burstEdge.roundToPx() }
     // Edge to edge: a photograph of a moment in your day should be the moment, not a card of it.
     val fullWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
 
@@ -120,31 +121,45 @@ fun TimelinePhotos(
             PhotoFrame(
                 photo = photo,
                 requestPx = fullWidthPx,
-                // 4:3 held explicitly rather than letting the bitmap decide: a portrait shot
-                // is otherwise taller than the screen, and a day of them cannot be scrolled
-                // past. The thumbnail is cropped to fit, which is what the roll does too.
-                modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
+                // 4:3 held explicitly rather than letting the bitmap decide: a portrait shot is
+                // otherwise taller than the screen, and a day of them cannot be scrolled past.
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f / PhotoTiles.FRAME_ASPECT),
                 onClick = { onOpen(photo) },
                 onLongClick = { onAttach(photo) },
             )
         } else {
-            LazyRow(Modifier.padding(horizontal = lightInset())) {
-                items(resolved, key = { it.id }) { photo ->
-                    PhotoFrame(
-                        photo = photo,
-                        requestPx = burstPx,
-                        modifier = Modifier.size(burstEdge),
-                        onClick = { onOpen(photo) },
-                        onLongClick = { onAttach(photo) },
-                    )
-                    Spacer(Modifier.width(0.4f.gridUnitsAsDp()))
+            // **Tiled like a page of a photo book, not laid out like a contact sheet.** Rows of
+            // different counts mean pictures of different sizes, which is most of what makes a
+            // group of photographs read as a page rather than as a filmstrip. The arrangement is
+            // fixed for a given count ([PhotoTiles]) so adding a photograph does not reshuffle the
+            // page while you are looking at it.
+            val ranges = remember(resolved.size) { PhotoTiles.rowRanges(resolved.size) }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val blockWidth = maxWidth
+                Column {
+                    ranges.forEach { range ->
+                        val inRow = range.last - range.first + 1
+                        val rowHeight = blockWidth * PhotoTiles.rowHeightFraction(inRow)
+                        val cellPx = with(density) { (blockWidth / inRow).roundToPx() }
+                        Row(Modifier.fillMaxWidth().height(rowHeight)) {
+                            range.forEach { index ->
+                                val photo = resolved[index]
+                                PhotoFrame(
+                                    photo = photo,
+                                    requestPx = cellPx,
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                    onClick = { onOpen(photo) },
+                                    onLongClick = { onAttach(photo) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-private const val BURST_THUMB_UNITS = 5.4f
 
 /**
  * One photograph, loaded off the main thread and cached in bytes by [PhotoLibrary].

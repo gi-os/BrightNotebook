@@ -277,7 +277,7 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.9.0 | this commit | Time between moments is drawn, and photographs go edge to edge |
+| v1.10.0 | this commit | Time between moments is drawn; photographs go edge to edge and tile like a page |
 | v1.8.27 | `d475d85` | A day ends when you go to bed, not at midnight |
 | v1.7.26 | `0bdc60a` | Steps by the hour, screen time, and daylight down the calendar's cells |
 | v1.6.25 | `526fb1d` | The day's shape: bookends, daylight, and the same date in years before |
