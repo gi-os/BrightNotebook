@@ -98,7 +98,7 @@ fun TimelinePhotos(
         // "14:30" costs a fifth of a 3.92" panel on every row of the day, and the entries
         // below already carry their times on the right.
         Row(
-            Modifier.padding(horizontal = lightInset()),
+            Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LightText(
@@ -140,16 +140,23 @@ fun TimelinePhotos(
             // fixed for a given count ([PhotoTiles]) so adding a photograph does not reshuffle the
             // page while you are looking at it.
             val ranges = remember(resolved.size) { PhotoTiles.rowRanges(resolved.size) }
-            BoxWithConstraints(Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH)) {
+            // Centred as a block, and each row centred inside it, so a tail row of two under a row
+            // of three sits under the middle of the page rather than shoved against its left edge.
+            BoxWithConstraints(
+                Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH),
+                contentAlignment = Alignment.Center,
+            ) {
                 val blockWidth = maxWidth
-                Column {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     ranges.forEach { range ->
                         val inRow = range.last - range.first + 1
                         val rowHeight = blockWidth * PhotoTiles.rowHeightFraction(inRow)
                         val cellPx = with(density) { (blockWidth / inRow).roundToPx() }
                         Row(
                             Modifier
-                                .fillMaxWidth()
+                                // The row is only as wide as the pictures on it, so a short last
+                                // row centres instead of stretching to fill.
+                                .width(blockWidth * inRow / ranges.maxOf { it.last - it.first + 1 })
                                 .height(rowHeight)
                                 .padding(vertical = TILE_GAP_UNITS.verticalGridUnitsAsDp()),
                         ) {

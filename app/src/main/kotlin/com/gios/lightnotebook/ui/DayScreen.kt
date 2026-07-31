@@ -48,6 +48,9 @@ import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.delay
 import java.time.ZoneId
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.snapshotFlow
 
 /**
  * One day. Anything can go on it: a line of text, or a line of text with a time in
@@ -86,6 +89,9 @@ fun DayScreen(
 }
 
 private const val STANDALONE_STEP_DP = 72
+
+/** Ignore a few pixels of jitter, or the bars flicker while a finger rests on the screen. */
+private const val SCROLL_SLOP = 12
 
 /**
  * The day itself, as a pane rather than a screen.
@@ -129,6 +135,35 @@ fun DayPane(
 
     val listState = rememberLazyListState()
     WheelScroll(listState)
+
+    // The bars get out of the way as you read down the day and come back the moment you reach for
+    // them by scrolling up. Driven by the *direction* of travel rather than by position, so a long
+    // day does not permanently hide its own header once you are past the top.
+    var lastIndex by remember { mutableIntStateOf(0) }
+    var lastOffset by remember { mutableIntStateOf(0) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val movedDown = index > lastIndex || (index == lastIndex && offset > lastOffset + SCROLL_SLOP)
+                val movedUp = index < lastIndex || (index == lastIndex && offset < lastOffset - SCROLL_SLOP)
+                // The top of the day always shows its chrome: there is nothing above it to read,
+                // and arriving at a day with no header would look like a broken screen.
+                val atTop = index == 0 && offset < SCROLL_SLOP
+                when {
+                    atTop -> vm.setChromeHidden(false)
+                    movedDown -> vm.setChromeHidden(true)
+                    movedUp -> vm.setChromeHidden(false)
+                }
+                if (index != lastIndex || kotlin.math.abs(offset - lastOffset) > SCROLL_SLOP) {
+                    lastIndex = index
+                    lastOffset = offset
+                }
+            }
+    }
+    // Leaving a day must not leave the shell without its bar.
+    DisposableEffect(Unit) { onDispose { vm.setChromeHidden(false) } }
+
+    val chromeHidden by vm.chromeHidden.collectAsStateWithLifecycle()
 
     // Tickets and photographs both change while this app is in the background — a ticket in
     // Movie Tickets, a photograph in Roll — so both are re-read on arrival rather than
@@ -213,6 +248,7 @@ fun DayPane(
             .imePadding()
             .then(gestures),
     ) {
+        AnimatedVisibility(visible = !chromeHidden) {
         LightTopBar(
             title = NoteDates.dayTitle(epochDay),
             left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onClose),
@@ -222,6 +258,7 @@ fun DayPane(
                 null
             },
         )
+        }
         LightRule()
 
         val bookends = remember(items) { DayTimeline.bookends(items) }

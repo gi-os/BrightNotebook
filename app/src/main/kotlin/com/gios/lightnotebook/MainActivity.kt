@@ -63,6 +63,9 @@ import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
+import androidx.compose.animation.AnimatedVisibility
+import com.gios.lightnotebook.ui.ColorMode
+import com.gios.lightnotebook.ui.ColourEffect
 
 /** A `lightnotebook://note/<key>` link, split into the parts [MainActivity] acts on. */
 private data class NoteLink(val key: String, val title: String)
@@ -116,6 +119,22 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    /**
+     * Greyscale comes back the moment this app is not the one you are looking at.
+     *
+     * Not left to the composable's disposal: leaving for another app does not dispose the
+     * composition, so without this the whole phone would stay in colour behind us.
+     */
+    override fun onStop() {
+        super.onStop()
+        ColorMode.onAppHidden(this)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ColorMode.onAppVisible(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -161,6 +180,12 @@ class MainActivity : ComponentActivity() {
         pendingNote.value = if (savedInstanceState == null) noteIn(intent) else null
         setContent {
             LightNotebookTheme {
+                // **Colour, everywhere.** The panel is a full-colour AMOLED and LightOS's grey is
+                // the accessibility daltonizer, so the app can simply hold it off while it is in
+                // front. Released in onStop below, or the rest of the phone would stay in colour
+                // after leaving — see ColorMode. Needs one adb grant and stays grey without it.
+                ColourEffect(enabled = true)
+
                 val nav = rememberNavController()
                 val vm: NotebookViewModel = viewModel()
 
@@ -401,6 +426,11 @@ private fun HomeShell(
                 )
             }
         }
+        // Out of the way while a day is being read, back the moment you scroll up. The day owns
+        // the decision; this bar only follows, because it belongs to the shell underneath.
+        val chromeHidden by vm.chromeHidden.collectAsStateWithLifecycle()
+        AnimatedVisibility(visible = !chromeHidden) {
+        Column {
         LightRule()
         // Icons, not labels: three words at the Button variant's 15% tracking filled the
         // bar edge to edge, and LightOS's own action bar is icons wherever a glyph exists.
@@ -421,6 +451,8 @@ private fun HomeShell(
                 ) { tab = 1 },
             ),
         )
+        }
+        }
     }
 
     if (addSheet) {

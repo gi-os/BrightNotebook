@@ -128,7 +128,10 @@ private fun FullPhoto(photo: DevicePhoto) {
                 contentDescription = "A photograph",
                 // Fit, not crop: this is the picture being looked at, so none of it is cut off.
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
+                // Wrapped and centred rather than filling: `fillMaxSize` with Fit leaves the
+                // drawn image centred *within its own bounds*, which is only the same thing when
+                // the bounds are the screen — and here they are not once insets are involved.
+                modifier = Modifier.align(Alignment.Center),
             )
         }
     }

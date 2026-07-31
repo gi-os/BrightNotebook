@@ -471,6 +471,21 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Whether the bars are out of the way.
+     *
+     * Held here rather than in the day screen because the two bars live in different places: the
+     * day owns its top bar, and the bottom bar belongs to the shell that is still composed
+     * underneath it. Scrolling a day has to move both, so the state is hoisted to the one thing
+     * both can see.
+     */
+    private val _chromeHidden = MutableStateFlow(false)
+    val chromeHidden: StateFlow<Boolean> = _chromeHidden.asStateFlow()
+
+    fun setChromeHidden(hidden: Boolean) {
+        if (_chromeHidden.value != hidden) _chromeHidden.value = hidden
+    }
+
     /* ---- what the phone itself noticed ---- */
 
     private val steps = StepStore(getApplication())
