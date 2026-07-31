@@ -1,19 +1,18 @@
-## Notebook v1.27 — the shake lands between too stiff and too eager
+## Notebook v1.28 — reports actually leave the phone
 
-**Four reversals past 0.46g: two quick shakes, there and back and there and back.**
+**The reporting key is in the build, so a report now becomes a GitHub issue instead of a queued
+file.**
 
-This is the third setting and the one arrived at from both directions on the actual phone. Six
-reversals past 0.55g was something you had to *mean*, hard, twice, before anything happened — the
-honest report on it was "I shake it and nothing happens". Three past 0.38g went the other way and
-fired on its own. Four past 0.46g is a movement you would not make by accident but would not think
-twice about making on purpose.
+Every report filed before this — the ones that got "this build has no reporting key" — is still on
+the phone and goes out on the first launch after this installs, carrying its original timestamp.
+Nothing that was reported has been lost.
 
-It is still a *reversal* count and not a force one, which is what separates a shake from a bag or a
-dropped phone: a brisk walk peaks around 0.3g and never gets looked at, and a drop is one hard jolt
-rather than four turns. The confirmation sheet is what lets it sit nearer the loose end than the
-strict one — a false positive costs one tap on NO, and a gesture that never fires costs the whole
-feature.
+The key is a fine-grained token that can do exactly one thing: file issues on the private
+`gi-os/light-reports` tracker. It ships inside a sideloaded APK from a public repository, so its
+scope was tested rather than trusted — filing an issue on `light-reports` works, opening one on
+this repo is refused, and writing repository contents anywhere at all is refused. Someone who
+unzips the APK gets the ability to write junk into one private tracker.
 
-The live readout on the settings screen — current g, the peak of the last two seconds, turns
-counted, shakes fired — is how this was settled, and is the thing to look at if it ever feels wrong
-again.
+That constraint is also why the screenshot travels as base64 inside the issue body rather than as
+a committed file: attaching one would have needed contents access, which is the permission worth
+not having.

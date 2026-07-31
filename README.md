@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.27.0**.
+`com.gios.lightnotebook`. Current release: **v1.28.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -268,10 +268,17 @@ Some things about how it is built that are easy to get wrong:
   write junk into one private tracker.
 
 The key is `REPORT_TOKEN` — a fine-grained PAT with **Issues: read and write** on
-`gi-os/light-reports` and nothing else. Put it in `local.properties` as `reportToken=` for
-local builds, and in the repository secrets as `REPORT_TOKEN` for CI. A build without one
-still compiles and still collects reports; they wait on the phone until a build that has one
-installs over it.
+`gi-os/light-reports` and nothing else, and it is set as a repository secret, so any build
+from `main` carries it. For local builds put it in `local.properties` as `reportToken=`.
+
+A build without one still compiles and still collects reports; they wait on the phone until a
+build that has one installs over it, which is what makes the key safe to be missing.
+
+The scope was checked rather than assumed. With that token: filing an issue on `light-reports`
+succeeds, opening one on this repo is 403, and writing repository contents anywhere — including
+`light-reports` itself — is 403. Anyone who unzips the APK gets the ability to write junk into one
+private tracker, and nothing else. It expires and will need replacing; when reports stop arriving
+and the settings screen starts counting a queue, that is the first thing to check.
 
 ## Build and test
 
@@ -332,7 +339,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.27.0 | this commit | The shake lands between too stiff and too eager |
+| v1.28.0 | this commit | Reports actually leave the phone |
+| v1.27.44 | `5a010f8` | The shake lands between too stiff and too eager |
 | v1.26.43 | `2a849d6` | Weather on the planner, pull a day to refresh, and the fetch says what it did |
 | v1.25.0 | (on main) | A flick reports a glitch, the app reports itself, releases carry notes |
 | v1.24.41 | `9321442` | Who you talked to, from LightChat |
