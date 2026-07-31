@@ -103,6 +103,10 @@ class NotebookRepository(private val context: Context) {
 
     fun observeNotes(): Flow<List<NoteEntity>> = dao.observeNotes()
 
+    /** Notes written or returned to inside a millisecond window. */
+    fun observeNotesTouched(fromMs: Long, toMs: Long): Flow<List<NoteEntity>> =
+        dao.observeNotesTouched(fromMs, toMs)
+
     fun observeNotesIn(folderId: String): Flow<List<NoteEntity>> = dao.observeNotesIn(folderId)
 
     fun observeNote(id: String): Flow<NoteEntity?> = dao.observeNote(id)

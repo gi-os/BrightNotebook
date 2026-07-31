@@ -42,6 +42,7 @@ import com.gios.lightnotebook.util.NoteDates
 fun CalendarScreen(
     vm: NotebookViewModel,
     onOpenAgenda: () -> Unit,
+    onOpenNote: (String) -> Unit,
     onSwipePage: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -84,7 +85,12 @@ fun CalendarScreen(
             onOpenDay = { day -> vm.selectDay(day) },
             onDayOpenChanged = { dayOpen = it },
             dayPane = { _, gestures, close ->
-                DayPane(vm = vm, onClose = close, gestures = gestures)
+                DayPane(
+                    vm = vm,
+                    onClose = close,
+                    onOpenNote = onOpenNote,
+                    gestures = gestures,
+                )
             },
             onWindowChanged = { from, to -> vm.setCanvasWindow(from, to) },
             onFocusDayChanged = { focusDay = it },

@@ -91,6 +91,14 @@ importing other calendars — works with none.
   both**, split by a `NOW` rule wherever the clock is. Photographs sit in the column in the
   order they were taken, among the things written that day.
 
+  **Notes you wrote or came back to appear on the day too**, at the time you touched them,
+  marked "Wrote this" or "Came back to this" and opening the note on a tap. This needs no bridge
+  and no permission — `NoteEntity` already carries `createdAt` and `updatedAt`. One row per note
+  per day: a note written *and* returned to on the same day counts as the writing, because a
+  second row saying you also edited the note you had just written is noise. Only the last edit of
+  a day is knowable, `updatedAt` being one column, which is a limit of the schema rather than a
+  choice.
+
   A reminder is not offered on something that has already happened — it counts back from a
   time, and there is nothing left to count back to — and a new entry on a past day does not
   take the default one. Times stay either way, because "we ate at eight" is a real thing to
@@ -249,7 +257,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.4.0 | this commit | The planner's cells carry the day's photograph, and days gone are struck through |
+| v1.5.0 | this commit | Notes you wrote or came back to are part of the day |
+| v1.4.23 | `23310f9` | The planner's cells carry the day's photograph, and days gone are struck through |
 | v1.3.22 | `3b164d8` | A day past is a diary, a day ahead is a calendar, today is both |
 | v1.2.21 | `069462c` | Photographs on the calendar, and pages photographed by Roll |
 | v1.1.20 | `23aff15` | One note per thing another app owns: `lightnotebook://note/<key>` |

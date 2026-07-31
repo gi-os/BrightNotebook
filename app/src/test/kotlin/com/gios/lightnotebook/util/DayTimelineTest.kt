@@ -203,4 +203,82 @@ class DayTimelineTest {
     fun `an empty day has no rule`() {
         assertNull(DayTimeline.nowLineIndex(emptyList(), noon))
     }
+
+    /* ---- notes, as part of the day's record of itself ---- */
+
+    private val dayStart = 1_753_848_000_000L // a fixed local midnight, in ms
+    private val dayEnd = dayStart + 86_400_000L
+
+    private fun activity(created: Long, updated: Long) = DayTimeline.noteActivity(
+        noteId = "n1",
+        title = "Ideas",
+        createdAtMs = created,
+        updatedAtMs = updated,
+        dayStartMs = dayStart,
+        dayEndExclusiveMs = dayEnd,
+    )
+
+    @Test
+    fun `a note written on the day says so, at the time it was written`() {
+        val note = activity(dayStart + 9 * 3_600_000L, dayStart + 9 * 3_600_000L)!!
+        assertTrue(note.wrote)
+        assertEquals(9 * 60, note.minutes)
+    }
+
+    @Test
+    fun `a note written earlier and returned to counts as an edit, at the edit's time`() {
+        val note = activity(dayStart - 5 * 86_400_000L, dayStart + 14 * 3_600_000L)!!
+        assertFalse(note.wrote)
+        assertEquals(14 * 60, note.minutes)
+    }
+
+    @Test
+    fun `written and edited on the same day is one row, and it is the writing`() {
+        // A second row saying you also edited the note you had just written is noise.
+        val note = activity(dayStart + 9 * 3_600_000L, dayStart + 20 * 3_600_000L)!!
+        assertTrue(note.wrote)
+        assertEquals(9 * 60, note.minutes)
+    }
+
+    @Test
+    fun `a note untouched on this day is not on it`() {
+        assertNull(activity(dayStart - 86_400_000L, dayStart - 86_400_000L))
+        assertNull(activity(dayEnd + 1_000L, dayEnd + 1_000L))
+    }
+
+    @Test
+    fun `the window is half-open at both ends`() {
+        assertTrue(activity(dayStart, dayStart)!!.wrote)
+        // Midnight belongs to one day, not two.
+        assertNull(activity(dayEnd, dayEnd))
+    }
+
+    @Test
+    fun `an untitled note still has something to show`() {
+        val note = DayTimeline.noteActivity(
+            noteId = "n2",
+            title = "   ",
+            createdAtMs = dayStart + 60_000L,
+            updatedAtMs = dayStart + 60_000L,
+            dayStartMs = dayStart,
+            dayEndExclusiveMs = dayEnd,
+        )!!
+        assertEquals("Untitled", note.title)
+    }
+
+    @Test
+    fun `at the same minute the order is entry, then note, then photograph`() {
+        val note = activity(dayStart + noon * 60_000L, dayStart + noon * 60_000L)!!
+        val items = DayTimeline.build(
+            rows = listOf(row("lunch", noon)),
+            photos = listOf(photo(1, noon)),
+            notes = listOf(note),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertTrue(items[0] is DayTimeline.Item.Entry)
+        assertTrue(items[1] is DayTimeline.Item.Note)
+        assertTrue(items[2] is DayTimeline.Item.Photos)
+    }
 }

@@ -130,6 +130,19 @@ interface NotebookDao {
     @Query("SELECT * FROM notes WHERE folderId = :folderId ORDER BY pinned DESC, updatedAt DESC")
     fun observeNotesIn(folderId: String): Flow<List<NoteEntity>>
 
+    /**
+     * Notes written or returned to inside a window, for the day's own record of itself.
+     *
+     * Both columns are tested because a note can belong to a day either way: written on it, or
+     * written earlier and come back to on it. Bounds are milliseconds and half-open, computed
+     * from a real time zone by the caller — a day is 23 hours some mornings.
+     */
+    @Query(
+        "SELECT * FROM notes WHERE (createdAt >= :fromMs AND createdAt < :toMs) " +
+            "OR (updatedAt >= :fromMs AND updatedAt < :toMs) ORDER BY updatedAt ASC",
+    )
+    fun observeNotesTouched(fromMs: Long, toMs: Long): Flow<List<NoteEntity>>
+
     @Query("SELECT * FROM notes WHERE id = :id LIMIT 1")
     fun observeNote(id: String): Flow<NoteEntity?>
 

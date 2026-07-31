@@ -57,6 +57,7 @@ import java.time.ZoneId
 fun DayScreen(
     vm: NotebookViewModel,
     onBack: () -> Unit,
+    onOpenNote: (String) -> Unit,
 ) {
     // Opened from a reminder rather than from the planner, so there is no surface to slide:
     // a horizontal drag steps the day once it passes half the screen.
@@ -65,6 +66,7 @@ fun DayScreen(
     DayPane(
         vm = vm,
         onClose = onBack,
+        onOpenNote = onOpenNote,
         gestures = Modifier.lightDayGestures(
             onSlide = { dx ->
                 slid += dx
@@ -96,6 +98,8 @@ private const val STANDALONE_STEP_DP = 72
 fun DayPane(
     vm: NotebookViewModel,
     onClose: () -> Unit,
+    /** A note written or returned to on this day opens it, the same as from the notes list. */
+    onOpenNote: (String) -> Unit,
     /**
      * The gestures that move between days. Supplied by the planner when the pane is a cell on
      * it, so that sliding pans the actual surface; the standalone route passes its own.
@@ -116,6 +120,7 @@ fun DayPane(
     var attaching by remember { mutableStateOf<DevicePhoto?>(null) }
 
     val photos by vm.dayPhotos.collectAsStateWithLifecycle()
+    val dayNotes by vm.dayNotes.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -148,10 +153,11 @@ fun DayPane(
     // Built here rather than in the view model: it is a pure function of three flows and a
     // clock, and putting it in the view model would mean the clock lived there too.
     val photosById = remember(photos) { photos.associateBy { it.id } }
-    val items = remember(rows, photos, epochDay, today, nowMinutes) {
+    val items = remember(rows, photos, dayNotes, epochDay, today, nowMinutes) {
         DayTimeline.build(
             rows = rows,
             photos = photos.map { DayTimeline.PhotoAt(it.id, it.minutesOfDay(ZoneId.systemDefault())) },
+            notes = dayNotes,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -227,6 +233,7 @@ fun DayPane(
                         when (item) {
                             is DayTimeline.Item.Entry -> "row-" + item.row.id
                             is DayTimeline.Item.Photos -> "photos-" + item.photos.first().id
+                            is DayTimeline.Item.Note -> "note-" + item.noteId
                         }
                     },
                 ) { index, item ->
@@ -239,6 +246,21 @@ fun DayPane(
                             onOpen = { photoFor = it.uri.toString() },
                             onAttach = { attaching = it },
                         )
+
+                        is DayTimeline.Item.Note -> {
+                            LightListRow(
+                                title = item.title,
+                                // What happened, not what the note is. "Wrote" and "Came back
+                                // to" are the two things a note can have done on a day, and the
+                                // difference is most of why the row is worth showing.
+                                sub = if (item.wrote) "Wrote this" else "Came back to this",
+                                detail = NoteDates.clock(item.minutes),
+                                leading = LightIcons.Compose,
+                                trailing = LightIcons.Forward,
+                                onClick = { onOpenNote(item.noteId) },
+                            )
+                            LightRule()
+                        }
 
                         is DayTimeline.Item.Entry -> {
                             val row = item.row

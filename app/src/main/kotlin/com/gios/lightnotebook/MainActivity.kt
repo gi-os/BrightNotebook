@@ -286,7 +286,11 @@ class MainActivity : ComponentActivity() {
                                 // from the view model afterwards, so swiping can move it without
                                 // pushing a screen per day.
                                 LaunchedEffect(day) { vm.selectDay(day) }
-                                DayScreen(vm = vm, onBack = { nav.popBackStack() })
+                                DayScreen(
+                                    vm = vm,
+                                    onBack = { nav.popBackStack() },
+                                    onOpenNote = { id -> nav.navigate("note/$id") },
+                                )
                             }
                             composable("camera") {
                                 CameraScreen(
@@ -392,6 +396,7 @@ private fun HomeShell(
                 else -> CalendarScreen(
                     vm = vm,
                     onOpenAgenda = onOpenAgenda,
+                    onOpenNote = onOpenNote,
                     onSwipePage = { direction -> if (direction < 0) tab = 0 },
                 )
             }

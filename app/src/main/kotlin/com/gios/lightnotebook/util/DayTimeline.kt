@@ -41,6 +41,23 @@ object DayTimeline {
         }
 
         /**
+         * A note you wrote or came back to on this day.
+         *
+         * Part of the record of a day for the same reason a photograph is: it is something that
+         * happened, the phone already knows when, and it costs nothing to ask. `NoteEntity`
+         * carries `createdAt` and `updatedAt`, so this needs no new column, no bridge to another
+         * app and no permission.
+         */
+        data class Note(
+            val noteId: String,
+            val title: String,
+            override val minutes: Int,
+            /** Written on this day, as opposed to returned to. */
+            val wrote: Boolean,
+            override val behind: Boolean,
+        ) : Item
+
+        /**
          * One moment, holding one photograph or a burst of them.
          *
          * A single photograph is drawn full width, the way a picture in a diary is. A burst is
@@ -95,6 +112,7 @@ object DayTimeline {
     fun build(
         rows: List<AgendaRow>,
         photos: List<PhotoAt>,
+        notes: List<Item.Note> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -104,10 +122,20 @@ object DayTimeline {
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
-        return (entries + clustered).sortedWith(
+        return (entries + clustered + notes).sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
-                { if (it is Item.Photos) 1 else 0 },
+                // At the same minute: what you planned, then what you wrote, then what you
+                // photographed. Any fixed order would do; having one is what matters, because a
+                // list that reorders between recompositions puts a photograph under the wrong
+                // time and recycles the wrong bitmap into it.
+                {
+                    when (it) {
+                        is Item.Entry -> 0
+                        is Item.Note -> 1
+                        is Item.Photos -> 2
+                    }
+                },
             ),
         )
     }
@@ -158,6 +186,46 @@ object DayTimeline {
         // Suppressed at the ends: a line above everything or below everything is a rule with
         // nothing on one side of it, which reads as a mistake rather than as the time.
         return index.takeIf { it > 0 && it < items.size }
+    }
+
+    /**
+     * Whether a note belongs to a day, and as which kind of thing.
+     *
+     * One row per note per day, never two. A note written *and* returned to on the same day is
+     * "wrote" — that is the thing that happened, and a second row saying you also edited the
+     * note you had just written is noise. Written wins on the day it was written; every later
+     * day it appears on, it appears as an edit.
+     *
+     * Only the **last** edit of a day is knowable: `updatedAt` is one column, so a note touched
+     * five times shows the last of them. That is a real limit of the schema rather than a
+     * choice, and it is the right one to accept — a full edit history would be a table.
+     */
+    fun noteActivity(
+        noteId: String,
+        title: String,
+        createdAtMs: Long,
+        updatedAtMs: Long,
+        /** The day's real bounds, from `PhotoDays.windowMs` — 23 or 25 hours where it matters. */
+        dayStartMs: Long,
+        dayEndExclusiveMs: Long,
+    ): Item.Note? {
+        val range = dayStartMs until dayEndExclusiveMs
+        val created = createdAtMs in range
+        val updated = updatedAtMs in range
+        val at = when {
+            created -> createdAtMs
+            updated -> updatedAtMs
+            else -> return null
+        }
+        val minutes = ((at - dayStartMs) / 60_000L).toInt().coerceIn(0, MINUTES_IN_DAY - 1)
+        return Item.Note(
+            noteId = noteId,
+            title = title.ifBlank { "Untitled" },
+            minutes = minutes,
+            wrote = created,
+            // Writing is something that has happened by definition — the note exists.
+            behind = true,
+        )
     }
 
     const val MINUTES_IN_DAY = 24 * 60

@@ -30,6 +30,7 @@ import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
+import com.gios.lightnotebook.util.PhotoDays
 import com.gios.lightnotebook.util.NoteMarkdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -332,6 +333,34 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * The notes written or returned to on the open day.
+     *
+     * Observed rather than nudged, unlike the photographs: these are this app's own rows, so
+     * Room tells us the moment one changes — and writing a note *is* the thing being recorded,
+     * so the day has to reflect it immediately rather than on the next visit.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayNotes: StateFlow<List<DayTimeline.Item.Note>> = _selectedDay
+        .flatMapLatest { day ->
+            val window = PhotoDays.windowMs(day, day, ZoneId.systemDefault())
+            val from = window.first
+            val to = window.last + 1
+            repo.observeNotesTouched(from, to).map { notes ->
+                notes.mapNotNull { note ->
+                    DayTimeline.noteActivity(
+                        noteId = note.id,
+                        title = note.title.ifBlank { NoteMarkdown.firstLine(note.body) },
+                        createdAtMs = note.createdAt,
+                        updatedAtMs = note.updatedAt,
+                        dayStartMs = from,
+                        dayEndExclusiveMs = to,
+                    )
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** The open day's photographs, earliest first. */
     @OptIn(ExperimentalCoroutinesApi::class)
