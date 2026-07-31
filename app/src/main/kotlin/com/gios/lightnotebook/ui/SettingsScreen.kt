@@ -3,13 +3,16 @@ package com.gios.lightnotebook.ui
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +25,7 @@ import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.report.Reports
+import com.gios.lightnotebook.report.ShakeMonitor
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -298,11 +302,13 @@ fun SettingsScreen(
                 modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
                 onClick = onReport,
             )
+            ShakeMeter()
             LightText(
                 text = buildString {
-                    append("Shake the phone hard, three times, and Notebook will ask whether ")
-                    append("you meant to report something. It files what went wrong, this ")
-                    append("build, and — only if you leave it ticked — a screenshot.")
+                    append("Flick the phone out and back and out again — a firm turn of the ")
+                    append("wrist, not a rattle — and Notebook asks whether you meant to ")
+                    append("report something. It files what went wrong, this build, and — ")
+                    append("only if you leave it ticked — a screenshot.")
                     if (queuedReports > 0) {
                         append(" ")
                         append(
@@ -386,5 +392,43 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * What the accelerometer is reading, live.
+ *
+ * Here because "I shook it and nothing happened" cannot be answered from outside the phone: the
+ * gesture either cleared the threshold or it did not, and with no logcat to hand there is no way
+ * to tell which. On screen it becomes "it peaked at 1.2g and wants 1.38g", which is something you
+ * can do about it. Shaking while this is up opens the report sheet over the top, which is the
+ * other half of the answer.
+ */
+@Composable
+private fun ShakeMeter() {
+    val reading by ShakeMonitor.reading.collectAsStateWithLifecycle()
+    // Only published while somebody is looking; the detector runs at 50Hz regardless.
+    DisposableEffect(Unit) {
+        ShakeMonitor.watch()
+        onDispose { ShakeMonitor.unwatch() }
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 0.8f.verticalGridUnitsAsDp()),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        MeterCell("NOW", "%.2fg".format(reading.magnitudeG))
+        MeterCell("PEAK", "%.2fg".format(reading.peakG))
+        MeterCell("TURNS", "${reading.turns} of ${reading.turnsNeeded}")
+        MeterCell("SENT", "${reading.fires}")
+    }
+}
+
+@Composable
+private fun MeterCell(label: String, value: String) {
+    Column {
+        LightText(label, LightTextVariant.Superfine, lighten = true)
+        LightText(value, LightTextVariant.Copy)
     }
 }

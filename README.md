@@ -228,8 +228,8 @@ importing other calendars — works with none.
 
 ## Reporting a glitch
 
-Shake the phone hard three times and Notebook asks whether you meant to send an error
-report. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
+Flick the phone out and back and out again — a firm turn of the wrist, not a rattle — and
+Notebook asks whether you meant to send an error report. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
 tracker carrying what went wrong, the build and firmware it happened on, which screen you
 were on, the last crash log if there is one, and — only while the row stays ticked — a
 screenshot of the moment you started shaking. The same sheet is on the settings screen
@@ -240,11 +240,18 @@ sent from the dying process: the trace goes to a file, and a healthy launch asks
 
 Some things about how it is built that are easy to get wrong:
 
-- **The question comes before anything else.** A shake is a gesture a bag, a run and a set
-  of keys can all imitate, so `util/ShakeGesture` counts *reversals* rather than force: six
-  alternations of the deviation from rest, each within 400ms of the last. A hard jolt is one
-  reversal, walking never leaves the threshold, and only a deliberate rattle gets there. It
-  is plain arithmetic with no Android imports, so `ShakeGestureTest` can hold it to that.
+- **The question comes before anything else**, which is what lets the gesture be loose. A
+  false positive costs one tap on NO, so `util/ShakeGesture` errs towards firing: three
+  reversals of the deviation from rest past 0.38g, each within 550ms of the last. It counts
+  *reversals* rather than force, which is what separates a flick from a bag or a dropped
+  phone — a walk peaks around 0.3g, and a drop is one jolt rather than three turns. Plain
+  arithmetic with no Android imports, so `ShakeGestureTest` holds it to that.
+- **The settings screen shows the accelerometer live** — current g, the peak of the last two
+  seconds, and turns counted. There is no other way to answer "I shook it and nothing
+  happened" on a phone with no logcat attached.
+- **Failures the app catches offer themselves**, through `report/Trouble`, so the quiet ones
+  that leave a screen looking ordinary get reported too. Rate-limited to once an hour per
+  failure, because an app that asks twelve times before lunch is one you switch off.
 - **The accelerometer runs only while the app is in front**, registered in `onResume` and
   dropped in `onPause`. A 50Hz stream is a real battery cost, and shaking a phone showing
   something else is not a complaint about Notebook.
@@ -324,7 +331,7 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.25.0 | this commit | Releases carry notes, and say which report they close |
+| v1.25.0 | this commit | A flick reports a glitch, the app reports itself, releases carry notes |
 | v1.24.41 | `9321442` | Who you talked to, from LightChat |
 | v1.23.40 | `7d30795` | Fill in the weather now, as far back as there is data |
 | v1.22.0 | (on main) | Shake the phone to report a glitch |

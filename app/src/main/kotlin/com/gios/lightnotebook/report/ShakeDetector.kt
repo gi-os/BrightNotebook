@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import com.gios.lightnotebook.util.ShakeGesture
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
@@ -20,9 +21,19 @@ import kotlin.math.sqrt
  */
 class ShakeDetector(context: Context, private val onShake: () -> Unit) : SensorEventListener {
 
+    private companion object {
+        const val PEAK_HOLD_MS = 2_000L
+    }
+
     private val sensors = context.getSystemService(SensorManager::class.java)
     private val accelerometer = sensors?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gesture = ShakeGesture()
+
+    /** Decaying so a flick leaves a readable mark instead of a number gone in 20ms. */
+    private var peak = 0f
+    private var peakAt = 0L
+    private var fires = 0
+    private var sample = 0
 
     /** False on a phone with no accelerometer, where the whole feature quietly does not exist. */
     val available: Boolean get() = accelerometer != null
@@ -50,7 +61,31 @@ class ShakeDetector(context: Context, private val onShake: () -> Unit) : SensorE
         // The event's own timestamp is nanoseconds since boot from the sensor hub, which is
         // the right clock here: it does not drift with the main thread being busy, and being
         // busy is exactly the state a freeze report is filed in.
-        if (gesture.sample(event.timestamp / 1_000_000L, magnitude)) onShake()
+        val at = event.timestamp / 1_000_000L
+        val fired = gesture.sample(at, magnitude)
+        if (fired) {
+            fires++
+            onShake()
+        }
+
+        if (ShakeMonitor.watchers == 0) return
+        val deviation = abs(magnitude - 1f)
+        if (deviation > peak || at - peakAt > PEAK_HOLD_MS) {
+            peak = deviation
+            peakAt = at
+        }
+        // Every third sample is about 16Hz, which is faster than anyone can read and a third
+        // of the recompositions.
+        if (++sample % 3 != 0 && !fired) return
+        ShakeMonitor.publish(
+            ShakeReading(
+                magnitudeG = magnitude,
+                peakG = 1f + peak,
+                turns = gesture.turns,
+                turnsNeeded = gesture.turnsNeeded,
+                fires = fires,
+            ),
+        )
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit

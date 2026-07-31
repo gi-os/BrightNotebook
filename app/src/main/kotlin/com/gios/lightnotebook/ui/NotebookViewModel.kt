@@ -29,6 +29,7 @@ import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.data.Weather
 import com.gios.lightnotebook.notify.Reminders
+import com.gios.lightnotebook.report.Trouble
 import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.notify.WeatherArchiveWorker
 import com.gios.lightnotebook.util.Agenda
@@ -943,8 +944,10 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         refreshShowings()
         _importStatus.value = when {
             result.nothingToDo -> "Nothing imported yet — add a calendar first."
-            result.failed > 0 && result.calendars == 0 ->
+            result.failed > 0 && result.calendars == 0 -> {
+                Trouble.record("reach any calendar", "${result.failed} of them, none answered")
                 "Could not reach any calendar. The file may have moved."
+            }
             result.failed > 0 ->
                 "Refreshed ${result.calendars}, could not reach ${result.failed}."
             else -> "Refreshed ${result.calendars} calendar(s), ${result.events} event(s)."
@@ -1034,6 +1037,9 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 is Vision.Events -> CaptureState.EventsRead(result.events, path)
                 is Vision.Failed -> {
                     withContext(Dispatchers.IO) { file.delete() }
+                    // The screen says so too; this is what turns "it didn't work" into a
+                    // report with the model's own reason attached.
+                    Trouble.record("read that page", result.reason)
                     CaptureState.Failed(result.reason)
                 }
             }

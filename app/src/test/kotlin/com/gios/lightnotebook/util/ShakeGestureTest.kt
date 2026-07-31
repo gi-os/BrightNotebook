@@ -34,37 +34,48 @@ class ShakeGestureTest {
     }
 
     @Test
-    fun `six alternations fire once`() {
+    fun `three alternations fire once`() {
         val g = ShakeGesture()
-        assertEquals(1, shake(g, 0, 6))
+        assertEquals(1, shake(g, 0, 3))
     }
 
     @Test
-    fun `five alternations are not enough`() {
+    fun `two alternations are not enough`() {
         val g = ShakeGesture()
-        assertEquals(0, shake(g, 0, 5))
+        assertEquals(0, shake(g, 0, 2))
+    }
+
+    @Test
+    fun `a flick just past the threshold still fires`() {
+        val g = ShakeGesture()
+        // Not a rattle — a wrist turned out and back and out, barely clearing 0.38g. This is
+        // the case the first thresholds got wrong: it felt like a shake and did nothing.
+        var fires = 0
+        val swing = floatArrayOf(1.45f, 0.55f, 1.45f)
+        swing.forEachIndexed { i, m -> if (g.sample(i * 120L, m)) fires++ }
+        assertEquals(1, fires)
     }
 
     @Test
     fun `slow waving does not accumulate`() {
         val g = ShakeGesture()
         // Same swings, same force, one every 900ms — someone gesturing with the phone
-        // in hand rather than rattling it.
+        // in hand rather than flicking it.
         assertEquals(0, shake(g, 0, 12, everyMs = 900))
     }
 
     @Test
     fun `one long shake is one report, not three`() {
         val g = ShakeGesture()
-        // Twenty alternations without pause: the first six fire, the cooldown eats the rest.
+        // Twenty alternations without pause: the first three fire, the cooldown eats the rest.
         assertEquals(1, shake(g, 0, 20))
     }
 
     @Test
     fun `a second shake after the cooldown fires again`() {
         val g = ShakeGesture()
-        assertEquals(1, shake(g, 0, 6))
-        assertEquals(1, shake(g, 10_000, 6))
+        assertEquals(1, shake(g, 0, 3))
+        assertEquals(1, shake(g, 10_000, 3))
     }
 
     @Test
@@ -81,10 +92,10 @@ class ShakeGestureTest {
     @Test
     fun `reset abandons a half-finished gesture`() {
         val g = ShakeGesture()
-        assertEquals(0, shake(g, 0, 5))
+        assertEquals(0, shake(g, 0, 2))
         g.reset()
-        // One alternation short of six before the reset, but it starts again from nothing,
-        // so five more is still five and not eleven.
-        assertEquals(0, shake(g, 600, 5))
+        // One short of firing before the reset, so the next two start again from nothing
+        // rather than completing the abandoned gesture.
+        assertEquals(0, shake(g, 5_000, 2))
     }
 }

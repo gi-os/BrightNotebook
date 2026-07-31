@@ -76,6 +76,7 @@ object Reports {
         screen: String,
         crash: String?,
         shot: String?,
+        failure: Failure? = null,
     ): Report {
         val version = versionName(context)
         val headline = note.trim().takeIf { it.isNotEmpty() }?.let { first(it) } ?: symptom.label
@@ -84,6 +85,18 @@ object Reports {
             appendLine()
             appendLine(symptom.label + (note.trim().takeIf { it.isNotEmpty() }?.let { " — $it" } ?: ""))
             appendLine()
+            if (failure != null) {
+                appendLine("### What the app itself reported")
+                appendLine()
+                appendLine("Could not ${failure.what}.")
+                if (!failure.detail.isNullOrBlank()) {
+                    appendLine()
+                    appendLine("```")
+                    appendLine(failure.detail)
+                    appendLine("```")
+                }
+                appendLine()
+            }
             appendLine("### Where")
             appendLine()
             appendLine("On the `$screen` screen.")
@@ -124,6 +137,9 @@ object Reports {
         val labels = buildList {
             add("notebook")
             add(if (!crash.isNullOrBlank()) "crash" else symptom.slug)
+            // Worth separating: the app noticed this one on its own, so it is reproducible
+            // from the detail rather than from somebody remembering what they were doing.
+            if (failure != null) add("self-reported")
         }
         return Report(
             title = "Notebook $version — $headline",

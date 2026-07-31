@@ -45,11 +45,13 @@ import com.gios.lightnotebook.hw.WheelBus
 import com.gios.lightnotebook.notify.Notifier
 import com.gios.lightnotebook.notify.WeatherArchiveWorker
 import com.gios.lightnotebook.report.CrashLog
+import com.gios.lightnotebook.report.Failure
 import com.gios.lightnotebook.report.ReportContext
 import com.gios.lightnotebook.report.Reports
 import com.gios.lightnotebook.report.Screenshot
 import com.gios.lightnotebook.report.ShakeDetector
 import com.gios.lightnotebook.report.Symptom
+import com.gios.lightnotebook.report.Trouble
 import com.gios.lightnotebook.ui.AgendaScreen
 import com.gios.lightnotebook.ui.CalendarScreen
 import com.gios.lightnotebook.ui.CalendarsScreen
@@ -91,7 +93,12 @@ private data class NoteLink(val key: String, val title: String)
  * the sheet asks for it: by then the sheet is the thing on screen, and a picture of the sheet
  * is a picture of nothing.
  */
-private data class ReportRequest(val reason: ReportReason, val shot: Bitmap?)
+private data class ReportRequest(
+    val reason: ReportReason,
+    val shot: Bitmap?,
+    /** Present when the app noticed the failure itself rather than being shaken. */
+    val failure: Failure? = null,
+)
 
 private const val NOTE_SCHEME = "lightnotebook"
 private const val NOTE_HOST = "note"
@@ -299,6 +306,23 @@ class MainActivity : ComponentActivity() {
                     Reports.flush(this@MainActivity)
                 }
 
+                // A failure the app noticed on its own asks to be reported, rather than waiting
+                // for somebody to be annoyed enough to shake the phone. Trouble rate-limits
+                // itself; this only decides when to put the question on screen.
+                val trouble by Trouble.latest.collectAsStateWithLifecycle()
+                LaunchedEffect(trouble) {
+                    val failure = trouble ?: return@LaunchedEffect
+                    Trouble.clear()
+                    // Never on top of a question already being asked — a sync failing while the
+                    // crash prompt is up would replace it and lose the trace.
+                    if (reportRequest.value != null) return@LaunchedEffect
+                    shake?.stop()
+                    Screenshot.capture(window) { bitmap ->
+                        reportRequest.value =
+                            ReportRequest(ReportReason.Failed, bitmap, failure)
+                    }
+                }
+
                 // Which screen a report was filed from. Read by the crash handler too, which
                 // runs on a dying thread with no view of any of this.
                 LaunchedEffect(nav) {
@@ -313,6 +337,10 @@ class MainActivity : ComponentActivity() {
                     ReportSheet(
                         reason = pending.reason,
                         hasScreenshot = pending.shot != null,
+                        failure = pending.failure?.what,
+                        // The app already knows what went wrong; typing it again on this phone
+                        // would be a tax for no information.
+                        seedNote = pending.failure?.let { "Could not ${it.what}" }.orEmpty(),
                         onDismiss = {
                             // Saying no to a crash log throws it away. Otherwise the same
                             // question waits at every launch until the app crashes again.
@@ -348,6 +376,7 @@ class MainActivity : ComponentActivity() {
                                             shot = pending.shot
                                                 ?.takeIf { includeScreenshot }
                                                 ?.let { Screenshot.encode(it) },
+                                            failure = pending.failure,
                                         ),
                                     )
                                     if (crash != null) CrashLog.clear(this@MainActivity)

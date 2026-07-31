@@ -15,19 +15,35 @@ package com.gios.lightnotebook.util
  * plumbing lives in `report/ShakeDetector.kt`.
  */
 class ShakeGesture(
-    /** How far from rest, in g, before a sample counts as part of a throw at all. */
-    private val thresholdG: Float = 0.55f,
-    /** Six alternations is three shakes there-and-back. Four fired while jogging. */
-    private val reversalsToFire: Int = 6,
+    /**
+     * How far from rest, in g, before a sample counts as part of a throw at all.
+     *
+     * A brisk walk peaks around 0.3g, which is what sets the floor. Everything above that is
+     * a deliberate movement of the wrist.
+     */
+    private val thresholdG: Float = 0.38f,
+    /**
+     * Three alternations — a flick out, back, and out again. It started at six, which was
+     * three full shakes and turned out to be something you had to *mean*, hard, twice, before
+     * anything happened. The confirmation sheet is the thing that makes a low number safe: a
+     * false positive costs one tap on NO, so the gesture should err towards firing.
+     */
+    private val reversalsToFire: Int = 3,
     /** A reversal this long after the last one starts a new gesture instead of joining it. */
-    private val gapMs: Long = 400,
+    private val gapMs: Long = 550,
     /** Nothing fires again for this long: one shake should not become three reports. */
-    private val cooldownMs: Long = 4_000,
+    private val cooldownMs: Long = 3_000,
 ) {
     private var lastSign = 0
     private var lastAt = 0L
     private var reversals = 0
     private var firedAt = 0L
+
+    /** How far through the gesture we are, for the readout on the settings screen. */
+    val turns: Int get() = reversals
+
+    /** How many it takes, so the readout can say "2 of 3" without knowing the number. */
+    val turnsNeeded: Int get() = reversalsToFire
 
     /** Forget a half-finished gesture — on resume, or once the sheet is up. */
     fun reset() {

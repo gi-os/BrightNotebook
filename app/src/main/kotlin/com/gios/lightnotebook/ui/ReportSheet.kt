@@ -26,8 +26,11 @@ import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 
-/** Why the sheet is up: you shook the phone, or the app died the last time you had it open. */
-enum class ReportReason { Shaken, Crashed }
+/**
+ * Why the sheet is up: you shook the phone, the app died the last time you had it open, or the
+ * app noticed by itself that something it tried did not work.
+ */
+enum class ReportReason { Shaken, Crashed, Failed }
 
 /**
  * "Did you mean to send an error report?"
@@ -45,6 +48,9 @@ enum class ReportReason { Shaken, Crashed }
 fun ReportSheet(
     reason: ReportReason,
     hasScreenshot: Boolean,
+    /** What the app already knows went wrong, for a failure it noticed itself. */
+    failure: String? = null,
+    seedNote: String = "",
     onDismiss: () -> Unit,
     onSend: (symptom: Symptom, note: String, includeScreenshot: Boolean) -> Unit,
 ) {
@@ -53,7 +59,7 @@ fun ReportSheet(
     var symptom by remember {
         mutableStateOf(if (reason == ReportReason.Crashed) Symptom.Crashed else Symptom.Other)
     }
-    var note by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf(seedNote) }
     var withScreenshot by remember { mutableStateOf(hasScreenshot) }
     val scroll = rememberScrollState()
 
@@ -77,6 +83,8 @@ fun ReportSheet(
                     text = when (reason) {
                         ReportReason.Shaken -> "Did you mean to send an error report?"
                         ReportReason.Crashed -> "Notebook closed itself last time."
+                        // Said as the app's own failure, not the phone's and not yours.
+                        ReportReason.Failed -> "Notebook could not ${failure ?: "do that"}."
                     },
                     variant = LightTextVariant.Paragraph,
                 )
@@ -84,6 +92,7 @@ fun ReportSheet(
                     text = when (reason) {
                         ReportReason.Shaken -> "You shook the phone."
                         ReportReason.Crashed -> "There is a crash log. Send it?"
+                        ReportReason.Failed -> "Send a report about it?"
                     },
                     variant = LightTextVariant.Detail,
                     lighten = true,
