@@ -21,6 +21,7 @@ import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
+import com.gios.lightnotebook.report.Reports
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
@@ -35,9 +36,13 @@ fun SettingsScreen(
     vm: NotebookViewModel,
     onScanQr: () -> Unit,
     onCalendars: () -> Unit,
+    onReport: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    // Read once when the screen opens: the queue only shrinks in the background, and a
+    // number that ticks down while you are reading it is a distraction, not information.
+    val queuedReports = remember { Reports.pendingCount(context) }
     val saved by vm.apiKey.collectAsStateWithLifecycle()
     val mirror by vm.mirrorEvents.collectAsStateWithLifecycle()
     val lead by vm.defaultLead.collectAsStateWithLifecycle()
@@ -242,6 +247,45 @@ fun SettingsScreen(
             LightText(
                 text = "Steps can only be counted from the day this app was installed — the " +
                     "phone's counter keeps no history to look back through.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(
+                    top = 0.5f.verticalGridUnitsAsDp(),
+                    bottom = 1.2f.verticalGridUnitsAsDp(),
+                ),
+            )
+
+            LightText(
+                text = "REPORTING A GLITCH",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.6f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = "SEND A REPORT",
+                filled = false,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = onReport,
+            )
+            LightText(
+                text = buildString {
+                    append("Shake the phone hard, three times, and Notebook will ask whether ")
+                    append("you meant to report something. It files what went wrong, this ")
+                    append("build, and — only if you leave it ticked — a screenshot.")
+                    if (queuedReports > 0) {
+                        append(" ")
+                        append(
+                            if (queuedReports == 1) {
+                                "One report is waiting to go out."
+                            } else {
+                                "$queuedReports reports are waiting to go out."
+                            },
+                        )
+                    }
+                    if (!Reports.canSend()) {
+                        append(" This build has no reporting key, so nothing can leave the phone yet.")
+                    }
+                },
                 variant = LightTextVariant.Detail,
                 lighten = true,
                 modifier = Modifier.padding(
