@@ -84,11 +84,30 @@ importing other calendars — works with none.
 
 ## Usage notes worth knowing
 
-- **The day's photographs are on the day.** Open a day and the pictures taken on it sit in
-  a strip above its entries; in the month grid a day with photographs carries a hollow
-  square, next to the filled dot that means something is written there. A filled mark for
-  *written*, an outlined one for *photographed* — a frame, which is what a picture is, and
-  the two stay legible on a cell three millimetres wide in a way that two dots would not.
+- **A day reads as a diary once it has happened, and as a calendar until then.** There is no
+  diary mode and no calendar mode: there is a *now line*, and everything follows from which
+  side of it a thing falls on. A day in the past is entirely behind the line and reads as a
+  page of what happened; a day ahead is entirely in front of it and reads as a plan; **today is
+  both**, split by a `NOW` rule wherever the clock is. Photographs sit in the column in the
+  order they were taken, among the things written that day.
+
+  A reminder is not offered on something that has already happened — it counts back from a
+  time, and there is nothing left to count back to — and a new entry on a past day does not
+  take the default one. Times stay either way, because "we ate at eight" is a real thing to
+  write about a day that has gone.
+
+  Photographs taken within twenty minutes of each other collapse into **one moment**. That is
+  not a nicety: a single picture is drawn full width the way a photograph in a diary is, and
+  eleven shots of the same thing drawn that way would be eleven screens of scrolling with
+  everything written that day pushed out of reach underneath. A burst becomes a row of
+  thumbnails instead, which keeps a heavy day bounded. The gap is measured from the previous
+  photograph rather than from the run's start, so a long afternoon of steady shooting stays one
+  moment instead of breaking into arbitrary twenty-minute blocks.
+
+  In the month grid a day with photographs carries a hollow square, next to the filled dot that
+  means something is written there. A filled mark for *written*, an outlined one for
+  *photographed* — a frame, which is what a picture is, and the two stay legible on a cell three
+  millimetres wide in a way that two dots would not.
 
   There is **no bridge to Roll** doing this, and that is the point. [Roll](https://github.com/gi-os/LightCamera)
   writes every exposure to MediaStore because that is what a camera does, so asking the
@@ -215,7 +234,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.2.0 | this commit | Photographs on the calendar, and pages photographed by Roll |
+| v1.3.0 | this commit | A day past is a diary, a day ahead is a calendar, today is both |
+| v1.2.21 | `069462c` | Photographs on the calendar, and pages photographed by Roll |
 | v1.1.20 | `23aff15` | One note per thing another app owns: `lightnotebook://note/<key>` |
 | v1.0.17 – v1.0.19 | | Keep the photograph and let a transcription be corrected; LightCamera's capture engine |
 | v1.0.16 | `dd4a3c2` | Separate what the notebook does with the wheel from what LightControl does |

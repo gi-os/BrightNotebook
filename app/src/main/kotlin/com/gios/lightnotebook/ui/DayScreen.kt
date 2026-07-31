@@ -12,11 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,7 +43,10 @@ import com.gios.lightnotebook.ui.theme.lightClickable
 import com.gios.lightnotebook.ui.theme.lightDayGestures
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
+import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.NoteDates
+import kotlinx.coroutines.delay
+import java.time.ZoneId
 
 /**
  * One day. Anything can go on it: a line of text, or a line of text with a time in
@@ -125,7 +129,39 @@ fun DayPane(
         vm.refreshPhotos()
     }
 
-    // Asked for from the strip itself, so the reason is on screen when the dialog appears.
+    // The clock, for the line between what has happened and what has not.
+    //
+    // Ticked only while today is open: any other day is entirely on one side of the line, so
+    // there is nothing for a tick to change, and a minute timer running on a phone this size is
+    // not free. The delay is to the top of the next minute rather than a flat 60s, or the line
+    // sits up to a minute stale for the whole time the screen is up.
+    val today = NoteDates.today()
+    var nowMinutes by remember { mutableIntStateOf(NoteDates.nowMinutes()) }
+    LaunchedEffect(epochDay, today) {
+        if (epochDay != today) return@LaunchedEffect
+        while (true) {
+            nowMinutes = NoteDates.nowMinutes()
+            delay(60_000L - (System.currentTimeMillis() % 60_000L))
+        }
+    }
+
+    // Built here rather than in the view model: it is a pure function of three flows and a
+    // clock, and putting it in the view model would mean the clock lived there too.
+    val photosById = remember(photos) { photos.associateBy { it.id } }
+    val items = remember(rows, photos, epochDay, today, nowMinutes) {
+        DayTimeline.build(
+            rows = rows,
+            photos = photos.map { DayTimeline.PhotoAt(it.id, it.minutesOfDay(ZoneId.systemDefault())) },
+            epochDay = epochDay,
+            today = today,
+            nowMinutes = nowMinutes,
+        )
+    }
+    val nowLineIndex = remember(items, epochDay, today, nowMinutes) {
+        DayTimeline.nowLineIndex(items, DayTimeline.nowLine(epochDay, today, nowMinutes))
+    }
+
+    // Asked for from the day itself, so the reason is on screen when the dialog appears.
     val askPhotos = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { vm.refreshPhotos() }
@@ -159,7 +195,7 @@ fun DayPane(
         LightTopBar(
             title = NoteDates.dayTitle(epochDay),
             left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onClose),
-            right = if (epochDay != NoteDates.today()) {
+            right = if (epochDay != today) {
                 LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() })
             } else {
                 null
@@ -167,53 +203,79 @@ fun DayPane(
         )
         LightRule()
 
-        // Above the entries, not below: what you photographed on a day is context for
-        // reading the day, and a strip under a scrolling list is a strip nobody finds.
-        if (photos.isNotEmpty()) {
-            Filmstrip(
-                photos = photos,
-                onOpen = { photoFor = it.uri.toString() },
-                onAttach = { attaching = it },
-            )
-            LightRule()
-        } else if (!photosGranted) {
-            FilmstripPermissionRow(onAsk = { askPhotos.launch(PhotoLibrary.permission) })
+        if (!photosGranted) {
+            PhotoPermissionRow(onAsk = { askPhotos.launch(PhotoLibrary.permission) })
             LightRule()
         }
 
         val body = Modifier.weight(1f).fillMaxWidth()
 
-        if (rows.isEmpty()) {
-            LightEmptyState("Nothing on this day yet.", body)
+        if (items.isEmpty()) {
+            LightEmptyState(
+                // A day that has gone and a day still to come are empty in different ways.
+                if (epochDay < today) "Nothing was written on this day." else "Nothing on this day yet.",
+                body,
+            )
         } else {
             LazyColumn(body, state = listState) {
-                items(rows, key = { it.id }) { row ->
-                    val entry = vm.entryById(row.entryId)
-                    LightListRow(
-                        title = row.title,
-                        sub = row.subtitle,
-                        detail = NoteDates.clock(row.minutes),
-                        leading = when {
-                            row.passId != null -> LightIcons.Ticket
-                            entry?.fromPhoto == true -> LightIcons.Camera
-                            entry?.isImported == true -> LightIcons.Calendar
-                            else -> null
-                        },
-                        trailing = when {
-                            row.passId != null -> LightIcons.Forward
-                            row.reminderMinutes != null -> LightIcons.Alarm
-                            else -> null
-                        },
-                        // A ticket opens its stub in Movie Tickets; a plain entry opens its
-                        // own actions. A row that is both takes the ticket on a tap and the
-                        // entry on a long press.
-                        onClick = {
-                            val pass = row.passId
-                            if (pass != null) vm.openPass(pass) else entry?.let { actionsFor = it }
-                        },
-                        onLongClick = entry?.let { { actionsFor = it } },
-                    )
-                    LightRule()
+                itemsIndexed(
+                    items,
+                    // Keyed on what the item *is*, never on its position: the list reorders as
+                    // the clock passes an entry, and a positional key would recycle a
+                    // photograph's loaded bitmap into whatever row took its place.
+                    key = { _, item ->
+                        when (item) {
+                            is DayTimeline.Item.Entry -> "row-" + item.row.id
+                            is DayTimeline.Item.Photos -> "photos-" + item.photos.first().id
+                        }
+                    },
+                ) { index, item ->
+                    if (index == nowLineIndex) NowLine()
+
+                    when (item) {
+                        is DayTimeline.Item.Photos -> TimelinePhotos(
+                            item = item,
+                            photosById = photosById,
+                            onOpen = { photoFor = it.uri.toString() },
+                            onAttach = { attaching = it },
+                        )
+
+                        is DayTimeline.Item.Entry -> {
+                            val row = item.row
+                            val entry = vm.entryById(row.entryId)
+                            LightListRow(
+                                title = row.title,
+                                sub = row.subtitle,
+                                detail = NoteDates.clock(row.minutes),
+                                leading = when {
+                                    row.passId != null -> LightIcons.Ticket
+                                    entry?.fromPhoto == true -> LightIcons.Camera
+                                    entry?.isImported == true -> LightIcons.Calendar
+                                    else -> null
+                                },
+                                trailing = when {
+                                    row.passId != null -> LightIcons.Forward
+                                    // An alarm glyph on something that has already happened is
+                                    // telling you about a reminder that can never fire again.
+                                    row.reminderMinutes != null && !item.behind -> LightIcons.Alarm
+                                    else -> null
+                                },
+                                // A ticket opens its stub in Movie Tickets; a plain entry opens
+                                // its own actions. A row that is both takes the ticket on a tap
+                                // and the entry on a long press.
+                                onClick = {
+                                    val pass = row.passId
+                                    if (pass != null) {
+                                        vm.openPass(pass)
+                                    } else {
+                                        entry?.let { actionsFor = it }
+                                    }
+                                },
+                                onLongClick = entry?.let { { actionsFor = it } },
+                            )
+                            LightRule()
+                        }
+                    }
                 }
             }
         }
@@ -253,14 +315,19 @@ fun DayPane(
             heading = entry.text.take(34).uppercase(),
             onDismiss = { actionsFor = null },
         ) {
-            LightSheetAction(
-                label = "Reminder",
-                sub = entry.reminderMinutes?.let {
-                    if (it <= 0) "At the time" else "$it minutes before"
-                } ?: if (entry.startMinutes == null) "Needs a time first" else "None",
-            ) {
-                remindingFor = entry
-                actionsFor = null
+            // Not offered on something that has already happened: a reminder counts back from
+            // a time, and there is nothing left to count back to. Times stay, because "we ate
+            // at eight" is a real thing to write down about a day that has gone.
+            if (!DayTimeline.behind(entry.epochDay, entry.startMinutes, today, nowMinutes)) {
+                LightSheetAction(
+                    label = "Reminder",
+                    sub = entry.reminderMinutes?.let {
+                        if (it <= 0) "At the time" else "$it minutes before"
+                    } ?: if (entry.startMinutes == null) "Needs a time first" else "None",
+                ) {
+                    remindingFor = entry
+                    actionsFor = null
+                }
             }
             LightSheetAction(
                 label = "Time",

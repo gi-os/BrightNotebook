@@ -26,6 +26,7 @@ import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.AgendaRow
+import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
@@ -413,13 +414,22 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             if (text.isBlank()) return@launch
             val eventId = mirror(text, epochDay, startMinutes, null)
             // A timed entry gets the default lead automatically. Being told about something
-            // you wrote a time on is the point of writing the time.
+            // you wrote a time on is the point of writing the time — unless it has already
+            // happened, in which case there is nothing left to count back from and the entry
+            // would carry an alarm glyph for a reminder that can never fire. Writing down a
+            // day that has gone is a diary, not a plan.
+            val behind = DayTimeline.behind(
+                epochDay = epochDay,
+                minutes = startMinutes,
+                today = NoteDates.today(),
+                nowMinutes = NoteDates.nowMinutes(),
+            )
             val entry = repo.addDayEntry(
                 epochDay = epochDay,
                 text = text,
                 startMinutes = startMinutes,
                 systemEventId = eventId,
-                reminderMinutes = repo.defaultReminderMinutes(),
+                reminderMinutes = if (behind) null else repo.defaultReminderMinutes(),
             )
             Reminders.schedule(getApplication(), entry)
         }

@@ -148,17 +148,26 @@ object PhotoLibrary {
      * JPEG. The cache is sized in **bytes** rather than in entries, because the whole reason
      * it exists is the heap on a phone with 4GB and a 3.92" panel.
      */
-    private val cache = object : LruCache<Long, Bitmap>(6 * 1024 * 1024) {
-        override fun sizeOf(key: Long, value: Bitmap): Int = value.byteCount
+    private val cache = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
+    /**
+     * Keyed on the id *and* the size asked for.
+     *
+     * The same photograph is drawn at two very different sizes — full width as a moment of a
+     * day, small in a burst — and an id-only key hands back whichever was loaded first. That is
+     * a burst thumbnail stretched across the screen, or a screen-sized bitmap held to draw a
+     * frame a few millimetres wide.
+     */
     fun thumbnail(context: Context, photo: DevicePhoto, edgePx: Int): Bitmap? {
-        cache.get(photo.id)?.let { return it }
+        val key = photo.id.toString() + "@" + edgePx
+        cache.get(key)?.let { return it }
         if (Build.VERSION.SDK_INT < 29) return null
         val bitmap = runCatching {
             context.contentResolver.loadThumbnail(photo.uri, Size(edgePx, edgePx), null)
         }.getOrNull() ?: return null
-        cache.put(photo.id, bitmap)
+        cache.put(key, bitmap)
         return bitmap
     }
 

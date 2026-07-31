@@ -20,6 +20,9 @@ object NoteDates {
 
     fun today(): Long = LocalDate.now().toEpochDay()
 
+    /** Minutes from local midnight, for the line between what has happened and what has not. */
+    fun nowMinutes(): Int = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
+
     fun of(epochDay: Long): LocalDate = LocalDate.ofEpochDay(epochDay)
 
     fun monthOf(epochDay: Long): YearMonth = YearMonth.from(of(epochDay))
