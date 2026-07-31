@@ -13,6 +13,7 @@ import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
 import com.gios.lightnotebook.data.DevicePhoto
+import com.gios.lightnotebook.data.DayBridges
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.FolderEntity
 import com.gios.lightnotebook.data.ImportResult
@@ -30,6 +31,7 @@ import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.DayTimeline
+import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.Daylight
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
@@ -501,6 +503,48 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     fun setChromeHidden(hidden: Boolean) {
         if (_chromeHidden.value != hidden) _chromeHidden.value = hidden
     }
+
+    /**
+     * Where you were and what you had on, from the two apps that know.
+     *
+     * Asked on arrival like everything else read across an app boundary: both are written while you
+     * are somewhere else entirely, so there is no moment in this process worth watching for.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayPlaces: StateFlow<List<DayTimeline.Item.Place>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.stays(getApplication(), day, zone).map { stay ->
+                        DayTimeline.Item.Place(
+                            startMinutes = JournalDay.minutesInto(stay.startMs, day, zone),
+                            endMinutes = JournalDay.minutesInto(stay.endMs, day, zone),
+                            latitude = stay.latitude,
+                            longitude = stay.longitude,
+                            // Naming a coordinate has no offline source on this phone; the nightly
+                            // lookup fills this in later.
+                            name = null,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayListening: StateFlow<List<DayTimeline.Item.Listening>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    val plays = DayBridges.plays(getApplication(), day, zone).map { play ->
+                        JournalDay.minutesInto(play.atMs, day, zone) to
+                            play.artist.ifBlank { play.title }
+                    }
+                    DayTimeline.listening(plays)
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /* ---- what the phone itself noticed ---- */
 

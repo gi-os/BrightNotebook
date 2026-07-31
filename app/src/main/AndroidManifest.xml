@@ -70,6 +70,12 @@
         <package android:name="com.gios.lightcamera" />
         <!-- Roll's starred list, which decides which photograph a planner cell shows. -->
         <provider android:authorities="com.gios.lightcamera.stars" />
+        <!-- Where you were, from LightFog: the one app that records a location. -->
+        <package android:name="com.gios.lightfog" />
+        <provider android:authorities="com.gios.lightfog.stays" />
+        <!-- What you listened to, from LightPhono. -->
+        <package android:name="com.lightphone.spotify" />
+        <provider android:authorities="com.lightphone.spotify.plays" />
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>

@@ -45,6 +45,7 @@ import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.DayLayout
 import com.gios.lightnotebook.util.DayTimeline
+import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.delay
 import java.time.ZoneId
@@ -132,6 +133,8 @@ fun DayPane(
     val dayNotes by vm.dayNotes.collectAsStateWithLifecycle()
     val past by vm.onThisDay.collectAsStateWithLifecycle()
     val stats by vm.dayStats.collectAsStateWithLifecycle()
+    val places by vm.dayPlaces.collectAsStateWithLifecycle()
+    val listening by vm.dayListening.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -196,11 +199,13 @@ fun DayPane(
     // Built here rather than in the view model: it is a pure function of three flows and a
     // clock, and putting it in the view model would mean the clock lived there too.
     val photosById = remember(photos) { photos.associateBy { it.id } }
-    val items = remember(rows, photos, dayNotes, epochDay, today, nowMinutes) {
+    val items = remember(rows, photos, dayNotes, places, listening, epochDay, today, nowMinutes) {
         DayTimeline.build(
             rows = rows,
             photos = photos.map { DayTimeline.PhotoAt(it.id, it.minutesOfDay(ZoneId.systemDefault())) },
             notes = dayNotes,
+            places = places,
+            listening = listening,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -314,6 +319,8 @@ fun DayPane(
                             is DayTimeline.Item.Entry -> "row-" + item.row.id
                             is DayTimeline.Item.Photos -> "photos-" + item.photos.first().id
                             is DayTimeline.Item.Note -> "note-" + item.noteId
+                            is DayTimeline.Item.Place -> "place-" + item.startMinutes
+                            is DayTimeline.Item.Listening -> "heard-" + item.minutes
                         }
                     },
                 ) { index, item ->
@@ -339,6 +346,27 @@ fun DayPane(
                             onOpen = { viewing = it },
                             onAttach = { attaching = it },
                         )
+
+                        is DayTimeline.Item.Place -> {
+                            LightListRow(
+                                title = item.name ?: "Somewhere",
+                                sub = DayLayout.labelFor(item.endMinutes - item.startMinutes)
+                                    ?: "${item.endMinutes - item.startMinutes} min",
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.startMinutes)),
+                                leading = LightIcons.Calendar,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Listening -> {
+                            LightListRow(
+                                title = item.artist,
+                                sub = if (item.tracks == 1) "1 track" else "${item.tracks} tracks",
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                leading = LightIcons.Star,
+                            )
+                            LightRule()
+                        }
 
                         is DayTimeline.Item.Note -> {
                             LightListRow(

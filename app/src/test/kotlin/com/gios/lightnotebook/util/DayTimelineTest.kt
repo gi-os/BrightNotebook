@@ -355,4 +355,68 @@ class DayTimelineTest {
     fun `an empty day has no bookends`() {
         assertNull(DayTimeline.bookends(emptyList()))
     }
+
+    /* ---- listening, grouped into runs ---- */
+
+    @Test
+    fun `a run of one artist is one line, not twenty`() {
+        val plays = (0..19).map { (14 * 60 + it * 4) to "Talk Talk" }
+        val runs = DayTimeline.listening(plays)
+        assertEquals(1, runs.size)
+        assertEquals("Talk Talk", runs.single().artist)
+        assertEquals(20, runs.single().tracks)
+    }
+
+    @Test
+    fun `changing what you are listening to starts a new run`() {
+        val plays = listOf(
+            (14 * 60) to "Talk Talk",
+            (14 * 60 + 5) to "Talk Talk",
+            (14 * 60 + 10) to "Slowdive",
+        )
+        val runs = DayTimeline.listening(plays)
+        assertEquals(listOf("Talk Talk", "Slowdive"), runs.map { it.artist })
+        assertEquals(2, runs.first().tracks)
+    }
+
+    @Test
+    fun `the same artist after a long silence is two runs`() {
+        // Morning and evening are two things you did, not one long one.
+        val plays = listOf((8 * 60) to "Talk Talk", (20 * 60) to "Talk Talk")
+        assertEquals(2, DayTimeline.listening(plays).size)
+    }
+
+    @Test
+    fun `a run carries when it started and when it stopped`() {
+        val plays = listOf((14 * 60) to "A", (14 * 60 + 20) to "A")
+        val run = DayTimeline.listening(plays).single()
+        assertEquals(14 * 60, run.minutes)
+        assertEquals(14 * 60 + 20, run.untilMinutes)
+    }
+
+    @Test
+    fun `plays out of order still group`() {
+        val plays = listOf((14 * 60 + 10) to "A", (14 * 60) to "A", (14 * 60 + 5) to "A")
+        assertEquals(1, DayTimeline.listening(plays).size)
+    }
+
+    @Test
+    fun `no listening is no rows`() {
+        assertTrue(DayTimeline.listening(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `a place and a song at the same minute have a fixed order`() {
+        val items = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            places = listOf(DayTimeline.Item.Place(noon, noon + 60, 0.0, 0.0, null)),
+            listening = listOf(DayTimeline.Item.Listening(noon, noon + 30, "A", 3)),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertTrue(items.first() is DayTimeline.Item.Place)
+        assertTrue(items.last() is DayTimeline.Item.Listening)
+    }
 }

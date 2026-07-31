@@ -58,6 +58,39 @@ object DayTimeline {
         ) : Item
 
         /**
+         * Somewhere you stopped, from LightFog.
+         *
+         * A place rather than a track: a tile says which square of the world you crossed, and
+         * crossing is not being somewhere. The name is null until the nightly lookup has found one,
+         * because turning a coordinate into "Fasan Cafe" has no offline source on this phone.
+         */
+        data class Place(
+            val startMinutes: Int,
+            val endMinutes: Int,
+            val latitude: Double,
+            val longitude: Double,
+            val name: String?,
+        ) : Item {
+            override val minutes: Int get() = startMinutes
+            override val behind: Boolean get() = true
+        }
+
+        /**
+         * Something you listened to, from LightPhono.
+         *
+         * Grouped before it gets here — a day of individual tracks would drown everything else on
+         * it, and "an hour of Talk Talk" is the thing that was true of the afternoon.
+         */
+        data class Listening(
+            override val minutes: Int,
+            val untilMinutes: Int,
+            val artist: String,
+            val tracks: Int,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
+        /**
          * One moment, holding one photograph or a burst of them.
          *
          * A single photograph is drawn full width, the way a picture in a diary is. A burst is
@@ -115,6 +148,8 @@ object DayTimeline {
         rows: List<AgendaRow>,
         photos: List<PhotoAt>,
         notes: List<Item.Note> = emptyList(),
+        places: List<Item.Place> = emptyList(),
+        listening: List<Item.Listening> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -124,7 +159,7 @@ object DayTimeline {
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
-        return (entries + clustered + notes).sortedWith(
+        return (entries + clustered + notes + places + listening).sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
                 // At the same minute: what you planned, then what you wrote, then what you
@@ -134,8 +169,10 @@ object DayTimeline {
                 {
                     when (it) {
                         is Item.Entry -> 0
-                        is Item.Note -> 1
-                        is Item.Photos -> 2
+                        is Item.Place -> 1
+                        is Item.Note -> 2
+                        is Item.Photos -> 3
+                        is Item.Listening -> 4
                     }
                 },
             ),
@@ -250,6 +287,45 @@ object DayTimeline {
             behind = true,
         )
     }
+
+    /**
+     * Runs of listening, so a day says "an hour of Talk Talk" rather than listing twenty tracks.
+     *
+     * Grouped by artist while the gap between tracks stays short. The artist is the unit because it
+     * is what you would say about an afternoon; a run of one artist broken by a single track from
+     * another is two runs, which is right — you changed what you were listening to.
+     */
+    fun listening(plays: List<Pair<Int, String>>, gapMinutes: Int = LISTENING_GAP_MINUTES): List<Item.Listening> {
+        if (plays.isEmpty()) return emptyList()
+        val sorted = plays.sortedBy { it.first }
+        val out = ArrayList<Item.Listening>()
+        var start = sorted.first().first
+        var last = start
+        var artist = sorted.first().second
+        var count = 1
+
+        fun flush() {
+            out.add(Item.Listening(minutes = start, untilMinutes = last, artist = artist, tracks = count))
+        }
+
+        sorted.drop(1).forEach { (at, who) ->
+            if (who == artist && at - last <= gapMinutes) {
+                last = at
+                count++
+            } else {
+                flush()
+                start = at
+                last = at
+                artist = who
+                count = 1
+            }
+        }
+        flush()
+        return out
+    }
+
+    /** Longer than this between tracks and you stopped listening and started again. */
+    const val LISTENING_GAP_MINUTES = 25
 
     const val MINUTES_IN_DAY = 24 * 60
 }
