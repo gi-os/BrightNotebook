@@ -105,4 +105,53 @@ class DayLayoutTest {
         val longDay = DayLayout.gapUnits(60, 25 * 60)
         assertTrue(longDay < normal)
     }
+
+    /* ---- hour marks down a gap ---- */
+
+    @Test
+    fun `a short gap names no hours`() {
+        assertTrue(DayLayout.hoursCrossed(fromMinutes = 100, gapMinutes = 30).isEmpty())
+    }
+
+    @Test
+    fun `a gap names the hour boundaries it actually crosses`() {
+        // Starting 20 minutes into hour 5, running two and a half hours: crosses 6 and 7.
+        val hours = DayLayout.hoursCrossed(fromMinutes = 5 * 60 + 20, gapMinutes = 150)
+        assertEquals(listOf(6 * 60, 7 * 60), hours)
+    }
+
+    @Test
+    fun `the boundaries at either end of a gap are left to the moments there`() {
+        // Five o'clock exactly to seven o'clock exactly. Neither end is labelled: the moment before
+        // the gap and the moment after it both carry their own times, and repeating them in the
+        // emptiness between would say the same thing three times.
+        assertEquals(listOf(6 * 60), DayLayout.hoursCrossed(fromMinutes = 5 * 60, gapMinutes = 120))
+    }
+
+    @Test
+    fun `a very long gap is thinned rather than listing every hour`() {
+        val hours = DayLayout.hoursCrossed(fromMinutes = 0, gapMinutes = 10 * 60)
+        assertTrue("was ${hours.size}", hours.size <= DayLayout.MAX_HOUR_MARKS)
+        // The ends of the stretch stay named, so it is still placeable.
+        assertEquals(60, hours.first())
+        assertEquals(9 * 60, hours.last())
+    }
+
+    @Test
+    fun `marks are in order and inside the gap`() {
+        val from = 3 * 60 + 10
+        val gap = 7 * 60
+        val hours = DayLayout.hoursCrossed(from, gap)
+        assertEquals(hours.sorted(), hours)
+        hours.forEach { assertTrue(it in from..(from + gap)) }
+    }
+
+    @Test
+    fun `hours read as a clock, not as minutes into the day`() {
+        // Zero is the cutover, which is four in the morning.
+        assertEquals("4AM", DayLayout.hourLabel(0))
+        assertEquals("12PM", DayLayout.hourLabel(8 * 60))
+        assertEquals("1AM", DayLayout.hourLabel(21 * 60))
+        assertEquals("12AM", DayLayout.hourLabel(20 * 60))
+    }
 }

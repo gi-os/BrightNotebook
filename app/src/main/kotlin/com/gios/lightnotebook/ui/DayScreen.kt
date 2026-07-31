@@ -275,7 +275,6 @@ fun DayPane(
         LightRule()
 
         val bookends = remember(moments) { DayTimeline.bookends(moments) }
-        DayOpening(minutes = bookends?.firstMinutes)
         DayShape(stats = stats)
 
         if (!photosGranted) {
@@ -298,6 +297,12 @@ fun DayPane(
             }
         } else {
             LazyColumn(body, state = listState) {
+                // Inside the list, not pinned above it: it is the day's first line, and a line that
+                // stays put while the day scrolls under it stops being the beginning of anything.
+                item(key = "day-opened") {
+                    DayOpening(minutes = bookends?.firstMinutes)
+                }
+
                 itemsIndexed(
                     moments,
                     // Keyed on what the item *is*, never on its position: the list reorders as
@@ -321,6 +326,7 @@ fun DayPane(
                             } else {
                                 0
                             },
+                            fromMinutes = previous ?: 0,
                         )
                     }
                     if (index == nowLineIndex) NowLine()

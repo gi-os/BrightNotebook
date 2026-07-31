@@ -92,4 +92,41 @@ object DayLayout {
     }
 
     const val LABEL_FROM_MINUTES = 60
+
+    /**
+     * The hour boundaries a gap passes through, as minutes into the journal day.
+     *
+     * So a long stretch of nothing can say which hours went by rather than only "later". They are
+     * **not** evenly spaced in real time once drawn — the page is compressed and deliberately so —
+     * but they are the real boundaries, in order, and that is enough to place yourself.
+     *
+     * Capped, because a gap of nine hours would otherwise list nine labels down a space that is a
+     * few lines tall. Past the cap it thins them out, keeping the first and last so the ends of the
+     * stretch are still named.
+     */
+    fun hoursCrossed(fromMinutes: Int, gapMinutes: Int, max: Int = MAX_HOUR_MARKS): List<Int> {
+        if (gapMinutes < LABEL_FROM_MINUTES || max <= 0) return emptyList()
+        val end = fromMinutes + gapMinutes
+        val firstHour = (fromMinutes / 60 + 1) * 60
+        val all = generateSequence(firstHour) { it + 60 }.takeWhile { it < end }.toList()
+        if (all.size <= max) return all
+        // Thinned evenly, first and last kept.
+        val step = (all.size - 1).toFloat() / (max - 1)
+        return (0 until max).map { all[(it * step).toInt().coerceIn(all.indices)] }.distinct()
+    }
+
+    /** "5 AM" — an hour of the day, from minutes into the journal day. */
+    fun hourLabel(minutesIntoDay: Int): String {
+        val clock = JournalDay.clockMinutes(minutesIntoDay)
+        val hour24 = clock / 60
+        val hour12 = when {
+            hour24 == 0 -> 12
+            hour24 > 12 -> hour24 - 12
+            else -> hour24
+        }
+        return "$hour12${if (hour24 < 12) "AM" else "PM"}"
+    }
+
+    /** Four marks is enough to place yourself; more turns a gap into a ruler. */
+    const val MAX_HOUR_MARKS = 4
 }

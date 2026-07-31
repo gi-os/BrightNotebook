@@ -58,6 +58,7 @@ import com.gios.lightnotebook.util.PhotoTiles
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.FlowRow
 import com.gios.lightnotebook.util.AgendaRow
+import androidx.compose.foundation.layout.Arrangement
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -91,10 +92,14 @@ fun TimelinePhotos(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = lightInset(),
-                vertical = 0.6f.verticalGridUnitsAsDp(),
-            ),
+            // Generous, and the point of it: a page of a photo book is mostly margin. No horizontal
+            // padding — the seventy per cent width below *is* the margin, and adding both makes the
+            // pictures narrower on one axis than the layout says.
+            .padding(vertical = 1.6f.verticalGridUnitsAsDp()),
+        // **Load-bearing.** Every child below sets its own width as a fraction, so without this
+        // they align to the start and the whole page sits against the left edge. This was set once
+        // and then lost to a later edit, which is exactly what the left lean was.
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // The time above the picture, not beside it. A left-hand gutter wide enough for
         // "14:30" costs a fifth of a 3.92" panel on every row of the day, and the entries
@@ -350,35 +355,61 @@ fun PhotoPermissionRow(onAsk: () -> Unit, modifier: Modifier = Modifier) {
  * than they are, and the number is what stops the squashing from lying.
  */
 @Composable
-fun TimeGap(units: Float, gapMinutes: Int, modifier: Modifier = Modifier) {
+fun TimeGap(
+    units: Float,
+    gapMinutes: Int,
+    /** Where the gap starts, in minutes into the journal day, so it knows which hours it crosses. */
+    fromMinutes: Int,
+    modifier: Modifier = Modifier,
+) {
     if (units <= 0f) return
     val colors = LightThemeTokens.colors
-    val label = DayLayout.labelFor(gapMinutes)
+
+    // **The hours you passed through, down the left.** Without them a long stretch of nothing says
+    // only "later", and the compression means you cannot judge it by eye. These are *not* evenly
+    // spaced in real time — the page is not linear and deliberately so — they are the boundaries
+    // this gap actually crossed, spread across the room the gap was given.
+    val hours = remember(fromMinutes, gapMinutes) { DayLayout.hoursCrossed(fromMinutes, gapMinutes) }
 
     Box(
         modifier
             .fillMaxWidth()
             .height(units.verticalGridUnitsAsDp()),
-        contentAlignment = Alignment.Center,
     ) {
-        // A hairline down the middle of the emptiness, so a gap reads as time passing rather than
-        // as a layout mistake. Faint: it is the absence of events, and it should not compete with
-        // them.
+        // A hairline down the emptiness, so a gap reads as time passing rather than as a layout
+        // mistake. Faint: it is the absence of events and should not compete with them.
         Box(
             Modifier
+                .align(Alignment.Center)
                 .fillMaxHeight()
                 .width(1.dp)
                 .background(colors.rule),
         )
-        if (label != null) {
-            // Set on the background so the rule appears to run behind it rather than through it.
+
+        if (hours.isNotEmpty()) {
+            Column(
+                Modifier
+                    .fillMaxHeight()
+                    .padding(start = lightInset()),
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                hours.forEach { hour ->
+                    LightText(
+                        text = DayLayout.hourLabel(hour),
+                        variant = LightTextVariant.Superfine,
+                        lighten = true,
+                    )
+                }
+            }
+        }
+
+        DayLayout.labelFor(gapMinutes)?.let { label ->
             LightText(
                 text = label,
                 variant = LightTextVariant.Superfine,
                 lighten = true,
-                modifier = Modifier
-                    .background(colors.background)
-                    .padding(vertical = 0.15f.verticalGridUnitsAsDp()),
+                // Set on the background so the rule appears to run behind it rather than through.
+                modifier = Modifier.align(Alignment.Center).background(colors.background),
             )
         }
     }
