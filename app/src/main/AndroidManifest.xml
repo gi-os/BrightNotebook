@@ -45,6 +45,15 @@
     -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
+    <!--
+      Colour. The panel is a full-colour AMOLED and LightOS's monochrome look is the accessibility
+      daltonizer, so a photograph opened full screen can show its real colours by switching that
+      off for as long as it is up. signature|privileged|development, so it is an adb grant:
+      adb shell pm grant com.gios.lightnotebook android.permission.WRITE_SECURE_SETTINGS
+      Without it every write is swallowed and photographs simply stay grey.
+    -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!--

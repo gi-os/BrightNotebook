@@ -836,10 +836,10 @@ private fun DrawScope.drawDay(
     // instead of reappearing at the top of the next one. Vertical position is time of day, which is
     // the only way a cell this size can carry a whole day's shape.
     //
-    // Only once the cells are big enough to read. Zoomed out to a month these are two more marks in
-    // a three-millimetre square already carrying a number, a dot and a strike, and the grid stops
-    // being a grid; the bars need the room that the Week stop gives them.
-    if (showEntries && daylight is Daylight.Result.Times) {
+    // Only at the deepest zoom — `showTimes`, not `showEntries`. At the middle stop a cell is
+    // already carrying a number, a rule and a line or two of text, and two more marks down its edge
+    // make it noise; the bars need a cell wide enough that they are clearly a separate thing.
+    if (showTimes && daylight is Daylight.Result.Times) {
         val top0 = top + height * (daylight.sunriseMinutes / MINUTES_IN_DAY_F)
         val bottom0 = top + height * (daylight.sunsetMinutes / MINUTES_IN_DAY_F)
         drawRect(
@@ -851,7 +851,7 @@ private fun DrawScope.drawDay(
     }
 
     // The span you were up and doing things, over the light you had to do it in.
-    if (showEntries && activity != null && !activity.isEmpty()) {
+    if (showTimes && activity != null && !activity.isEmpty()) {
         val from = top + height * (activity.first / MINUTES_IN_DAY_F)
         val to = top + height * (activity.last / MINUTES_IN_DAY_F)
         drawLine(

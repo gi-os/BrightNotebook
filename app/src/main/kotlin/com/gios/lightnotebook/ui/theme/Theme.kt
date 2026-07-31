@@ -254,18 +254,18 @@ fun Modifier.lightClickable(
 ): Modifier = composed {
     val context = LocalContext.current
     val buzz = enabled && haptics
-    pointerInput(buzz) {
-        if (!buzz) return@pointerInput
-        awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            LightHaptics.click(context)
-        }
-    }.clickable(
+    // **The buzz belongs on the tap, not on the touch.** It used to fire from `awaitFirstDown`,
+    // which cannot tell a tap from the first moment of a scroll — so dragging a finger down a list
+    // buzzed once for every row it passed under. Raised from the click itself instead, which also
+    // keeps `clickable`'s semantics rather than replacing them with a raw gesture detector.
+    clickable(
         interactionSource = null,
         indication = null,
         enabled = enabled,
-        onClick = onClick,
-    )
+    ) {
+        if (buzz) LightHaptics.click(context)
+        onClick()
+    }
 }
 
 /**
@@ -380,21 +380,24 @@ private const val DAY_AXIS_BIAS = 1.3f
  * Same, with a long press. Long press is where a note's own actions live — pin, move,
  * delete — so that the list itself stays a list of notes and nothing else.
  */
-@OptIn(ExperimentalFoundationApi::class)
 fun Modifier.lightCombinedClickable(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ): Modifier = composed {
     val context = LocalContext.current
-    pointerInput(Unit) {
-        awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            LightHaptics.click(context)
-        }
-    }.combinedClickable(
+    // Same as above: the haptic is raised from the gesture that actually happened, so scrolling
+    // past a day full of photographs is silent.
+    combinedClickable(
         interactionSource = null,
         indication = null,
-        onLongClick = onLongClick,
-        onClick = onClick,
-    )
+        onLongClick = {
+            LightHaptics.click(context)
+            onLongClick()
+        },
+    ) {
+        LightHaptics.click(context)
+        onClick()
+    }
 }
+
+

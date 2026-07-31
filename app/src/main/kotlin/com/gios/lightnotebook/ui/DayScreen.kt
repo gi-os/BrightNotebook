@@ -119,6 +119,7 @@ fun DayPane(
     var movingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var photoFor by remember { mutableStateOf<String?>(null) }
     var attaching by remember { mutableStateOf<DevicePhoto?>(null) }
+    var viewing by remember { mutableStateOf<DevicePhoto?>(null) }
 
     val photos by vm.dayPhotos.collectAsStateWithLifecycle()
     val dayNotes by vm.dayNotes.collectAsStateWithLifecycle()
@@ -243,7 +244,7 @@ fun DayPane(
                 )
                 // Worth showing even here: a day you wrote nothing on is exactly the day whose
                 // only record is what it sat on top of.
-                OnThisDayRow(past = past, onOpen = { photoFor = it.uri.toString() })
+                OnThisDayRow(past = past, onOpen = { viewing = it })
             }
         } else {
             LazyColumn(body, state = listState) {
@@ -278,7 +279,7 @@ fun DayPane(
                         is DayTimeline.Item.Photos -> TimelinePhotos(
                             item = item,
                             photosById = photosById,
-                            onOpen = { photoFor = it.uri.toString() },
+                            onOpen = { viewing = it },
                             onAttach = { attaching = it },
                         )
 
@@ -362,7 +363,7 @@ fun DayPane(
                 if (past.isNotEmpty()) {
                     item(key = "on-this-day") {
                         LightRule()
-                        OnThisDayRow(past = past, onOpen = { photoFor = it.uri.toString() })
+                        OnThisDayRow(past = past, onOpen = { viewing = it })
                     }
                 }
             }
@@ -541,5 +542,18 @@ fun DayPane(
 
     if (photoFor != null) {
         PhotoSheet(path = photoFor, onDismiss = { photoFor = null })
+    }
+
+    // Over everything, including the bars: a photograph opened to be looked at should have the
+    // whole panel, and this is the one place in the app that shows colour.
+    viewing?.let { photo ->
+        PhotoViewer(
+            // The day's photographs, so the viewer swipes across the day rather than showing one
+            // file. "On this day" opens a picture from another year, which is not in this list —
+            // it stands alone rather than being spliced into today's roll.
+            photos = if (photos.any { it.id == photo.id }) photos else listOf(photo),
+            initial = photo,
+            onDismiss = { viewing = null },
+        )
     }
 }

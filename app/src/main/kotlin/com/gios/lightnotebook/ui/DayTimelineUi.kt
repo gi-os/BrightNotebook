@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import com.gios.lightnotebook.util.DayLayout
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.gios.lightnotebook.util.PhotoTiles
+import androidx.compose.ui.graphics.graphicsLayer
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -121,9 +122,14 @@ fun TimelinePhotos(
             PhotoFrame(
                 photo = photo,
                 requestPx = fullWidthPx,
-                // 4:3 held explicitly rather than letting the bitmap decide: a portrait shot is
-                // otherwise taller than the screen, and a day of them cannot be scrolled past.
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f / PhotoTiles.FRAME_ASPECT),
+                // Not the full width. A photograph pinned to a page has paper around it, and edge
+                // to edge reads as a website hero rather than as something someone stuck in a book.
+                // 4:3 is held explicitly rather than left to the bitmap: a portrait shot would
+                // otherwise be taller than the screen and a day of them could not be scrolled past.
+                modifier = Modifier
+                    .fillMaxWidth(PAGE_PHOTO_WIDTH)
+                    .aspectRatio(1f / PhotoTiles.FRAME_ASPECT)
+                    .tiltedLike(photo.id),
                 onClick = { onOpen(photo) },
                 onLongClick = { onAttach(photo) },
             )
@@ -134,20 +140,29 @@ fun TimelinePhotos(
             // fixed for a given count ([PhotoTiles]) so adding a photograph does not reshuffle the
             // page while you are looking at it.
             val ranges = remember(resolved.size) { PhotoTiles.rowRanges(resolved.size) }
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
+            BoxWithConstraints(Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH)) {
                 val blockWidth = maxWidth
                 Column {
                     ranges.forEach { range ->
                         val inRow = range.last - range.first + 1
                         val rowHeight = blockWidth * PhotoTiles.rowHeightFraction(inRow)
                         val cellPx = with(density) { (blockWidth / inRow).roundToPx() }
-                        Row(Modifier.fillMaxWidth().height(rowHeight)) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(rowHeight)
+                                .padding(vertical = TILE_GAP_UNITS.verticalGridUnitsAsDp()),
+                        ) {
                             range.forEach { index ->
                                 val photo = resolved[index]
                                 PhotoFrame(
                                     photo = photo,
                                     requestPx = cellPx,
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .padding(horizontal = TILE_GAP_UNITS.gridUnitsAsDp())
+                                        .tiltedLike(photo.id),
                                     onClick = { onOpen(photo) },
                                     onLongClick = { onAttach(photo) },
                                 )
@@ -160,6 +175,37 @@ fun TimelinePhotos(
     }
 }
 
+
+/**
+ * How wide a photograph sits on the page.
+ *
+ * Seventy per cent, centred. A photograph in a book has paper around it; edge to edge reads as a
+ * website hero rather than as something someone stuck down.
+ */
+private const val PAGE_PHOTO_WIDTH = 0.7f
+
+/** Air between tiles, so a group reads as separate prints rather than as one sheet. */
+private const val TILE_GAP_UNITS = 0.22f
+
+/** The most a photograph leans, in degrees. Past this it stops being charm and becomes a bug. */
+private const val MAX_TILT_DEGREES = 1.8f
+
+/**
+ * A slight lean, as if it were stuck down by hand.
+ *
+ * Derived from the photograph's own id rather than from its position, so the angle belongs to the
+ * picture: it stays the same when the day gains another photograph above it, and it is the same
+ * every time you open the day. A random tilt would reshuffle on every recomposition and make the
+ * page twitch while you scrolled.
+ *
+ * Deliberately small. Anything the eye reads as *crooked* rather than as *hand-placed* looks like a
+ * layout bug, and on a grid of tiles the misalignment compounds.
+ */
+private fun Modifier.tiltedLike(id: Long): Modifier {
+    // A fixed spread of angles, picked by id. Modulo an odd number so neighbouring ids differ.
+    val step = ((id % 7L).toInt() - 3) / 3f
+    return graphicsLayer { rotationZ = step * MAX_TILT_DEGREES }
+}
 
 /**
  * One photograph, loaded off the main thread and cached in bytes by [PhotoLibrary].
