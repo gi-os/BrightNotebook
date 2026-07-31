@@ -836,10 +836,10 @@ private fun DrawScope.drawDay(
     // instead of reappearing at the top of the next one. Vertical position is time of day, which is
     // the only way a cell this size can carry a whole day's shape.
     //
-    // Only at the deepest zoom — `showTimes`, not `showEntries`. At the middle stop a cell is
-    // already carrying a number, a rule and a line or two of text, and two more marks down its edge
-    // make it noise; the bars need a cell wide enough that they are clearly a separate thing.
-    if (showTimes && daylight is Daylight.Result.Times) {
+    // From the middle stop onwards, never on the month grid: at three millimetres they are two more
+    // marks in a square already carrying a number, a dot and a strike, and the grid stops being a
+    // grid. Given a cell with room, they are the frame the entries below are positioned against.
+    if (showEntries && daylight is Daylight.Result.Times) {
         val top0 = top + height * (daylight.sunriseMinutes / MINUTES_IN_DAY_F)
         val bottom0 = top + height * (daylight.sunsetMinutes / MINUTES_IN_DAY_F)
         drawRect(
@@ -851,7 +851,7 @@ private fun DrawScope.drawDay(
     }
 
     // The span you were up and doing things, over the light you had to do it in.
-    if (showTimes && activity != null && !activity.isEmpty()) {
+    if (showEntries && activity != null && !activity.isEmpty()) {
         val from = top + height * (activity.first / MINUTES_IN_DAY_F)
         val to = top + height * (activity.last / MINUTES_IN_DAY_F)
         drawLine(
@@ -948,16 +948,41 @@ private fun DrawScope.drawDay(
 
     if (rows.isEmpty()) return
 
-    var y = headerY + inset * 0.6f
+    val bodyTop = headerY + inset * 0.6f
     val available = top + height - inset
     val textSize = (entryStyle.fontSize.value * scale * 0.75f)
         .coerceIn(MIN_ENTRY_SP, MAX_ENTRY_SP)
-    val lines = CanvasMath.linesFor(cellHeight = height, lineHeight = textSize * 1.6f)
+    val lineHeight = textSize * 1.6f
+    val textLeft = left + inset * 0.5f + width * DAYLIGHT_WIDTH + inset * 0.5f
+    val textWidth = (left + width - inset - textLeft).roundToInt().coerceAtLeast(1)
 
-    rows.take(lines).forEach { row ->
-        if (y >= available) return@forEach
-        // The time is dropped until the cell is wide enough to carry it without eating the
-        // words that say what the thing actually is.
+    // **Entries sit at the time they happen.** The cell already draws the day as a column — the
+    // daylight band runs down it from the cutover to the next — and a list stacked from the top
+    // contradicts that: a half past five appointment drawn first looks like it happened at
+    // breakfast. So each row is placed against the same axis the band uses, and the cell becomes a
+    // very small calendar day rather than a very small list.
+    var lastBottom = Float.NEGATIVE_INFINITY
+    var hidden = 0
+
+    rows.forEach { row ->
+        val minutes = row.minutes
+        val wanted = if (minutes == null) {
+            // No time to place it at. All-day things belong under the heading, where a day view
+            // puts them too.
+            bodyTop
+        } else {
+            top + height * (minutes / MINUTES_IN_DAY_F)
+        }
+
+        // Never above the heading, and never off the bottom. Rows are also pushed down past the
+        // previous one so two things half an hour apart in a cell this size stay legible instead of
+        // printing over each other — position is a strong hint here, not a guarantee.
+        val y = wanted.coerceAtLeast(bodyTop).coerceAtLeast(lastBottom)
+        if (y + lineHeight > available) {
+            hidden++
+            return@forEach
+        }
+
         val clock = if (showTimes) NoteDates.clock(row.minutes) else null
         val line = listOfNotNull(clock, row.title).joinToString(" ")
         val measured = measurer.measure(
@@ -965,21 +990,19 @@ private fun DrawScope.drawDay(
             style = entryStyle.copy(color = ink, fontSize = textSize.sp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            constraints = Constraints(maxWidth = (width - inset * 2).roundToInt().coerceAtLeast(1)),
+            constraints = Constraints(maxWidth = textWidth),
         )
-        if (y + measured.size.height > available) return@forEach
-        drawText(measured, topLeft = Offset(left + inset, y))
-        y += measured.size.height * 1.1f
+        drawText(measured, topLeft = Offset(textLeft, y))
+        lastBottom = y + measured.size.height * 1.05f
     }
 
-    val hidden = rows.size - lines
-    if (hidden > 0 && y < available) {
+    if (hidden > 0) {
         val more = measurer.measure(
             text = "+$hidden",
             style = monthStyle.copy(color = ink, fontSize = textSize.sp),
             maxLines = 1,
         )
-        drawText(more, topLeft = Offset(left + inset, y))
+        drawText(more, topLeft = Offset(textLeft, available - more.size.height))
     }
 }
 

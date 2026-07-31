@@ -129,7 +129,7 @@ fun TimelinePhotos(
                 modifier = Modifier
                     .fillMaxWidth(PAGE_PHOTO_WIDTH)
                     .aspectRatio(1f / PhotoTiles.FRAME_ASPECT)
-                    .tiltedLike(photo.id),
+                    .tiltedLike(photo.id, 0),
                 onClick = { onOpen(photo) },
                 onLongClick = { onAttach(photo) },
             )
@@ -169,7 +169,10 @@ fun TimelinePhotos(
                                         .weight(1f)
                                         .fillMaxHeight()
                                         .padding(horizontal = TILE_GAP_UNITS.gridUnitsAsDp())
-                                        .tiltedLike(photo.id),
+                                        // Index across the whole block, not within the row, so the
+                                        // alternation carries down the page instead of restarting
+                                        // and putting two identical leans either side of a row end.
+                                        .tiltedLike(photo.id, index),
                                     onClick = { onOpen(photo) },
                                     onLongClick = { onAttach(photo) },
                                 )
@@ -200,19 +203,31 @@ private const val MAX_TILT_DEGREES = 1.8f
 /**
  * A slight lean, as if it were stuck down by hand.
  *
- * Derived from the photograph's own id rather than from its position, so the angle belongs to the
- * picture: it stays the same when the day gains another photograph above it, and it is the same
- * every time you open the day. A random tilt would reshuffle on every recomposition and make the
- * page twitch while you scrolled.
+ * **The sign alternates with position, and only the size comes from the picture.** An angle derived
+ * purely from the photograph's id looked wrong far more often than it looked charming: two
+ * neighbours leaning the same way read as a crooked page rather than a hand-placed one, and a run
+ * of three in the same direction reads as a bug. Alternating guarantees every pair opposes, which
+ * is the arrangement that looks deliberate — the eye reads two mirrored leans as balance and two
+ * parallel ones as a mistake.
  *
- * Deliberately small. Anything the eye reads as *crooked* rather than as *hand-placed* looks like a
- * layout bug, and on a grid of tiles the misalignment compounds.
+ * The magnitude still comes from the id, so the page is varied rather than a zigzag of identical
+ * angles, and it is stable: the same photograph leans the same amount every time the day is opened,
+ * and gaining a picture above it does not change how much it leans — only, deliberately, which way.
+ *
+ * Kept under two degrees. Past that it stops being charm and becomes a layout bug, and across a
+ * grid of tiles the misalignment compounds at the edges.
  */
-private fun Modifier.tiltedLike(id: Long): Modifier {
-    // A fixed spread of angles, picked by id. Modulo an odd number so neighbouring ids differ.
-    val step = ((id % 7L).toInt() - 3) / 3f
-    return graphicsLayer { rotationZ = step * MAX_TILT_DEGREES }
+private fun Modifier.tiltedLike(id: Long, index: Int): Modifier {
+    // 0.55..1.0 of the maximum, so no photograph sits perfectly straight among leaning ones and
+    // none of them reaches the full angle unless its id says so.
+    val magnitude = MIN_TILT_FRACTION +
+        ((id % 5L).toInt() / 4f) * (1f - MIN_TILT_FRACTION)
+    val direction = if (index % 2 == 0) 1f else -1f
+    return graphicsLayer { rotationZ = direction * magnitude * MAX_TILT_DEGREES }
 }
+
+/** No photograph sits perfectly straight among leaning ones; it reads as the odd one out. */
+private const val MIN_TILT_FRACTION = 0.55f
 
 /**
  * One photograph, loaded off the main thread and cached in bytes by [PhotoLibrary].

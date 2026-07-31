@@ -406,6 +406,10 @@ fun DayPane(
             }
         }
 
+        // Out of the way with the rest of the chrome. Reading back through a day is not writing in
+        // it, and the field is the largest thing on the screen that is not the day itself.
+        AnimatedVisibility(visible = !chromeHidden) {
+        Column {
         LightRule()
         Row(
             Modifier
@@ -431,6 +435,8 @@ fun DayPane(
                     .padding(start = 0.8f.gridUnitsAsDp(), bottom = 0.3f.verticalGridUnitsAsDp())
                     .lightClickable(enabled = draft.isNotBlank()) { commit() },
             )
+        }
+        }
         }
     }
 
