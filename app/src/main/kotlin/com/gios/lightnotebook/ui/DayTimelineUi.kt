@@ -251,6 +251,17 @@ fun TimelinePhotos(
  * of a portrait shot while stopping a single picture from filling the whole panel and turning the day
  * into a slideshow you have to scroll through.
  */
+/**
+ * How wide a photograph sits on the page.
+ *
+ * Seventy per cent, centred. A photograph in a book has paper around it; edge to edge reads as a
+ * website hero rather than as something someone stuck down.
+ */
+private const val PAGE_PHOTO_WIDTH = 0.7f
+
+/** 4:3, the shape assumed for a photograph whose own dimensions MediaStore did not report. */
+private const val LANDSCAPE = 4f / 3f
+
 private const val TALLEST = 0.72f
 
 /**
@@ -279,6 +290,15 @@ private const val PILE_TILT_BOLDNESS = 3.4f
  * A fifth. At seven per cent the row still read as a strip.
  */
 private const val PILE_STAGGER = 0.2f
+
+/** How much bigger or smaller one print is than another. Slight — it is a pile, not a collage. */
+private const val PILE_SIZE_VARIATION = 0.06f
+
+/**
+ * The largest a print grows, so a thumbnail is requested big enough for the biggest of them, and so
+ * the row can be given a height that does not depend on which prints are composed.
+ */
+private const val PILE_LARGEST = 1f + PILE_SIZE_VARIATION
 
 /**
  * How far up or down one print sits.
