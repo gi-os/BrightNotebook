@@ -367,6 +367,15 @@ private fun Modifier.tiltedLike(id: Long, index: Int, boldness: Float = 1f): Mod
 private const val MIN_TILT_FRACTION = 0.55f
 
 /**
+ * The most a photograph leans on its own, in degrees.
+ *
+ * Small: anything the eye reads as *crooked* rather than as *hand-placed* looks like a layout bug.
+ * Prints in a pile multiply this by [PILE_TILT_BOLDNESS], where the overlap gives the angle something
+ * to be about.
+ */
+private const val MAX_TILT_DEGREES = 1.8f
+
+/**
  * One photograph, loaded off the main thread and cached in bytes by [PhotoLibrary].
  *
  * `remember(photo.id)` and not `remember`: a lazy list recycles composables, so without the key
