@@ -26,7 +26,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -56,6 +58,14 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import com.gios.lightnotebook.data.DevicePhoto
+import com.gios.lightnotebook.data.PhotoLibrary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * The calendar as one endless wall planner: seven columns, weeks running downwards, pinch to
@@ -75,15 +85,17 @@ import kotlinx.coroutines.launch
 fun CalendarCanvas(
     rows: Map<Long, List<AgendaRow>>,
     /**
-     * The days with photographs on them, for the mark in a cell.
+     * One photograph per day — the earliest — for the mark in a cell and the picture behind it.
      *
-     * A set of days and not the photographs: this draws one mark, the window can be a year
-     * wide when the surface is zoomed out, and *what* was photographed is the day screen's
-     * question. Deliberately not a thumbnail in the cell either — forty-two cells
-     * re-measuring text per drag frame is the whole reason this is one `Canvas` instead of
-     * composables, and decoding bitmaps into it would undo that at the first pinch.
+     * Zoomed out this only draws a mark, because forty-two cells re-measuring text per drag
+     * frame is the whole reason this is one `Canvas` instead of composables and decoding
+     * bitmaps into it would undo that at the first pinch. **Once the cells carry entries the
+     * arithmetic changes**: three columns of four are a dozen cells, not forty-two, and a dozen
+     * small thumbnails decoded *once, off the draw path* and held as `ImageBitmap` cost nothing
+     * per frame. That is the whole trick — the draw only ever reads an already-decoded map, and
+     * a day whose picture has not arrived draws no picture.
      */
-    photoDays: Set<Long>,
+    photoCovers: Map<Long, DevicePhoto>,
     today: Long,
     anchorDay: Long,
     /** Told which day the surface has opened, so the day pane knows what to show. */
@@ -155,6 +167,34 @@ fun CalendarCanvas(
         // [selectedDay], which is what the cell geometry below follows.
         var dayOpen by remember { mutableStateOf(false) }
         var scale by remember { mutableFloatStateOf(ZoomLevel.Month.scale) }
+
+        // Decided out here and not in the draw, because loading is a coroutine and drawing is
+        // not. `showsEntriesAtScale` is the same question the draw asks, answered from the scale
+        // alone — the viewport cancels out of it — so the two cannot disagree about which cells
+        // want a picture.
+        val wantsCovers = CanvasMath.showsEntriesAtScale(scale)
+        val coverBitmaps = remember { mutableStateMapOf<Long, ImageBitmap>() }
+        val context = LocalContext.current
+        val coverPx = with(LocalDensity.current) { COVER_REQUEST_DP.dp.roundToPx() }
+
+        LaunchedEffect(photoCovers, wantsCovers, coverPx) {
+            if (!wantsCovers) {
+                // Dropped rather than kept: zooming out is the moment there is nothing to show
+                // them in, and a map of every cell a long pan crossed is a slow leak of bitmaps.
+                coverBitmaps.clear()
+                return@LaunchedEffect
+            }
+            coverBitmaps.keys.retainAll(photoCovers.keys)
+            for ((day, photo) in photoCovers) {
+                if (coverBitmaps.containsKey(day)) continue
+                val bitmap = withContext(Dispatchers.IO) {
+                    PhotoLibrary.thumbnail(context, photo, coverPx)
+                } ?: continue
+                // Published one at a time, so the cells fill in as they arrive instead of the
+                // whole grid waiting on the slowest thumbnail.
+                coverBitmaps[day] = bitmap.asImageBitmap()
+            }
+        }
         var offset by remember {
             mutableStateOf(
                 Offset(
@@ -493,7 +533,12 @@ fun CalendarCanvas(
                     drawDay(
                         day = day,
                         rows = rows[day].orEmpty(),
-                        hasPhotos = day in photoDays,
+                        hasPhotos = day in photoCovers,
+                        cover = coverBitmaps[day],
+                        // Struck through once it has gone. Not today, which is the inverted
+                        // block, and not a day already carrying a photograph — a line across a
+                        // picture reads as damage to the picture.
+                        struck = day < today,
                         isToday = day == today,
                         inFocusMonth = YearMonth.from(LocalDate.ofEpochDay(day)) == focusMonth,
                         left = left,
@@ -613,6 +658,66 @@ private const val HANDOVER_MS = 190
 /** Short: the finger has already done most of the travel, this only tidies the last of it. */
 private const val SLIDE_SETTLE_MS = 130
 
+/**
+ * A cell's photograph, centre-cropped to fill it.
+ *
+ * `loadThumbnail` returns whatever aspect the photograph was, and a cell is nearly square, so
+ * the source rectangle is narrowed to the cell's shape before it is drawn — the same
+ * centre-crop a thumbnail in the roll gets. Letting it stretch instead is immediately obvious
+ * on faces, and letterboxing it leaves two black bands that read as a broken image.
+ */
+private fun DrawScope.drawCover(
+    cover: ImageBitmap,
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+) {
+    if (width <= 0f || height <= 0f || cover.width <= 0 || cover.height <= 0) return
+
+    val cellAspect = width / height
+    val srcAspect = cover.width.toFloat() / cover.height.toFloat()
+    val srcW: Int
+    val srcH: Int
+    if (srcAspect > cellAspect) {
+        // Source is wider than the cell: keep its full height and take a slice of the width.
+        srcH = cover.height
+        srcW = (cover.height * cellAspect).toInt().coerceIn(1, cover.width)
+    } else {
+        srcW = cover.width
+        srcH = (cover.width / cellAspect).toInt().coerceIn(1, cover.height)
+    }
+
+    drawImage(
+        image = cover,
+        srcOffset = IntOffset((cover.width - srcW) / 2, (cover.height - srcH) / 2),
+        srcSize = IntSize(srcW, srcH),
+        dstOffset = IntOffset(left.toInt(), top.toInt()),
+        dstSize = IntSize(width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1)),
+    )
+}
+
+/**
+ * How dark the photograph is pushed before text is drawn over it.
+ *
+ * Chosen high deliberately. This is a 1-bit-feeling greyscale panel read at arm's length, and
+ * the failure mode is not "the picture is a bit dim" — it is a day whose entries cannot be read
+ * at all, which is the actual job of the cell.
+ */
+private const val COVER_SCRIM_ALPHA = 0.68f
+
+/** Light enough to read as a mark on the cell rather than as a line through the text. */
+private const val STRUCK_ALPHA = 0.55f
+
+/**
+ * The pixel size asked of MediaStore for a cell background.
+ *
+ * A cell at the Week stop is roughly a third of a ~410dp screen, so this is deliberately a
+ * little larger than it is drawn and far smaller than the panel — big enough that it does not
+ * soften under the scrim, small enough that a dozen of them are nothing.
+ */
+private const val COVER_REQUEST_DP = 180
+
 /** How far sideways counts as turning the page rather than a stray drag. */
 private const val PAGE_FRACTION = 0.16f
 
@@ -626,6 +731,8 @@ private fun DrawScope.drawDay(
     day: Long,
     rows: List<AgendaRow>,
     hasPhotos: Boolean,
+    cover: ImageBitmap?,
+    struck: Boolean,
     isToday: Boolean,
     inFocusMonth: Boolean,
     left: Float,
@@ -660,6 +767,38 @@ private fun DrawScope.drawDay(
 
     if (isToday) {
         drawRect(color = content, topLeft = Offset(left, top), size = Size(width, height))
+    }
+
+    // The day's first photograph, behind everything written on it.
+    //
+    // Never on today: today is *the inverted block*, and that is how this grid says "here" —
+    // a picture in it would cost the one cell whose state has to be unmistakable.
+    if (cover != null && !isToday) {
+        drawCover(cover, left, top, width, height)
+        // Knocked back hard, and this is the whole reason it is legible. At full brightness a
+        // photograph and white text are the same luminance in patches, and on a greyscale panel
+        // there is no colour left to separate them. Past this it reads as texture behind the
+        // day rather than as a picture in it — which is the intent: the photograph is a
+        // reminder of the day, not the content of the cell.
+        drawRect(
+            color = background.copy(alpha = COVER_SCRIM_ALPHA),
+            topLeft = Offset(left, top),
+            size = Size(width, height),
+        )
+    }
+
+    // Crossed out once the day has gone.
+    //
+    // One diagonal, not two: an X reads as cancelled or wrong, where a single stroke reads as
+    // spent, which is what a day behind you is. Suppressed over a photograph, where a line
+    // across the cell reads as damage to the picture rather than as a mark on the calendar.
+    if (struck && cover == null) {
+        drawLine(
+            color = (if (isToday) background else rule).copy(alpha = STRUCK_ALPHA),
+            start = Offset(left, top + height),
+            end = Offset(left + width, top),
+            strokeWidth = 2f,
+        )
     }
 
     // Days spilling in from the months either side are drawn down rather than hidden: they

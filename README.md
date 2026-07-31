@@ -104,6 +104,21 @@ importing other calendars — works with none.
   photograph rather than from the run's start, so a long afternoon of steady shooting stays one
   moment instead of breaking into arbitrary twenty-minute blocks.
 
+  **Zoom in one stop and the cells carry the photograph itself** — the day's first, centre-cropped
+  behind whatever is written on it and knocked back hard with black, so it reads as texture
+  rather than as a picture. The scrim is not a nicety: at full brightness a photograph and white
+  text are the same luminance in patches, and on a greyscale panel there is no colour left to
+  separate them. Never on today, which is the inverted block — the one cell whose state has to be
+  unmistakable. **Days that have gone are struck through** with a single faint diagonal, an X
+  reading as cancelled where one stroke reads as spent; suppressed over a photograph, where a
+  line across the cell reads as damage to the picture.
+
+  This is the one place the "no bitmaps in the planner" rule bends, and the arithmetic is why:
+  zoomed out there are forty-two cells, but once they carry entries there are about a dozen, and
+  a dozen small thumbnails decoded **once, off the draw path** and held as `ImageBitmap` cost
+  nothing per frame. The draw only ever reads an already-decoded map; a day whose picture has not
+  arrived draws no picture, and zooming back out drops them all.
+
   In the month grid a day with photographs carries a hollow square, next to the filled dot that
   means something is written there. A filled mark for *written*, an outlined one for
   *photographed* — a frame, which is what a picture is, and the two stay legible on a cell three
@@ -234,7 +249,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.3.0 | this commit | A day past is a diary, a day ahead is a calendar, today is both |
+| v1.4.0 | this commit | The planner's cells carry the day's photograph, and days gone are struck through |
+| v1.3.22 | `3b164d8` | A day past is a diary, a day ahead is a calendar, today is both |
 | v1.2.21 | `069462c` | Photographs on the calendar, and pages photographed by Roll |
 | v1.1.20 | `23aff15` | One note per thing another app owns: `lightnotebook://note/<key>` |
 | v1.0.17 – v1.0.19 | | Keep the photograph and let a transcription be corrected; LightCamera's capture engine |

@@ -313,24 +313,25 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     val photosGranted: StateFlow<Boolean> = _photosGranted.asStateFlow()
 
     /**
-     * Which visible days have photographs on them, for the mark in a month cell.
+     * One photograph per visible day: the mark in a month cell, and the picture behind it once
+     * the cells are big enough to carry one.
      *
      * Keyed off the planner's own window, so panning a year does not read a year: the same
      * reasoning as [canvasRows], and the same window drives both.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val photoDays: StateFlow<Set<Long>> =
+    val photoCovers: StateFlow<Map<Long, DevicePhoto>> =
         combine(_canvasWindow, _photoNudge, _photosGranted) { window, _, granted -> window to granted }
             .mapLatest { (window, granted) ->
                 if (!granted) {
-                    emptySet()
+                    emptyMap()
                 } else {
                     withContext(Dispatchers.IO) {
-                        PhotoLibrary.daysWithPhotos(getApplication(), window.first, window.last)
+                        PhotoLibrary.covers(getApplication(), window.first, window.last)
                     }
                 }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** The open day's photographs, earliest first. */
     @OptIn(ExperimentalCoroutinesApi::class)

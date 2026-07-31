@@ -66,13 +66,27 @@ object PhotoLibrary {
     /**
      * Which days in the window have at least one photograph.
      *
-     * Deliberately a set of days and not the photographs themselves: this drives a mark in a
-     * month cell, the window can be a year wide when the planner is zoomed out, and holding
-     * every row of a year to decide whether to draw forty dots would be absurd.
+     * One photograph per day — the earliest — and not all of them. The window can be a year
+     * wide when the planner is zoomed out, and holding every row of a year to decide whether to
+     * draw forty marks would be absurd. Its keys are also the answer to "which days have
+     * photographs", so the mark and the cell background come from one query.
      */
-    fun daysWithPhotos(context: Context, fromDay: Long, toDay: Long, zone: ZoneId = ZoneId.systemDefault()): Set<Long> {
-        val out = mutableSetOf<Long>()
-        query(context, fromDay, toDay, zone) { _, day, _ -> out.add(day) }
+    fun covers(
+        context: Context,
+        fromDay: Long,
+        toDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Map<Long, DevicePhoto> {
+        val out = HashMap<Long, DevicePhoto>()
+        query(context, fromDay, toDay, zone) { id, day, ms ->
+            // The earliest of the day wins. One query rather than one per day, and the same pass
+            // answers both questions the planner asks — which days have photographs, and which
+            // one to draw behind the cell.
+            val existing = out[day]
+            if (existing == null || ms < existing.takenAt) {
+                out[day] = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms)
+            }
+        }
         return out
     }
 

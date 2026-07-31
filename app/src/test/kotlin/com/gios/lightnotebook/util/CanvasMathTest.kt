@@ -365,4 +365,32 @@ class CanvasMathTest {
         val day = CanvasMath.focusedDay(offset, 3f, viewportW, viewportH, cellW, cellH, origin)
         assertEquals(0, CanvasMath.columnOf(day))
     }
+
+    /* ---- the scale-only shortcut, used to decide what to load ---- */
+
+    @Test
+    fun `the scale-only answer agrees with the draw's own`() {
+        // These two must never disagree. The draw decides whether a cell shows entries from the
+        // measured cell width; loading that cell's background photograph happens in a
+        // composable, where the viewport is not known yet, and asks from the scale alone. If
+        // they diverge, cells either load pictures they never show or show cells with no
+        // picture loaded.
+        for (viewport in listOf(320f, 411f, 480f, 1080f)) {
+            var scale = 1f
+            while (scale <= 7f) {
+                val cellSpan = viewport / 7f * scale
+                assertEquals(
+                    CanvasMath.showsEntries(CanvasMath.daysAcross(cellSpan, viewport)),
+                    CanvasMath.showsEntriesAtScale(scale),
+                )
+                scale += 0.05f
+            }
+        }
+    }
+
+    @Test
+    fun `a nonsense scale is treated as fully zoomed out`() {
+        assertEquals(7f, CanvasMath.daysAcrossAtScale(0f), 0.001f)
+        assertEquals(7f, CanvasMath.daysAcrossAtScale(-1f), 0.001f)
+    }
 }

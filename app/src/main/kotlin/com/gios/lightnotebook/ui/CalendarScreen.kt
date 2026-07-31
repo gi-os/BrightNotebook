@@ -46,7 +46,7 @@ fun CalendarScreen(
     modifier: Modifier = Modifier,
 ) {
     val rows by vm.canvasRows.collectAsStateWithLifecycle()
-    val photoDays by vm.photoDays.collectAsStateWithLifecycle()
+    val photoCovers by vm.photoCovers.collectAsStateWithLifecycle()
     val anchor by vm.selectedDay.collectAsStateWithLifecycle()
     val today = NoteDates.today()
 
@@ -74,7 +74,7 @@ fun CalendarScreen(
 
         CalendarCanvas(
             rows = rows,
-            photoDays = photoDays,
+            photoCovers = photoCovers,
             today = today,
             anchorDay = homeAnchor,
             homeRequest = homeRequest,

@@ -219,6 +219,19 @@ object CanvasMath {
     fun showsEntries(daysAcross: Float): Boolean = daysAcross <= ENTRIES_FROM_DAYS_ACROSS
 
     /**
+     * The same question answered from the scale alone, for code that runs outside the draw.
+     *
+     * The grid is always seven columns of `viewportWidth / 7`, so a cell at a given scale spans
+     * `viewportWidth * scale / 7` and the days across the screen come to `7 / scale` — the
+     * viewport cancels out. That matters because loading a cell's background photograph has to
+     * be decided in a composable, where the viewport is not known yet, and it must agree
+     * exactly with what the draw decides or cells load pictures they never show.
+     */
+    fun daysAcrossAtScale(scale: Float): Float = if (scale <= 0f) 7f else 7f / scale
+
+    fun showsEntriesAtScale(scale: Float): Boolean = showsEntries(daysAcrossAtScale(scale))
+
+    /**
      * Times wait until closer in. At four days across a title uses the whole width, and
      * prefixing "9:30" to it just eats the words that say what the thing is.
      */
