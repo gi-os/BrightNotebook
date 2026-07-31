@@ -62,6 +62,7 @@ import com.gios.lightnotebook.data.DayWeather
 import com.gios.lightnotebook.util.WeatherCodes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.offset
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -153,7 +154,9 @@ fun TimelinePhotos(
             // row tall however many there are — which is the property the very first filmstrip had
             // and the tiled version gave away.
             val edge = PILE_PRINT_UNITS.verticalGridUnitsAsDp()
-            val edgePx = with(density) { edge.roundToPx() }
+            // The longest side a print can be, since a landscape one is wider than it is tall and
+            // asking for its height would fetch a thumbnail too small and scale it up.
+            val edgePx = with(density) { (edge * LANDSCAPE).roundToPx() }
             LazyRow(
                 Modifier.fillMaxWidth(),
                 // Negative spacing: each print laps over the one before it. This is the whole look —
@@ -166,7 +169,17 @@ fun TimelinePhotos(
                         photo = photo,
                         requestPx = edgePx,
                         modifier = Modifier
-                            .size(edge)
+                            // **One height, each print its own width.** Square prints cropped every
+                            // portrait photograph to its middle, which on a phone is most of them.
+                            // A common height with varying widths is also what a real pile looks
+                            // like: prints are different shapes and they line up along one edge.
+                            .height(edge)
+                            .aspectRatio(photo.aspect ?: LANDSCAPE)
+                            // **A light stagger up and down.** Prints dropped on a page do not share
+                            // a baseline, and a row that does reads as a strip however much each one
+                            // leans. Small — a fraction of the print — because past that it stops
+                            // being a pile and becomes a wave.
+                            .offset(y = edge * staggerFor(photo.id))
                             // Bolder in a pile than alone. A single photograph on a page wants a
                             // hint of a lean; overlapping prints need enough angle that the overlap
                             // reads as stacking rather than as a misaligned grid.
@@ -200,8 +213,28 @@ private const val PILE_PRINT_UNITS = 7.2f
 /** How far each print laps over the one before it, as a fraction of its own size. */
 private const val PILE_LAP = 0.18f
 
-/** Prints in a pile lean about twice as far as a photograph standing on its own. */
-private const val PILE_TILT_BOLDNESS = 2.2f
+/**
+ * Prints in a pile lean this much further than a photograph standing on its own.
+ *
+ * Raised from 2.2: with each print keeping its own shape and sitting at its own height, a stronger
+ * angle reads as a handful of photographs dropped on a page. A single photograph keeps the gentle
+ * version, because one leaning picture with nothing to lean against just looks crooked.
+ */
+private const val PILE_TILT_BOLDNESS = 3.4f
+
+/** The most a print sits above or below its neighbours, as a fraction of its own height. */
+private const val PILE_STAGGER = 0.07f
+
+/**
+ * How far up or down one print sits.
+ *
+ * From the photograph's own id, like the lean, and for the same reason: the same picture should sit
+ * at the same height every time the day is opened, and a random offset would make the pile twitch on
+ * every recomposition. Five buckets rather than two so it reads as scattered rather than as
+ * alternating.
+ */
+private fun staggerFor(id: Long): Float =
+    (((id / 7L) % 5L).toInt() - 2) / 2f * PILE_STAGGER
 
 /** 4:3, the shape assumed for a photograph whose own dimensions MediaStore did not report. */
 private const val LANDSCAPE = 4f / 3f
@@ -288,7 +321,9 @@ private fun PhotoFrame(
             Image(
                 bitmap = it.asImageBitmap(),
                 contentDescription = "A photograph from this day",
-                contentScale = ContentScale.Crop,
+                // Crop is right for a frame whose shape was chosen for it; here the frame *is* the
+                // photograph's shape, so there is nothing to crop and Fit keeps it exact.
+                contentScale = ContentScale.Fit,
                 modifier = Modifier.matchParentSize(),
             )
         }
@@ -711,7 +746,7 @@ fun OnThisDayRow(
 ) {
     if (past.isEmpty()) return
     val edge = PAST_THUMB_UNITS.verticalGridUnitsAsDp()
-    val edgePx = with(LocalDensity.current) { edge.roundToPx() }
+    val edgePx = with(LocalDensity.current) { (edge * LANDSCAPE).roundToPx() }
 
     Column(
         modifier
@@ -729,7 +764,11 @@ fun OnThisDayRow(
                     PhotoFrame(
                         photo = photo,
                         requestPx = edgePx,
-                        modifier = Modifier.size(edge),
+                        // Its own shape here too, or a square frame letterboxes a portrait
+                        // photograph inside a visible border and looks like a mistake.
+                        modifier = Modifier
+                            .height(edge)
+                            .aspectRatio(photo.aspect ?: LANDSCAPE),
                         onClick = { onOpen(photo) },
                         onLongClick = { onOpen(photo) },
                     )

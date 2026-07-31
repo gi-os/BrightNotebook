@@ -339,7 +339,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.30.0 | this commit | Places get names, and photographs a pile you scroll through |
+| v1.31.0 | this commit | Prints keep their own shape, and sit at their own angle and height |
+| v1.30.47 | `35b3138` | Places get names, and photographs a pile you scroll through |
 | v1.29.46 | `828db48` | Went home, went to work |
 | v1.28.0 | (on main) | Reports actually leave the phone |
 | v1.27.44 | `5a010f8` | The shake lands between too stiff and too eager |
