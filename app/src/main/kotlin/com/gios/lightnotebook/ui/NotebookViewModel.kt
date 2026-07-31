@@ -461,7 +461,9 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 } else {
                     withContext(Dispatchers.IO) {
                         OnThisDay.priorYears(day).mapNotNull { past ->
-                            PhotoLibrary.covers(getApplication(), past.epochDay, past.epochDay)[past.epochDay]
+                            PhotoLibrary
+                                .summaries(getApplication(), past.epochDay, past.epochDay)[past.epochDay]
+                                ?.cover
                                 ?.let { past to it }
                         }
                     }
