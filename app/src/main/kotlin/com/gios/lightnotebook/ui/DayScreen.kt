@@ -220,6 +220,8 @@ fun DayPane(
         )
         LightRule()
 
+        val bookends = remember(items) { DayTimeline.bookends(items) }
+        DayOpening(minutes = bookends?.firstMinutes)
         DayShape(stats = stats)
 
         if (!photosGranted) {
@@ -333,6 +335,13 @@ fun DayPane(
                         LightRule()
                         StatsGrantRow(onCopy = { askSteps.launch(Manifest.permission.ACTIVITY_RECOGNITION) })
                     }
+                }
+
+                item(key = "day-closed") {
+                    DayClosing(
+                        minutes = bookends?.lastMinutes,
+                        unfinished = epochDay >= today,
+                    )
                 }
 
                 if (past.isNotEmpty()) {

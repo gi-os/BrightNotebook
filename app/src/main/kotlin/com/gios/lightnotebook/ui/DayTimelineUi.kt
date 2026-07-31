@@ -41,6 +41,7 @@ import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.OnThisDay
+import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -248,6 +249,43 @@ fun PhotoPermissionRow(onAsk: () -> Unit, modifier: Modifier = Modifier) {
  * Nothing is shown for a day with only one thing on it — "6:40 to 6:40" is not a day, it is the
  * row already on screen.
  */
+/**
+ * "Started the day at 07:12" — the first thing that happened, at the top of the day.
+ *
+ * Written out rather than shown as a time in a corner, because it is the opening line of a page
+ * about a day rather than a field. Its counterpart sits at the very bottom, and between them the
+ * day is laid out in the order it happened.
+ *
+ * Times are read back to the clock: eight hours into a day that began at four is noon, and a late
+ * night reads as "01:40" rather than as the twenty-one hours it is measured in.
+ */
+@Composable
+fun DayOpening(minutes: Int?, modifier: Modifier = Modifier) {
+    if (minutes == null) return
+    DayEdgeLine("STARTED THE DAY AT " + clockOf(minutes), modifier)
+}
+
+/** "Ended the day at 23:40", at the foot of the page. Absent while the day is still going. */
+@Composable
+fun DayClosing(minutes: Int?, unfinished: Boolean, modifier: Modifier = Modifier) {
+    if (minutes == null || unfinished) return
+    DayEdgeLine("ENDED THE DAY AT " + clockOf(minutes), modifier)
+}
+
+@Composable
+private fun DayEdgeLine(text: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.6f.verticalGridUnitsAsDp()),
+    ) {
+        LightText(text = text, variant = LightTextVariant.Superfine, lighten = true)
+    }
+}
+
+private fun clockOf(minutesIntoDay: Int): String =
+    NoteDates.clock(JournalDay.clockMinutes(minutesIntoDay)).orEmpty()
+
 @Composable
 fun DayShape(
     stats: NotebookViewModel.DayStats,

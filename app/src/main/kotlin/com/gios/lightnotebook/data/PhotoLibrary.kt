@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.util.LruCache
 import android.util.Size
 import androidx.core.content.ContextCompat
+import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.PhotoDays
 import java.time.ZoneId
 
@@ -22,11 +23,13 @@ data class DevicePhoto(
     /** Milliseconds, already reconciled by [PhotoDays.instantMs]. */
     val takenAt: Long,
 ) {
-    /** Minutes from local midnight, for sitting a photo among timed entries. */
-    fun minutesOfDay(zone: ZoneId): Int {
-        val start = PhotoDays.windowMs(epochDay, epochDay, zone).first
-        return ((takenAt - start) / 60_000L).toInt().coerceIn(0, 24 * 60 - 1)
-    }
+    /**
+     * Minutes into its journal day, for sitting a photograph among timed entries.
+     *
+     * Measured from the cutover, not from midnight, so a photograph taken at one in the morning
+     * lands near the *bottom* of the night it belonged to rather than at the top of the next day.
+     */
+    fun minutesOfDay(zone: ZoneId): Int = JournalDay.minutesInto(takenAt, epochDay, zone)
 }
 
 /**

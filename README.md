@@ -99,6 +99,13 @@ importing other calendars — works with none.
   a day is knowable, `updatedAt` being one column, which is a limit of the schema rather than a
   choice.
 
+  **A day ends when you go to bed.** A journal day runs from four in the morning to four the next
+  morning, so a photograph taken at 1am belongs to the night you were having rather than to a morning
+  you had not started. Everything agrees about it — photographs, notes, entries, steps, screen time,
+  the now line, the planner's highlighted cell — because they all ask one object, `util/JournalDay`.
+  A vertical position in a cell is measured from the cutover too, so a late night runs down the
+  bottom of the day it belonged to instead of reappearing at the top of the next one.
+
   The day carries **its own shape** in a line under the title: when it started and stopped, and
   when it got light and dark. Sunrise is **computed, not fetched** — the NOAA algorithm from a date
   and a place, so it works offline for any date in either direction, and polar latitudes come back
@@ -270,7 +277,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.7.0 | this commit | Steps by the hour, screen time, and daylight down the calendar's cells |
+| v1.8.0 | this commit | A day ends when you go to bed, not at midnight |
+| v1.7.26 | `0bdc60a` | Steps by the hour, screen time, and daylight down the calendar's cells |
 | v1.6.25 | `526fb1d` | The day's shape: bookends, daylight, and the same date in years before |
 | v1.5.24 | `0aa0e07` | Notes you wrote or came back to are part of the day |
 | v1.4.23 | `23310f9` | The planner's cells carry the day's photograph, and days gone are struck through |

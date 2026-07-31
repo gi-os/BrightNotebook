@@ -1,7 +1,5 @@
 package com.gios.lightnotebook.util
 
-import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -65,9 +63,15 @@ object PhotoDays {
         return null
     }
 
-    /** The local calendar day an instant falls on. */
-    fun localEpochDay(instantMs: Long, zone: ZoneId): Long =
-        Instant.ofEpochMilli(instantMs).atZone(zone).toLocalDate().toEpochDay()
+    /**
+     * The journal day an instant falls on.
+     *
+     * Delegated to [JournalDay] rather than computed here, and that is the point: a day ends when
+     * you go to bed, and if this file kept its own opinion about midnight then a photograph taken at
+     * one in the morning would sit in a strip that the step graph and the bookends both disagreed
+     * with. One answer, asked from five places.
+     */
+    fun localEpochDay(instantMs: Long, zone: ZoneId): Long = JournalDay.dayOf(instantMs, zone)
 
     /**
      * The half-open millisecond window covering [fromDay]..[toDay] inclusive, in [zone].
@@ -79,9 +83,7 @@ object PhotoDays {
     fun windowMs(fromDay: Long, toDay: Long, zone: ZoneId): LongRange {
         val lo = min(fromDay, toDay)
         val hi = max(fromDay, toDay)
-        val start = LocalDate.ofEpochDay(lo).atStartOfDay(zone).toInstant().toEpochMilli()
-        val endExclusive = LocalDate.ofEpochDay(hi + 1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return start until endExclusive
+        return JournalDay.startMs(lo, zone) until JournalDay.startMs(hi + 1, zone)
     }
 
     /**

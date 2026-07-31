@@ -28,8 +28,17 @@ class PhotoDaysTest {
     }
 
     @Test
+    fun `a photograph after midnight belongs to the night before`() {
+        // A day ends when you go to bed. See JournalDay — this file delegates to it so the strip,
+        // the step graph and the bookends cannot disagree about which day a moment was part of.
+        val lateNight = ms(nyc, 2026, 7, 31, 1, 30)
+        assertEquals(day(2026, 7, 30), PhotoDays.localEpochDay(lateNight, nyc))
+    }
+
+    @Test
     fun `an early morning photograph east of UTC stays put too`() {
-        // The same error with the sign reversed: 7am in Tokyo is the previous day in UTC.
+        // The same error with the sign reversed: 7am in Tokyo is the previous day in UTC. Seven is
+        // after the cutover, so it is its own day's morning.
         val morning = ms(tokyo, 2026, 7, 30, 7, 0)
         assertEquals(day(2026, 7, 30), PhotoDays.localEpochDay(morning, tokyo))
     }
@@ -80,30 +89,29 @@ class PhotoDaysTest {
     /* ---- the query window ---- */
 
     @Test
-    fun `the window starts at local midnight, not UTC midnight`() {
+    fun `the window runs from one cutover to the next, in local time`() {
         val d = day(2026, 7, 30)
         val window = PhotoDays.windowMs(d, d, nyc)
-        assertEquals(ms(nyc, 2026, 7, 30, 0, 0), window.first)
-        // Half-open: the last value in the range is one millisecond before the next midnight.
-        assertEquals(ms(nyc, 2026, 7, 31, 0, 0) - 1, window.last)
+        assertEquals(ms(nyc, 2026, 7, 30, 4, 0), window.first)
+        // Half-open: the last value is one millisecond before the next day begins.
+        assertEquals(ms(nyc, 2026, 7, 31, 4, 0) - 1, window.last)
     }
 
     @Test
-    fun `a spring-forward day is twenty-three hours, not twenty-four`() {
-        // 2026-03-08 in New York loses an hour. A window built as days times 86_400_000
-        // would run an hour past midnight and pull in the next day's photographs.
-        val d = day(2026, 3, 8)
+    fun `a window still spans the hour the clocks changed`() {
+        // The clocks go forward at 2am on the 8th, which is before that day's cutover — so the
+        // short day is the one that began at 4am on the 7th. A window built as days times
+        // 86_400_000 would be an hour wrong and pull in a neighbour's photographs.
+        val d = day(2026, 3, 7)
         val window = PhotoDays.windowMs(d, d, nyc)
-        val hours = (window.last + 1 - window.first) / 3_600_000L
-        assertEquals(23L, hours)
+        assertEquals(23L, (window.last + 1 - window.first) / 3_600_000L)
     }
 
     @Test
-    fun `a fall-back day is twenty-five hours`() {
-        val d = day(2026, 11, 1)
+    fun `and the hour it gained`() {
+        val d = day(2026, 10, 31)
         val window = PhotoDays.windowMs(d, d, nyc)
-        val hours = (window.last + 1 - window.first) / 3_600_000L
-        assertEquals(25L, hours)
+        assertEquals(25L, (window.last + 1 - window.first) / 3_600_000L)
     }
 
     @Test
@@ -128,6 +136,15 @@ class PhotoDaysTest {
         // The end of the range is where the timezone error would bite: an 11pm photograph on
         // the last day of a month has a UTC timestamp in the next month.
         val taken = ms(nyc, 2026, 7, 31, 23, 30)
+        assertEquals(
+            day(2026, 7, 31),
+            PhotoDays.dayIfWithin(taken, 0L, day(2026, 7, 1), day(2026, 7, 31), nyc),
+        )
+    }
+
+    @Test
+    fun `a photograph at 2am on the first of the month is the previous month's`() {
+        val taken = ms(nyc, 2026, 8, 1, 2, 0)
         assertEquals(
             day(2026, 7, 31),
             PhotoDays.dayIfWithin(taken, 0L, day(2026, 7, 1), day(2026, 7, 31), nyc),

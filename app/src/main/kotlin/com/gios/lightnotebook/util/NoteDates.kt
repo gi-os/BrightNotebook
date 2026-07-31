@@ -18,10 +18,17 @@ object NoteDates {
     /** Sunday-first, matching the LPIII's own month view. */
     val weekdayInitials: List<String> = listOf("S", "M", "T", "W", "T", "F", "S")
 
-    fun today(): Long = LocalDate.now().toEpochDay()
+    /**
+     * Today, as a journal day.
+     *
+     * At two in the morning this is still yesterday, which is the whole point: the day you are
+     * having has not ended, so the planner should still be pointing at it and a note written now
+     * belongs to it. See [JournalDay].
+     */
+    fun today(): Long = JournalDay.today(java.time.ZoneId.systemDefault())
 
-    /** Minutes from local midnight, for the line between what has happened and what has not. */
-    fun nowMinutes(): Int = java.time.LocalTime.now().let { it.hour * 60 + it.minute }
+    /** Minutes since the day's cutover, for the line between what has happened and what has not. */
+    fun nowMinutes(): Int = JournalDay.nowMinutes(java.time.ZoneId.systemDefault())
 
     fun of(epochDay: Long): LocalDate = LocalDate.ofEpochDay(epochDay)
 
