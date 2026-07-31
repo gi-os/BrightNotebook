@@ -481,4 +481,36 @@ class DayTimelineTest {
     fun `no pickups is no rows`() {
         assertTrue(DayTimeline.pickups(emptyList()).isEmpty())
     }
+
+    /* ---- going home, going to work ---- */
+
+    @Test
+    fun `the two named zones read as sentences, not as labels`() {
+        assertEquals("Went home", DayTimeline.Item.Arrived(0, "home").phrase)
+        assertEquals("Went to work", DayTimeline.Item.Arrived(0, "work").phrase)
+    }
+
+    @Test
+    fun `case does not matter and anything else still reads`() {
+        assertEquals("Went home", DayTimeline.Item.Arrived(0, "Home").phrase)
+        assertEquals("Went to the studio", DayTimeline.Item.Arrived(0, "the studio").phrase)
+    }
+
+    @Test
+    fun `an arrival is something that happened, so it sits behind the line`() {
+        assertTrue(DayTimeline.Item.Arrived(20 * 60, "home").behind)
+    }
+
+    @Test
+    fun `going home can be the last thing on a day`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("breakfast", 8 * 60)),
+            photos = emptyList(),
+            arrivals = listOf(DayTimeline.Item.Arrived(19 * 60 + 40, "home")),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertEquals(19 * 60 + 40, DayTimeline.bookends(items)!!.lastMinutes)
+    }
 }

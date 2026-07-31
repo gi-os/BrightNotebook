@@ -58,6 +58,28 @@ object DayTimeline {
         ) : Item
 
         /**
+         * Arriving somewhere you had named — home, work.
+         *
+         * A moment rather than a stay, because that is all there is: the fixes inside a named zone
+         * are never recorded, so there is no duration to know. "Went home at 19:40" is the whole
+         * fact, and it is enough — the next thing on the day says when you left.
+         */
+        data class Arrived(
+            override val minutes: Int,
+            /** `home`, `work` — lower case as the recorder stores it. */
+            val zone: String,
+        ) : Item {
+            override val behind: Boolean get() = true
+
+            /** "Went home", "Went to work" — the two read differently and both should read right. */
+            val phrase: String get() = when (zone.lowercase()) {
+                "home" -> "Went home"
+                "work" -> "Went to work"
+                else -> "Went to " + zone
+            }
+        }
+
+        /**
          * Somebody you talked to, from LightChat.
          *
          * Names only, by design at the other end: the journal knows you spoke to Alex and does not
@@ -190,6 +212,7 @@ object DayTimeline {
         listening: List<Item.Listening> = emptyList(),
         pickups: List<Item.Pickups> = emptyList(),
         talked: List<Item.Talked> = emptyList(),
+        arrivals: List<Item.Arrived> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -199,7 +222,8 @@ object DayTimeline {
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
-        return (entries + clustered + notes + places + listening + pickups + talked).sortedWith(
+        return (entries + clustered + notes + places + listening + pickups + talked + arrivals)
+            .sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
                 // At the same minute: what you planned, then what you wrote, then what you
@@ -209,6 +233,10 @@ object DayTimeline {
                 {
                     when (it) {
                         is Item.Entry -> 0
+                        // Arriving somewhere and being somewhere sort together: they are the same
+                        // kind of fact, and a named arrival at the same minute as a stay is the same
+                        // event seen from two sides.
+                        is Item.Arrived -> 1
                         is Item.Place -> 1
                         is Item.Talked -> 2
                         is Item.Note -> 3

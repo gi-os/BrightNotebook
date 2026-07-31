@@ -140,6 +140,7 @@ fun DayPane(
     val listening by vm.dayListening.collectAsStateWithLifecycle()
     val weather by vm.dayWeather.collectAsStateWithLifecycle()
     val talked by vm.dayTalked.collectAsStateWithLifecycle()
+    val arrivals by vm.dayArrivals.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -205,7 +206,10 @@ fun DayPane(
     // clock, and putting it in the view model would mean the clock lived there too.
     val photosById = remember(photos) { photos.associateBy { it.id } }
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
-    val items = remember(rows, photos, dayNotes, places, listening, pickups, talked, epochDay, today, nowMinutes) {
+    val items = remember(
+        rows, photos, dayNotes, places, listening, pickups, talked, arrivals,
+        epochDay, today, nowMinutes,
+    ) {
         DayTimeline.build(
             rows = rows,
             photos = photos.map { DayTimeline.PhotoAt(it.id, it.minutesOfDay(ZoneId.systemDefault())) },
@@ -214,6 +218,7 @@ fun DayPane(
             listening = listening,
             pickups = pickups,
             talked = talked,
+            arrivals = arrivals,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -354,6 +359,7 @@ fun DayPane(
                             is DayTimeline.Item.Listening -> "heard-" + item.minutes
                             is DayTimeline.Item.Pickups -> "picked-" + item.minutes
                             is DayTimeline.Item.Talked -> "talked-" + item.name + item.minutes
+                            is DayTimeline.Item.Arrived -> "arrived-" + item.zone + item.minutes
                         }
                     },
                 ) { index, item ->
@@ -396,6 +402,15 @@ fun DayPane(
                         // No rule under it, and no row: music ran alongside the day rather than
                         // interrupting it.
                         is DayTimeline.Item.Listening -> ListeningSpan(item)
+
+                        is DayTimeline.Item.Arrived -> {
+                            LightListRow(
+                                title = item.phrase,
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                leading = LightIcons.Pin,
+                            )
+                            LightRule()
+                        }
 
                         is DayTimeline.Item.Talked -> {
                             LightListRow(

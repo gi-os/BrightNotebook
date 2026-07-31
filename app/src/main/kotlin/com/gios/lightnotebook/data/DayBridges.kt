@@ -19,6 +19,14 @@ data class Stay(
 /** Something you listened to, from LightPhono. */
 data class Play(val atMs: Long, val title: String, val artist: String)
 
+/**
+ * Arriving somewhere you had named, from LightFog. Home and work.
+ *
+ * No coordinates, by construction at the other end: a zone's fixes never reach the track, so the
+ * only thing there is to serve is that you got there and when.
+ */
+data class Arrival(val atMs: Long, val name: String)
+
 /** Someone you talked to, from LightChat. Names only — no message ever crosses the boundary. */
 data class Talked(
     val firstMs: Long,
@@ -47,6 +55,7 @@ object DayBridges {
     private const val STAYS = "content://com.gios.lightfog.stays/stays/"
     private const val PLAYS = "content://com.lightphone.spotify.plays/plays/"
     private const val TALKED = "content://com.gios.lightchat.talked/talked/"
+    private const val ZONES = "content://com.gios.lightfog.stays/zones/"
 
     fun stays(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Stay> {
         val window = JournalDay.windowMs(epochDay, zone)
@@ -104,6 +113,21 @@ object DayBridges {
             .distinctBy { it.name to it.firstMs }
     }
 
+    fun arrivals(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Arrival> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, ZONES + date) { c ->
+                Arrival(
+                    atMs = c.getLong(c.getColumnIndexOrThrow("at_ms")),
+                    name = c.getString(c.getColumnIndexOrThrow("name")).orEmpty(),
+                )
+            }
+        }
+            .filter { it.atMs in window && it.name.isNotBlank() }
+            .sortedBy { it.atMs }
+            .distinctBy { it.atMs to it.name }
+    }
+
     /**
      * The calendar dates a journal day touches.
      *
@@ -145,6 +169,9 @@ object DayBridges {
                 minutes.add(JournalDay.minutesInto(it.endMs, day, zone))
             }
             plays(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.atMs, day, zone))
+            }
+            arrivals(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.atMs, day, zone))
             }
             talked(context, day, zone).forEach {

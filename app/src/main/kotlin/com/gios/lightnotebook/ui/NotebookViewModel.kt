@@ -626,6 +626,29 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /**
+     * Going home, going to work.
+     *
+     * From LightFog, which records that you arrived at a place you had named without recording where
+     * that place is — see its privacy zones. So this has a time and a word and nothing else, which
+     * is the whole of what a journal needs from it.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayArrivals: StateFlow<List<DayTimeline.Item.Arrived>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.arrivals(getApplication(), day, zone).map {
+                        DayTimeline.Item.Arrived(
+                            minutes = JournalDay.minutesInto(it.atMs, day, zone),
+                            zone = it.name,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Who you talked to on the open day. Names only; LightChat serves no message text. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayTalked: StateFlow<List<DayTimeline.Item.Talked>> =
