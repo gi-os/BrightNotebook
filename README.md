@@ -339,7 +339,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.33.0 | this commit | The pile scatters instead of batching, and stops popping as you scroll |
+| v1.34.0 | this commit | The star sits on the print, and a tall photograph fills its frame |
+| v1.33.0 | (folded in) | The pile scatters instead of batching, and stops popping as you scroll |
 | v1.32.49 | `0053c07` | The pile scrolls, a starred photograph leads it, and it stops covering the text |
 | v1.31.48 | `deebd09` | Prints keep their own shape, and sit at their own angle and height |
 | v1.30.47 | `35b3138` | Places get names, and photographs a pile you scroll through |

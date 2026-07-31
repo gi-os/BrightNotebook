@@ -156,19 +156,27 @@ fun TimelinePhotos(
             // conditional rather than "the first one, always".
             val highlight = remember(resolved) { resolved.firstOrNull { it.starred } }
             if (highlight != null) {
-                Box(Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH)) {
+                // **The star belongs on the picture, and the picture fills its frame.**
+                //
+                // Both of those were wrong. The star was aligned to an outer box rather than to the
+                // frame, so on a tall photograph it sat above the image; and the frame is clamped by
+                // `TALLEST`, which for a very tall photograph is *less* tall than the picture — so
+                // `Fit` letterboxed it and left a border inside the outline. One box now carries the
+                // shape, the lean, the photograph and the star together, so the star cannot drift off
+                // the print and the print cannot float inside its own frame.
+                Box(
+                    Modifier
+                        .fillMaxWidth(PAGE_PHOTO_WIDTH)
+                        .aspectRatio((highlight.aspect ?: LANDSCAPE).coerceAtLeast(TALLEST))
+                        .tiltedLike(highlight.id, 0),
+                ) {
                     PhotoFrame(
                         photo = highlight,
                         requestPx = fullWidthPx,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio((highlight.aspect ?: LANDSCAPE).coerceAtLeast(TALLEST))
-                            .tiltedLike(highlight.id, 0),
+                        modifier = Modifier.matchParentSize(),
                         onClick = { onOpen(highlight) },
                         onLongClick = { onAttach(highlight) },
                     )
-                    // On the picture rather than beside it: the star is a fact about the photograph,
-                    // and a corner of it is the only place there is room on this panel.
                     LightIcon(
                         icon = LightIcons.Star,
                         size = 1.6f,
@@ -414,9 +422,12 @@ private fun PhotoFrame(
             Image(
                 bitmap = it.asImageBitmap(),
                 contentDescription = "A photograph from this day",
-                // Crop is right for a frame whose shape was chosen for it; here the frame *is* the
-                // photograph's shape, so there is nothing to crop and Fit keeps it exact.
-                contentScale = ContentScale.Fit,
+                // **Crop, and it costs nothing.** Where the frame is the photograph's own shape — a
+                // print in the pile, a picture on this day — Crop and Fit are the same operation and
+                // nothing is lost. Where the frame has been clamped for being absurdly tall, Crop
+                // fills it and Fit leaves a white border inside the outline, which reads as a broken
+                // image. Only the viewer wants Fit, because there the whole picture is the point.
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
             )
         }
