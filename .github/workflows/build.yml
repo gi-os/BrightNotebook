@@ -97,5 +97,10 @@ jobs:
           tag_name: v${{ steps.ver.outputs.version }}
           name: LightNotebook v${{ steps.ver.outputs.version }}
           files: out/LightNotebook-v${{ steps.ver.outputs.version }}.apk
+          # RELEASE_NOTES.md holds this release and only this release — it is rewritten every
+          # time, the way gi-os/LightCamera does it. The running index is the version table in
+          # the README; the archive is the list of releases itself. A fix names the report it
+          # closes, so a release says what was fixed and not only what changed.
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
           make_latest: true

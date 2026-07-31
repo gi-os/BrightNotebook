@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.22.0**.
+`com.gios.lightnotebook`. Current release: **v1.25.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -314,9 +314,18 @@ Tags are stamped by CI (`v<major>.<minor>.<run number>`) on every push to `main`
 one below is a real tag against the commit shown. A branch that is not `main` runs
 `check.yml` instead, which compiles and tests and publishes nothing.
 
+`RELEASE_NOTES.md` is the body of the GitHub release, and holds **this release and only this
+release** — rewrite it rather than appending, the way `gi-os/LightCamera` does. The table below
+is the running index; the archive is the list of releases itself. A release that fixes something
+reported through shake-to-report names the report it closes, so the history says what was *fixed*
+and not only what changed:
+
+    Fixes [light-reports#12] — the day screen scrolled to the wrong hour after a pinch.
+
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.24.0 | this commit | Who you talked to, from LightChat |
+| v1.25.0 | this commit | Releases carry notes, and say which report they close |
+| v1.24.41 | `9321442` | Who you talked to, from LightChat |
 | v1.23.40 | `7d30795` | Fill in the weather now, as far back as there is data |
 | v1.22.0 | (on main) | Shake the phone to report a glitch |
 | v1.21.38 | `87626e3` | Weather, archived overnight; artists named; a place gets a pin |
