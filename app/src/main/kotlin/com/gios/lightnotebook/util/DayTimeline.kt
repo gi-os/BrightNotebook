@@ -102,7 +102,9 @@ object DayTimeline {
      * The day, in order.
      *
      * All-day things first — they are the day's heading, not an event at midnight — then
-     * everything with a time, earliest first. Photographs are clustered before they are sorted
+     * everything with a time, earliest first. The day screen and the planner both lift them out and
+     * draw them beside the date; they stay in the built list so that anything counting a day's
+     * contents still sees them. Photographs are clustered before they are sorted
      * in, so a burst takes one place in the order rather than eleven.
      *
      * A photograph is **always** behind, whatever its timestamp says. You cannot photograph the

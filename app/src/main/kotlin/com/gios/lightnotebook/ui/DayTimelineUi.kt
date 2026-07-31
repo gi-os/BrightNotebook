@@ -56,6 +56,8 @@ import com.gios.lightnotebook.util.DayLayout
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.gios.lightnotebook.util.PhotoTiles
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.FlowRow
+import com.gios.lightnotebook.util.AgendaRow
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -377,6 +379,43 @@ fun TimeGap(units: Float, gapMinutes: Int, modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .background(colors.background)
                     .padding(vertical = 0.15f.verticalGridUnitsAsDp()),
+            )
+        }
+    }
+}
+
+/**
+ * The things that are true of the whole day, next to its date.
+ *
+ * A birthday, a holiday, a trip — these have no time, so a timeline has nowhere honest to put them.
+ * Placed first among the moments they read as the first thing that happened, which is exactly what
+ * they are not. They belong with the date instead: both describe the day rather than a point in it.
+ *
+ * Wrapped rather than truncated, because three all-day things on one day is normal and a "+2" for
+ * something that is the day's whole character is the wrong thing to hide.
+ */
+@Composable
+fun AllDayRow(
+    entries: List<DayTimeline.Item.Entry>,
+    onOpen: (AgendaRow) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (entries.isEmpty()) return
+    FlowRow(
+        modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = lightInset(),
+                vertical = 0.35f.verticalGridUnitsAsDp(),
+            ),
+    ) {
+        entries.forEach { entry ->
+            LightText(
+                text = entry.row.title,
+                variant = LightTextVariant.Superfine,
+                modifier = Modifier
+                    .padding(end = 0.7f.gridUnitsAsDp())
+                    .lightClickable { onOpen(entry.row) },
             )
         }
     }

@@ -899,6 +899,39 @@ private fun DrawScope.drawDay(
     )
     drawText(number, topLeft = Offset(left + inset, top + inset))
 
+    // **What is true of the whole day goes beside its date**, for the same reason it does on the day
+    // screen: an all-day thing has no time, so anywhere on the column below would be claiming one.
+    // Only when there is room to read it — on a month cell the number is already most of the square.
+    if (showEntries) {
+        val allDay = rows.filter { it.minutes == null }
+        if (allDay.isNotEmpty()) {
+            val labelLeft = left + inset + number.size.width + inset * 0.6f
+            val labelWidth = (left + width - inset - labelLeft).roundToInt()
+            if (labelWidth > 0) {
+                val label = measurer.measure(
+                    text = allDay.joinToString(" · ") { it.title },
+                    style = entryStyle.copy(
+                        color = ink,
+                        fontSize = (entryStyle.fontSize.value * scale * 0.7f)
+                            .coerceIn(MIN_ENTRY_SP, MAX_ENTRY_SP).sp,
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    constraints = Constraints(maxWidth = labelWidth),
+                )
+                // Sat on the number's baseline rather than its top edge: the day number is much the
+                // larger type, and aligning the boxes would leave the label floating.
+                drawText(
+                    label,
+                    topLeft = Offset(
+                        labelLeft,
+                        top + inset + (number.size.height - label.size.height).coerceAtLeast(0) / 2f,
+                    ),
+                )
+            }
+        }
+    }
+
     if (!showEntries) {
         // Two marks, and they have to be told apart at a glance on a cell a few millimetres
         // wide. A filled dot is something *written* on the day; a hollow square is something
@@ -965,14 +998,9 @@ private fun DrawScope.drawDay(
     var hidden = 0
 
     rows.forEach { row ->
-        val minutes = row.minutes
-        val wanted = if (minutes == null) {
-            // No time to place it at. All-day things belong under the heading, where a day view
-            // puts them too.
-            bodyTop
-        } else {
-            top + height * (minutes / MINUTES_IN_DAY_F)
-        }
+        // All-day things are drawn beside the date above and must not appear twice.
+        val minutes = row.minutes ?: return@forEach
+        val wanted = top + height * (minutes / MINUTES_IN_DAY_F)
 
         // Never above the heading, and never off the bottom. Rows are also pushed down past the
         // previous one so two things half an hour apart in a cell this size stay legible instead of

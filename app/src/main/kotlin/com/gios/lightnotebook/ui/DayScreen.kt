@@ -205,10 +205,18 @@ fun DayPane(
             nowMinutes = nowMinutes,
         )
     }
+    // **All-day things are not moments.** They have no time to be placed at, so putting them at the
+    // head of a timeline makes them look like the first thing that happened — they belong with the
+    // date, which is the other thing that describes the whole day rather than a point in it.
+    val allDay = remember(items) {
+        items.filterIsInstance<DayTimeline.Item.Entry>().filter { it.row.minutes == null }
+    }
+    val moments = remember(items) { items.filter { it.minutes != null } }
+
     // The emptiness between moments, so a morning and an afternoon are not drawn adjacent.
-    val gaps = remember(items) { DayLayout.gaps(items.map { it.minutes }) }
-    val nowLineIndex = remember(items, epochDay, today, nowMinutes) {
-        DayTimeline.nowLineIndex(items, DayTimeline.nowLine(epochDay, today, nowMinutes))
+    val gaps = remember(moments) { DayLayout.gaps(moments.map { it.minutes }) }
+    val nowLineIndex = remember(moments, epochDay, today, nowMinutes) {
+        DayTimeline.nowLineIndex(moments, DayTimeline.nowLine(epochDay, today, nowMinutes))
     }
 
     // Asked for from the day itself, so the reason is on screen when the dialog appears.
@@ -259,9 +267,14 @@ fun DayPane(
             },
         )
         }
+
+        AllDayRow(
+            entries = allDay,
+            onOpen = { entry -> vm.entryById(entry.entryId)?.let { actionsFor = it } },
+        )
         LightRule()
 
-        val bookends = remember(items) { DayTimeline.bookends(items) }
+        val bookends = remember(moments) { DayTimeline.bookends(moments) }
         DayOpening(minutes = bookends?.firstMinutes)
         DayShape(stats = stats)
 
@@ -272,7 +285,7 @@ fun DayPane(
 
         val body = Modifier.weight(1f).fillMaxWidth()
 
-        if (items.isEmpty()) {
+        if (moments.isEmpty()) {
             Column(body) {
                 LightEmptyState(
                     // A day that has gone and a day still to come are empty in different ways.
@@ -286,7 +299,7 @@ fun DayPane(
         } else {
             LazyColumn(body, state = listState) {
                 itemsIndexed(
-                    items,
+                    moments,
                     // Keyed on what the item *is*, never on its position: the list reorders as
                     // the clock passes an entry, and a positional key would recycle a
                     // photograph's loaded bitmap into whatever row took its place.
@@ -299,7 +312,7 @@ fun DayPane(
                     },
                 ) { index, item ->
                     if (index > 0) {
-                        val previous = items[index - 1].minutes
+                        val previous = moments[index - 1].minutes
                         val current = item.minutes
                         TimeGap(
                             units = gaps.getOrElse(index - 1) { 0f },
