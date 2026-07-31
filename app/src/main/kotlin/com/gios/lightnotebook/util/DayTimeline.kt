@@ -173,6 +173,27 @@ object DayTimeline {
         untilMinutes = last().minutes,
     )
 
+    /** The first and last thing that happened, in minutes from midnight. */
+    data class Bookends(val firstMinutes: Int, val lastMinutes: Int)
+
+    /**
+     * When the day started and when it stopped.
+     *
+     * Read only from things that have **already happened** and that carry a time. A plan for this
+     * evening is not when the day ended, and an all-day entry has no time to be an end at — it is
+     * the day's heading rather than a moment in it.
+     *
+     * Null when there is nothing to bookend, and null when there is only one moment: "6:40 to
+     * 6:40" is not a day, it is one thing, and the row is already on screen saying so.
+     */
+    fun bookends(items: List<Item>): Bookends? {
+        val minutes = items.filter { it.behind }.mapNotNull { it.minutes }
+        if (minutes.isEmpty()) return null
+        val first = minutes.min()
+        val last = minutes.max()
+        return if (first == last) null else Bookends(first, last)
+    }
+
     /**
      * Where the now line goes in a built list: the number of items that are behind it.
      *

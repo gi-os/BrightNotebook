@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.gios.lightnotebook.util.Daylight
 import com.gios.lightnotebook.util.ImportedEvent
 import kotlinx.coroutines.flow.Flow
 import java.io.File
@@ -342,6 +343,9 @@ class NotebookRepository(private val context: Context) {
         const val KEY_API = "anthropic_key"
         const val KEY_MIRROR = "mirror_system_calendar"
         const val KEY_LEAD = "default_reminder_minutes"
+        const val KEY_LAT = "home_lat"
+        const val KEY_LON = "home_lon"
+        const val KEY_DAYLIGHT = "show_daylight"
         const val DEFAULT_LEAD = 10
     }
 }

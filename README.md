@@ -99,6 +99,19 @@ importing other calendars — works with none.
   a day is knowable, `updatedAt` being one column, which is a limit of the schema rather than a
   choice.
 
+  The day carries **its own shape** in a line under the title: when it started and stopped, and
+  when it got light and dark. Sunrise is **computed, not fetched** — the NOAA algorithm from a date
+  and a place, so it works offline for any date in either direction, and polar latitudes come back
+  as "the sun does not set" rather than as a missing value. It needs somewhere to be, and nothing
+  on this phone records that yet, so Settings → Daylight holds a home position; when a location
+  recorder lands, the day's own coordinates should win for days that have them.
+
+  At the very bottom, **On this day**: one photograph from the same date in each previous year that
+  has one, with the year under it. Quiet and last on purpose — it is the least urgent thing on the
+  screen and the most rewarding to come across, which is the wrong order to put at the top. Shown
+  on an empty day too, since a day you wrote nothing on is exactly the one whose only record is
+  what it sat on top of.
+
   A reminder is not offered on something that has already happened — it counts back from a
   time, and there is nothing left to count back to — and a new entry on a past day does not
   take the default one. Times stay either way, because "we ate at eight" is a real thing to
@@ -257,7 +270,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.5.0 | this commit | Notes you wrote or came back to are part of the day |
+| v1.6.0 | this commit | The day's shape: bookends, daylight, and the same date in years before |
+| v1.5.24 | `0aa0e07` | Notes you wrote or came back to are part of the day |
 | v1.4.23 | `23310f9` | The planner's cells carry the day's photograph, and days gone are struck through |
 | v1.3.22 | `3b164d8` | A day past is a diary, a day ahead is a calendar, today is both |
 | v1.2.21 | `069462c` | Photographs on the calendar, and pages photographed by Roll |

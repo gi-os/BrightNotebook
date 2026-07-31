@@ -281,4 +281,78 @@ class DayTimelineTest {
         assertTrue(items[1] is DayTimeline.Item.Note)
         assertTrue(items[2] is DayTimeline.Item.Photos)
     }
+
+    /* ---- bookends ---- */
+
+    @Test
+    fun `bookends are the first and last thing that happened`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("up", 6 * 60 + 40), row("bed", 23 * 60 + 10), row("lunch", noon)),
+            photos = emptyList(),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        val ends = DayTimeline.bookends(items)!!
+        assertEquals(6 * 60 + 40, ends.firstMinutes)
+        assertEquals(23 * 60 + 10, ends.lastMinutes)
+    }
+
+    @Test
+    fun `a plan for this evening is not when today ended`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("up", 7 * 60), row("dinner later", 20 * 60)),
+            photos = emptyList(),
+            epochDay = today,
+            today = today,
+            nowMinutes = noon,
+        )
+        // Only one thing has happened, so there is nothing to bookend yet.
+        assertNull(DayTimeline.bookends(items))
+    }
+
+    @Test
+    fun `an all-day entry is the day's heading, not its end`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("all day", null), row("up", 7 * 60), row("bed", 22 * 60)),
+            photos = emptyList(),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        val ends = DayTimeline.bookends(items)!!
+        assertEquals(7 * 60, ends.firstMinutes)
+        assertEquals(22 * 60, ends.lastMinutes)
+    }
+
+    @Test
+    fun `one moment is not a day`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("only thing", 9 * 60)),
+            photos = emptyList(),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertNull(DayTimeline.bookends(items))
+    }
+
+    @Test
+    fun `a photograph can be the first or last thing`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("lunch", noon)),
+            photos = listOf(photo(1, 6 * 60), photo(2, 22 * 60)),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        val ends = DayTimeline.bookends(items)!!
+        assertEquals(6 * 60, ends.firstMinutes)
+        assertEquals(22 * 60, ends.lastMinutes)
+    }
+
+    @Test
+    fun `an empty day has no bookends`() {
+        assertNull(DayTimeline.bookends(emptyList()))
+    }
 }

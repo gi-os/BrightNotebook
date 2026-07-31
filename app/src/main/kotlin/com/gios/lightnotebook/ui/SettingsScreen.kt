@@ -42,9 +42,13 @@ fun SettingsScreen(
     val lead by vm.defaultLead.collectAsStateWithLifecycle()
     val calendars by vm.calendars.collectAsStateWithLifecycle()
     val status by vm.importStatus.collectAsStateWithLifecycle()
+    val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
+    val home by vm.home.collectAsStateWithLifecycle()
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
     var leadSheet by remember { mutableStateOf(false) }
+    var homeSheet by remember { mutableStateOf(false) }
+    var homeError by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     WheelScroll(scroll)
 
@@ -189,10 +193,75 @@ fun SettingsScreen(
                 lighten = true,
                 modifier = Modifier.padding(
                     top = 0.5f.verticalGridUnitsAsDp(),
+                    bottom = 1.2f.verticalGridUnitsAsDp(),
+                ),
+            )
+
+            LightText(
+                text = "DAYLIGHT",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.2f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = if (daylightOn) "DAYLIGHT: ON" else "DAYLIGHT: OFF",
+                filled = daylightOn,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = { vm.setShowDaylight(!daylightOn) },
+            )
+            LightWideButton(
+                label = "WHERE YOU ARE",
+                filled = false,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                onClick = {
+                    homeError = false
+                    homeSheet = true
+                },
+            )
+            LightText(
+                text = if (daylightOn) {
+                    "Sunrise and sunset are computed on the phone from the date and " +
+                        "%.3f, %.3f — no network, and it works for any date.".format(
+                            home.first,
+                            home.second,
+                        )
+                } else {
+                    "A day will not show when it got light."
+                },
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(
+                    top = 0.5f.verticalGridUnitsAsDp(),
                     bottom = 1.6f.verticalGridUnitsAsDp(),
                 ),
             )
         }
+    }
+
+    if (homeSheet) {
+        LightNameSheet(
+            title = if (homeError) "NOT A PLACE · LATITUDE, LONGITUDE" else "WHERE YOU ARE · LAT, LON",
+            initial = "%.4f, %.4f".format(home.first, home.second),
+            confirmLabel = "SET",
+            onConfirm = { typed ->
+                // Two numbers separated by anything: a comma, a space, or both. Typing coordinates
+                // on this keyboard is unpleasant enough without being strict about the separator.
+                val parts = typed.split(',', ' ').mapNotNull { it.trim().toDoubleOrNull() }
+                if (parts.size == 2 && vm.setHome(parts[0], parts[1])) {
+                    homeSheet = false
+                    homeError = false
+                } else {
+                    // Kept open with the heading changed, rather than closed silently: a sheet
+                    // that vanishes having stored nothing is indistinguishable from one that
+                    // worked.
+                    homeError = true
+                }
+            },
+            onDismiss = {
+                homeSheet = false
+                homeError = false
+            },
+        )
     }
 
     if (leadSheet) {

@@ -27,9 +27,11 @@ import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.DayTimeline
+import com.gios.lightnotebook.util.Daylight
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
+import com.gios.lightnotebook.util.OnThisDay
 import com.gios.lightnotebook.util.PhotoDays
 import com.gios.lightnotebook.util.NoteMarkdown
 import kotlinx.coroutines.Dispatchers
@@ -371,6 +373,75 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                     emptyList()
                 } else {
                     withContext(Dispatchers.IO) { PhotoLibrary.photosOn(getApplication(), day) }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * When it got light and when it got dark on the open day.
+     *
+     * Computed, not fetched — no network, no model, no permission, and it works for any date in
+     * either direction. See [Daylight]. Null when the setting is off, and a polar result is a
+     * different shape rather than a missing one.
+     */
+    private val _daylightSettings = MutableStateFlow(
+        Triple(repo.showDaylight(), repo.homeLatitude(), repo.homeLongitude()),
+    )
+
+    /** Where sunrise is computed for, so Settings can show it. */
+    val home: StateFlow<Pair<Double, Double>> = _daylightSettings
+        .map { it.second to it.third }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            repo.homeLatitude() to repo.homeLongitude(),
+        )
+
+    val daylightShown: StateFlow<Boolean> = _daylightSettings
+        .map { it.first }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.showDaylight())
+
+    // Combined with the settings rather than reading them inside the map: a toggle has to take
+    // effect now, and reading prefs in a flow keyed only on the day means it takes effect the next
+    // time you change days, which reads as a setting that does nothing.
+    val daylight: StateFlow<Daylight.Result?> =
+        combine(_selectedDay, _daylightSettings) { day, (on, lat, lon) ->
+            if (!on) null else Daylight.of(day, lat, lon, ZoneId.systemDefault())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun setShowDaylight(enabled: Boolean) {
+        repo.setShowDaylight(enabled)
+        _daylightSettings.value = _daylightSettings.value.copy(first = enabled)
+    }
+
+    /** False when the coordinates are nonsense, so the sheet can say so instead of storing them. */
+    fun setHome(latitude: Double, longitude: Double): Boolean {
+        if (!repo.setHome(latitude, longitude)) return false
+        _daylightSettings.value = Triple(repo.showDaylight(), latitude, longitude)
+        return true
+    }
+
+    /**
+     * The same date in previous years, with a photograph from each that has one.
+     *
+     * Ten small queries rather than one clever one: a day is a day, `covers` already answers
+     * exactly this question for a single one, and ten of them off the main thread once per day
+     * opened is nothing. Years with no photograph are dropped rather than shown empty — a row of
+     * blank frames says "this feature is broken", not "you took no pictures in 2021".
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val onThisDay: StateFlow<List<Pair<OnThisDay.PastDay, DevicePhoto>>> =
+        combine(_selectedDay, _photoNudge, _photosGranted) { day, _, granted -> day to granted }
+            .mapLatest { (day, granted) ->
+                if (!granted) {
+                    emptyList()
+                } else {
+                    withContext(Dispatchers.IO) {
+                        OnThisDay.priorYears(day).mapNotNull { past ->
+                            PhotoLibrary.covers(getApplication(), past.epochDay, past.epochDay)[past.epochDay]
+                                ?.let { past to it }
+                        }
+                    }
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

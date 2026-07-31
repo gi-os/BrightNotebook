@@ -121,6 +121,8 @@ fun DayPane(
 
     val photos by vm.dayPhotos.collectAsStateWithLifecycle()
     val dayNotes by vm.dayNotes.collectAsStateWithLifecycle()
+    val daylight by vm.daylight.collectAsStateWithLifecycle()
+    val past by vm.onThisDay.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -163,6 +165,7 @@ fun DayPane(
             nowMinutes = nowMinutes,
         )
     }
+    val bookends = remember(items) { DayTimeline.bookends(items) }
     val nowLineIndex = remember(items, epochDay, today, nowMinutes) {
         DayTimeline.nowLineIndex(items, DayTimeline.nowLine(epochDay, today, nowMinutes))
     }
@@ -209,6 +212,12 @@ fun DayPane(
         )
         LightRule()
 
+        DayShape(
+            bookends = bookends,
+            daylight = daylight,
+            unfinished = epochDay >= today,
+        )
+
         if (!photosGranted) {
             PhotoPermissionRow(onAsk = { askPhotos.launch(PhotoLibrary.permission) })
             LightRule()
@@ -217,11 +226,16 @@ fun DayPane(
         val body = Modifier.weight(1f).fillMaxWidth()
 
         if (items.isEmpty()) {
-            LightEmptyState(
-                // A day that has gone and a day still to come are empty in different ways.
-                if (epochDay < today) "Nothing was written on this day." else "Nothing on this day yet.",
-                body,
-            )
+            Column(body) {
+                LightEmptyState(
+                    // A day that has gone and a day still to come are empty in different ways.
+                    if (epochDay < today) "Nothing was written on this day." else "Nothing on this day yet.",
+                    Modifier.weight(1f).fillMaxWidth(),
+                )
+                // Worth showing even here: a day you wrote nothing on is exactly the day whose
+                // only record is what it sat on top of.
+                OnThisDayRow(past = past, onOpen = { photoFor = it.uri.toString() })
+            }
         } else {
             LazyColumn(body, state = listState) {
                 itemsIndexed(
@@ -297,6 +311,16 @@ fun DayPane(
                             )
                             LightRule()
                         }
+                    }
+                }
+
+                // Last, and inside the list rather than pinned under it: it is the least urgent
+                // thing on the screen, and a footer that never scrolls away would be claiming
+                // otherwise.
+                if (past.isNotEmpty()) {
+                    item(key = "on-this-day") {
+                        LightRule()
+                        OnThisDayRow(past = past, onOpen = { photoFor = it.uri.toString() })
                     }
                 }
             }

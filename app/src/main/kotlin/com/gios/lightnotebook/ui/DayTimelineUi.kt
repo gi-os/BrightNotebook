@@ -40,6 +40,8 @@ import com.gios.lightnotebook.ui.theme.lightCombinedClickable
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.DayTimeline
+import com.gios.lightnotebook.util.Daylight
+import com.gios.lightnotebook.util.OnThisDay
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -231,3 +233,109 @@ fun PhotoPermissionRow(onAsk: () -> Unit, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * The shape of the day, in one line under its title.
+ *
+ * Bookends and daylight together, because separately neither earns a row of its own on a 3.92"
+ * panel and together they are the two facts that frame everything below: when you were up, and
+ * how much light there was to be up in.
+ *
+ * Nothing is shown for a day with only one thing on it — "6:40 to 6:40" is not a day, it is the
+ * row already on screen.
+ */
+@Composable
+fun DayShape(
+    bookends: DayTimeline.Bookends?,
+    daylight: Daylight.Result?,
+    /** Today's day is unfinished, so its last moment is "so far" rather than an end. */
+    unfinished: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val parts = buildList {
+        if (bookends != null) {
+            val first = NoteDates.clock(bookends.firstMinutes).orEmpty()
+            val last = NoteDates.clock(bookends.lastMinutes).orEmpty()
+            add(if (unfinished) "SINCE $first" else "$first – $last")
+        }
+        when (daylight) {
+            is Daylight.Result.Times -> {
+                val light = NoteDates.clock(daylight.sunriseMinutes).orEmpty()
+                val dark = NoteDates.clock(daylight.sunsetMinutes).orEmpty()
+                // Hours and minutes, not "743 minutes". Nobody reads a day in minutes.
+                val hours = daylight.daylightMinutes / 60
+                val mins = daylight.daylightMinutes % 60
+                add("LIGHT $light–$dark · ${hours}H ${mins}M")
+            }
+            Daylight.Result.AlwaysDay -> add("THE SUN DOES NOT SET")
+            Daylight.Result.AlwaysNight -> add("THE SUN DOES NOT RISE")
+            null -> Unit
+        }
+    }
+    if (parts.isEmpty()) return
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = lightInset(),
+                vertical = 0.4f.verticalGridUnitsAsDp(),
+            ),
+    ) {
+        parts.forEach { part ->
+            LightText(text = part, variant = LightTextVariant.Superfine, lighten = true)
+        }
+    }
+}
+
+/**
+ * The same date, in the years before it — a small row at the very bottom of the day.
+ *
+ * At the bottom and deliberately quiet: it is the least urgent thing on the screen and the most
+ * rewarding to come across, which is the wrong order to put at the top. One photograph per year,
+ * the year under it, and only years that have one — a row of empty frames reads as a broken
+ * feature rather than as a year you took no pictures in.
+ */
+@Composable
+fun OnThisDayRow(
+    past: List<Pair<OnThisDay.PastDay, DevicePhoto>>,
+    onOpen: (DevicePhoto) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (past.isEmpty()) return
+    val edge = PAST_THUMB_UNITS.verticalGridUnitsAsDp()
+    val edgePx = with(LocalDensity.current) { edge.roundToPx() }
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = lightInset(),
+                vertical = 0.8f.verticalGridUnitsAsDp(),
+            ),
+    ) {
+        LightText(text = "ON THIS DAY", variant = LightTextVariant.Superfine, lighten = true)
+        Spacer(Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()))
+        LazyRow {
+            items(past, key = { it.first.year }) { (day, photo) ->
+                Column(Modifier.padding(end = 0.5f.gridUnitsAsDp())) {
+                    PhotoFrame(
+                        photo = photo,
+                        requestPx = edgePx,
+                        modifier = Modifier.size(edge),
+                        onClick = { onOpen(photo) },
+                        onLongClick = { onOpen(photo) },
+                    )
+                    LightText(
+                        text = day.year.toString(),
+                        variant = LightTextVariant.Superfine,
+                        lighten = true,
+                        modifier = Modifier.padding(top = 0.2f.verticalGridUnitsAsDp()),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val PAST_THUMB_UNITS = 4.2f
