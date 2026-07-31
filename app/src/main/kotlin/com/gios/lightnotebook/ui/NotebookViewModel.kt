@@ -30,6 +30,7 @@ import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.data.Weather
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.notify.SyncAlarm
+import com.gios.lightnotebook.notify.WeatherArchiveWorker
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.DayTimeline
@@ -451,6 +452,17 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * Fetch the weather now, because someone asked.
+     *
+     * The only place in the app that starts a network fetch from a tap. It still goes through the
+     * worker rather than doing it here: the work is identical, and a job survives the screen being
+     * closed halfway through a hundred days of archive.
+     */
+    fun fetchWeather(everything: Boolean) {
+        WeatherArchiveWorker.runNow(getApplication(), refetchEverything = everything)
+    }
 
     fun setShowDaylight(enabled: Boolean) {
         repo.setShowDaylight(enabled)

@@ -161,6 +161,13 @@ interface NotebookDao {
     )
     fun observeNotesTouched(fromMs: Long, toMs: Long): Flow<List<NoteEntity>>
 
+    /** The earliest day anything was written on, or null on a fresh install. */
+    @Query("SELECT MIN(epochDay) FROM day_entries")
+    suspend fun earliestEntryDay(): Long?
+
+    @Query("SELECT MIN(createdAt) FROM notes")
+    suspend fun earliestNoteAt(): Long?
+
     @Query("SELECT * FROM notes WHERE id = :id LIMIT 1")
     fun observeNote(id: String): Flow<NoteEntity?>
 

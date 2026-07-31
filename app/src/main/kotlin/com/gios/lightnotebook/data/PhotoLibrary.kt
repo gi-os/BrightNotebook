@@ -128,6 +128,32 @@ object PhotoLibrary {
         return out
     }
 
+    /**
+     * The journal day of the oldest photograph on the phone, or null when there are none.
+     *
+     * One row, sorted by the system rather than by us: this is asked to decide how far back it is
+     * worth fetching weather for, and reading every image on the device to find the oldest would be
+     * absurd for a single number.
+     */
+    fun earliestDay(context: Context, zone: ZoneId = ZoneId.systemDefault()): Long? {
+        if (!granted(context)) return null
+        val projection = arrayOf(
+            MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_ADDED,
+        )
+        // COALESCE because DATE_TAKEN is null for anything without EXIF, and DATE_ADDED is seconds.
+        val order = "COALESCE(NULLIF(${MediaStore.Images.Media.DATE_TAKEN}, 0), " +
+            "${MediaStore.Images.Media.DATE_ADDED} * 1000) ASC LIMIT 1"
+        return runCatching {
+            context.contentResolver.query(collection, projection, null, null, order)?.use { c ->
+                if (!c.moveToFirst()) return@use null
+                val taken = c.getLong(0).takeIf { !c.isNull(0) }
+                val added = c.getLong(1).takeIf { !c.isNull(1) }
+                PhotoDays.instantMs(taken, added)?.let { PhotoDays.localEpochDay(it, zone) }
+            }
+        }.getOrNull()
+    }
+
     /** Every photograph on one day, in the order they were taken. */
     fun photosOn(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<DevicePhoto> {
         val out = mutableListOf<DevicePhoto>()

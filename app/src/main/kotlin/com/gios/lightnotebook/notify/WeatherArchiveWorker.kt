@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
+import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -37,7 +40,17 @@ class WeatherArchiveWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val repo = NotebookRepository(applicationContext)
-        val ok = Weather(applicationContext).archive(repo.homeLatitude(), repo.homeLongitude())
+        val everything = inputData.getBoolean(KEY_REFETCH, false)
+        val reachBack = inputData.getBoolean(KEY_ALL_DATA, false)
+
+        val ok = Weather(applicationContext).archive(
+            latitude = repo.homeLatitude(),
+            longitude = repo.homeLongitude(),
+            // Asked by hand: go back as far as the journal has anything at all. The nightly run
+            // stays with its own modest reach, because it happens every night anyway.
+            earliestDay = if (reachBack) repo.earliestRecordedDay() else null,
+            refetch = everything,
+        )
         // Retry rather than fail: a phone on a charger overnight with no usable network is a normal
         // evening, and the archive is no worse off for waiting. WorkManager backs off on its own.
         if (ok) Result.success() else Result.retry()
@@ -45,6 +58,9 @@ class WeatherArchiveWorker(
 
     companion object {
         private const val NAME = "weather-archive"
+        private const val NOW = "weather-archive-now"
+        private const val KEY_REFETCH = "refetch"
+        private const val KEY_ALL_DATA = "all_data"
 
         /**
          * Ask for it once a day.
@@ -65,6 +81,37 @@ class WeatherArchiveWorker(
             runCatching {
                 WorkManager.getInstance(context)
                     .enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+            }
+        }
+
+        /**
+         * Run it now, because someone asked.
+         *
+         * **No charging constraint.** The nightly job waits for a charger because it is nobody's
+         * priority; a person tapping a button in Settings has made it theirs, and a job that
+         * silently waits for a cable is a button that appears to do nothing. Still requires a
+         * network, since without one there is nothing to do but fail.
+         *
+         * `REPLACE`, so tapping twice does not queue two of them — the second ask is the one that
+         * matters, and two overlapping archive runs would fetch everything twice.
+         */
+        fun runNow(context: Context, refetchEverything: Boolean) {
+            val request = OneTimeWorkRequestBuilder<WeatherArchiveWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build(),
+                )
+                .setInputData(
+                    Data.Builder()
+                        .putBoolean(KEY_REFETCH, refetchEverything)
+                        .putBoolean(KEY_ALL_DATA, true)
+                        .build(),
+                )
+                .build()
+            runCatching {
+                WorkManager.getInstance(context)
+                    .enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, request)
             }
         }
     }

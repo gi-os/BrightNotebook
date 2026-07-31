@@ -5,6 +5,8 @@ import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.gios.lightnotebook.util.Daylight
+import java.time.ZoneId
+import com.gios.lightnotebook.util.PhotoDays
 import com.gios.lightnotebook.util.ImportedEvent
 import kotlinx.coroutines.flow.Flow
 import java.io.File
@@ -66,6 +68,21 @@ class NotebookRepository(private val context: Context) {
             .putFloat(KEY_LON, longitude.toFloat())
             .apply()
         return true
+    }
+
+    /**
+     * The earliest day this phone has any record of, or null when it has none.
+     *
+     * Used to bound how far back the weather archive reaches. Fetching the weather for 2019 on a
+     * phone whose oldest photograph is from March is a hundred requests describing days that do not
+     * exist in the journal — "as far as we have data" is exactly the right limit, and it is cheap to
+     * ask: two `MIN()` queries and one MediaStore row.
+     */
+    suspend fun earliestRecordedDay(): Long? {
+        val entry = dao.earliestEntryDay()
+        val note = dao.earliestNoteAt()?.let { PhotoDays.localEpochDay(it, ZoneId.systemDefault()) }
+        val photo = PhotoLibrary.earliestDay(context)
+        return listOfNotNull(entry, note, photo).minOrNull()
     }
 
     fun showDaylight(): Boolean = prefs.getBoolean(KEY_DAYLIGHT, true)

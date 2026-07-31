@@ -245,6 +245,37 @@ fun SettingsScreen(
                 modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
             )
             LightText(
+                text = "WEATHER",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.2f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = "FILL IN MISSING DAYS",
+                filled = false,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = { vm.fetchWeather(everything = false) },
+            )
+            LightWideButton(
+                label = "FETCH IT ALL AGAIN",
+                filled = false,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                onClick = { vm.fetchWeather(everything = true) },
+            )
+            LightText(
+                text = "Weather is archived overnight while charging, so no screen ever waits on " +
+                    "it. Filling in runs now instead, and only reaches back as far as this phone " +
+                    "has anything recorded — there is no point fetching a day the journal has " +
+                    "never heard of.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(
+                    top = 0.5f.verticalGridUnitsAsDp(),
+                    bottom = 1.2f.verticalGridUnitsAsDp(),
+                ),
+            )
+
+            LightText(
                 text = "Steps can only be counted from the day this app was installed — the " +
                     "phone's counter keeps no history to look back through.",
                 variant = LightTextVariant.Detail,

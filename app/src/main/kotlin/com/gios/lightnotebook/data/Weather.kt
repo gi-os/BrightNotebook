@@ -74,23 +74,57 @@ class Weather(private val context: Context) {
      *
      * Blocking, and the caller is a worker on IO.
      */
-    fun archive(latitude: Double, longitude: Double): Boolean {
+    fun archive(
+        latitude: Double,
+        longitude: Double,
+        /**
+         * How far back to reach.
+         *
+         * **Only as far as there is data.** Fetching the weather for 2019 on a phone whose oldest
+         * photograph is from March is a hundred requests describing days the journal has never heard
+         * of. Null means the ordinary nightly reach.
+         */
+        earliestDay: Long? = null,
+        /** Throw away what is cached and ask again — including days already observed. */
+        refetch: Boolean = false,
+    ): Boolean {
         val today = LocalDate.now().toEpochDay()
+        if (refetch) clear()
 
         val ahead = load(FORECAST, today, today + FORECAST_DAYS, latitude, longitude, observed = false)
 
-        // Only as far back as there is any point: a day nobody will scroll to is a day not worth a
-        // request, and the archive endpoint lags real time by a day or two anyway.
-        val stale = ((today - BACKFILL_DAYS) until today).filter { day ->
+        val floor = maxOf(earliestDay ?: (today - BACKFILL_DAYS), today - MAX_BACKFILL_DAYS)
+        val stale = (floor until today).filter { day ->
             val cached = readCache(day)
             cached == null || !cached.observed
         }
-        val behind = if (stale.isEmpty()) {
-            true
-        } else {
-            load(ARCHIVE, stale.min(), stale.max(), latitude, longitude, observed = true)
+        if (stale.isEmpty()) return ahead
+
+        // In chunks, because the archive endpoint is asked for a span and a year in one request is
+        // both rude and easy to have refused. Each chunk stands alone: a failure halfway leaves the
+        // days before it archived rather than losing the lot.
+        var allWell = ahead
+        var from = stale.min()
+        val last = stale.max()
+        while (from <= last) {
+            val to = minOf(from + CHUNK_DAYS - 1, last)
+            if (!load(ARCHIVE, from, to, latitude, longitude, observed = true)) allWell = false
+            from = to + 1
         }
-        return ahead && behind
+        return allWell
+    }
+
+    /** How many days between [fromDay] and [toDay] are still missing or unobserved. */
+    fun missingCount(fromDay: Long, toDay: Long): Int {
+        val today = LocalDate.now().toEpochDay()
+        return (fromDay..toDay).count { day ->
+            val cached = readCache(day)
+            cached == null || (day < today && !cached.observed)
+        }
+    }
+
+    fun clear() {
+        runCatching { dir().listFiles()?.forEach { it.delete() } }
     }
 
     private fun load(
@@ -193,11 +227,23 @@ class Weather(private val context: Context) {
         const val FORECAST_DAYS = 14L
 
         /**
-         * How far back the nightly job will fill in.
+         * How far back the nightly job reaches on its own.
          *
-         * Sixty days: enough that scrolling back through a couple of months of the journal finds
-         * weather, and few enough that the first run is one request rather than a year of them.
+         * Sixty days: enough that scrolling back through a couple of months finds weather, and few
+         * enough that a first run is one request rather than a year of them. A manual fill can go
+         * further, as far as there is data.
          */
         const val BACKFILL_DAYS = 60L
+
+        /**
+         * The hard limit, however much data there is.
+         *
+         * Five years. Open-Meteo's archive goes back decades, but a journal that did not exist then
+         * has nothing to put beside the weather, and this is a free service being asked politely.
+         */
+        const val MAX_BACKFILL_DAYS = 366L * 5
+
+        /** One request per this many days. A year in a single call is rude and easily refused. */
+        const val CHUNK_DAYS = 180L
     }
 }
