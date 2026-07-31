@@ -191,17 +191,25 @@ fun TimelinePhotos(
                 // The longest side a print can be, since a landscape one is wider than it is tall and
                 // asking for its height would fetch a thumbnail too small and scale it up.
                 val edgePx = with(density) { (edge * LANDSCAPE * PILE_LARGEST).roundToPx() }
+                // **A fixed height, and this is the bug it fixes.** Prints vary in size, so a row
+                // that sizes itself to its children was as tall as whichever ones happened to be
+                // composed — and scrolling a taller print into view grew the row and shoved the
+                // whole pile up or down. That was the popping. Tall enough for the largest print
+                // plus the stagger it can be pushed by, and now nothing about it depends on where
+                // the scroll happens to be.
+                val rowHeight = edge * PILE_LARGEST + edge * PILE_STAGGER * 2
                 LazyRow(
                     Modifier
                         .fillMaxWidth()
+                        .height(rowHeight)
                         // **The drag is ours.** The day pane watches for horizontal swipes on the
                         // Initial pass, which reaches an ancestor before a descendant, so without
                         // this the carousel never received a single pointer event and simply would
                         // not scroll. See `ownsHorizontalDrag`.
-                        .ownsHorizontalDrag()
-                        // Room for the stagger. `offset` moves a print without reserving the space,
-                        // so a print nudged downwards was drawing over the text beneath the pile.
-                        .padding(vertical = edge * PILE_STAGGER),
+                        // The fixed height above already carries room for the stagger, which
+                        // `offset` reserves none of on its own — without that room a nudged print
+                        // drew over the text beneath the pile.
+                        .ownsHorizontalDrag(),
                     // Negative spacing: each print laps over the one before it. This is the whole
                     // look — with a positive gap it is a filmstrip again.
                     horizontalArrangement = Arrangement.spacedBy(-edge * PILE_LAP),
@@ -221,7 +229,7 @@ fun TimelinePhotos(
                                 .aspectRatio(photo.aspect ?: LANDSCAPE)
                                 // Prints dropped on a page do not share a baseline, and a row that
                                 // does reads as a strip however much each one leans.
-                                .offset(y = edge * staggerFor(photo.id))
+                                .offset(y = edge * staggerFor(index, photo.id))
                                 // Bolder in a pile than alone. A single photograph on a page wants a
                                 // hint of a lean; overlapping prints need enough angle that the
                                 // overlap reads as stacking rather than as a misaligned grid.
@@ -266,62 +274,48 @@ private const val PILE_LAP = 0.18f
 private const val PILE_TILT_BOLDNESS = 3.4f
 
 /**
- * The most a print sits above or below its neighbours, as a fraction of its own height.
+ * The most a print sits above or below the line, as a fraction of its own height.
  *
- * A fifth. At seven per cent the row still read as a strip; this is enough that the prints clearly do
- * not share a baseline. The row reserves this much padding above and below, because `offset` does not
- * claim space and a nudged print was otherwise drawing over the text below the pile.
+ * A fifth. At seven per cent the row still read as a strip.
  */
 private const val PILE_STAGGER = 0.2f
-
-/** How much bigger or smaller one print is than another. Slight — it is a pile, not a collage. */
-private const val PILE_SIZE_VARIATION = 0.12f
-
-/**
- * The largest a print grows, so a thumbnail is requested big enough for the biggest of them.
- *
- * Declared after the variation it is built from: a top-level constant in Kotlin cannot read one
- * declared below it in the same file.
- */
-private const val PILE_LARGEST = 1f + PILE_SIZE_VARIATION
-
-/**
- * How big one print is relative to the rest.
- *
- * From the id again, and for the third time the same reason: the same photograph must be the same size
- * every time the day is opened, or the pile reshuffles itself as you scroll. Uses a different divisor
- * from the stagger so size and height do not move together and produce a visible pattern.
- */
-private fun sizeFor(id: Long): Float =
-    1f + ((((id / 3L) % 5L).toInt() - 2) / 2f) * PILE_SIZE_VARIATION
 
 /**
  * How far up or down one print sits.
  *
- * From the photograph's own id, like the lean, and for the same reason: the same picture should sit
- * at the same height every time the day is opened, and a random offset would make the pile twitch on
- * every recomposition. Five buckets rather than two so it reads as scattered rather than as
- * alternating.
+ * **The direction alternates with position and only the amount comes from the photograph** — the same
+ * split as the lean, and for the same reason it was needed there. Taking both from the id looked
+ * batched, because MediaStore ids increment by one and any division buckets a run of neighbours
+ * together: seven in a row landed at the same height, which read as three up then three down rather
+ * than as a scatter. Alternating guarantees every print opposes the one beside it.
+ *
+ * The amount still comes from the id, so the heights are uneven rather than a zigzag of identical
+ * offsets, and a given photograph sits at the same height every time the day is opened. `% 7` with no
+ * division, so consecutive ids give different amounts.
  */
-private fun staggerFor(id: Long): Float =
-    (((id / 7L) % 5L).toInt() - 2) / 2f * PILE_STAGGER
+private fun staggerFor(index: Int, id: Long): Float {
+    val amount = MIN_STAGGER_FRACTION +
+        ((id % 7L).toInt() / 6f) * (1f - MIN_STAGGER_FRACTION)
+    val direction = if (index % 2 == 0) -1f else 1f
+    return direction * amount * PILE_STAGGER
+}
 
-/** 4:3, the shape assumed for a photograph whose own dimensions MediaStore did not report. */
-private const val LANDSCAPE = 4f / 3f
+/** No print sits exactly on the line; one that did would read as the odd one out. */
+private const val MIN_STAGGER_FRACTION = 0.35f
 
 /**
- * How wide a photograph sits on the page.
+ * How big one print is relative to the rest.
  *
- * Seventy per cent, centred. A photograph in a book has paper around it; edge to edge reads as a
- * website hero rather than as something someone stuck down.
+ * **Every print differs, and by less than before.** `(id / 3) % 5` gave a run of three neighbours the
+ * same size and a range of ±12%, which was both rare enough to look accidental and wide enough that
+ * the extremes read as mistakes rather than as variety. `% 5` with no division changes on every
+ * consecutive id, and ±6% is enough to see without any print looking wrong.
+ *
+ * From the id, so the same photograph is the same size every time the day is opened. A random one
+ * would resize the pile as you scrolled past it.
  */
-private const val PAGE_PHOTO_WIDTH = 0.7f
-
-/** Air between tiles, so a group reads as separate prints rather than as one sheet. */
-private const val TILE_GAP_UNITS = 0.22f
-
-/** The most a photograph leans, in degrees. Past this it stops being charm and becomes a bug. */
-private const val MAX_TILT_DEGREES = 1.8f
+private fun sizeFor(id: Long): Float =
+    1f + ((((id % 5L).toInt()) - 2) / 2f) * PILE_SIZE_VARIATION
 
 /**
  * A slight lean, as if it were stuck down by hand.
