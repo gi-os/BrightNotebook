@@ -56,6 +56,7 @@ import com.gios.lightnotebook.util.DayLayout
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.gios.lightnotebook.util.PhotoTiles
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import com.gios.lightnotebook.util.AgendaRow
 import androidx.compose.foundation.layout.Arrangement
@@ -425,6 +426,7 @@ fun TimeGap(
  * Wrapped rather than truncated, because three all-day things on one day is normal and a "+2" for
  * something that is the day's whole character is the wrong thing to hide.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AllDayRow(
     entries: List<DayTimeline.Item.Entry>,
