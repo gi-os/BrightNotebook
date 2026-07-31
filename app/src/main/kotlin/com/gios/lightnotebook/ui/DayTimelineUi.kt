@@ -40,11 +40,15 @@ import com.gios.lightnotebook.ui.theme.lightCombinedClickable
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.DayTimeline
-import com.gios.lightnotebook.util.Daylight
 import com.gios.lightnotebook.util.OnThisDay
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import com.gios.lightnotebook.util.Steps
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -246,35 +250,25 @@ fun PhotoPermissionRow(onAsk: () -> Unit, modifier: Modifier = Modifier) {
  */
 @Composable
 fun DayShape(
-    bookends: DayTimeline.Bookends?,
-    daylight: Daylight.Result?,
-    /** Today's day is unfinished, so its last moment is "so far" rather than an end. */
-    unfinished: Boolean,
+    stats: NotebookViewModel.DayStats,
     modifier: Modifier = Modifier,
 ) {
+    // Daylight and the day's bookends used to live here and now live on the planner, where a
+    // vertical band down a cell says more than a line of text: pan a year and you see the winter.
+    // What is left here is what the phone noticed about *you* rather than about the day.
     val parts = buildList {
-        if (bookends != null) {
-            val first = NoteDates.clock(bookends.firstMinutes).orEmpty()
-            val last = NoteDates.clock(bookends.lastMinutes).orEmpty()
-            add(if (unfinished) "SINCE $first" else "$first – $last")
-        }
-        when (daylight) {
-            is Daylight.Result.Times -> {
-                val light = NoteDates.clock(daylight.sunriseMinutes).orEmpty()
-                val dark = NoteDates.clock(daylight.sunsetMinutes).orEmpty()
-                // Hours and minutes, not "743 minutes". Nobody reads a day in minutes.
-                val hours = daylight.daylightMinutes / 60
-                val mins = daylight.daylightMinutes % 60
-                add("LIGHT $light–$dark · ${hours}H ${mins}M")
+        stats.steps?.takeIf { it > 0 }?.let { add("${Steps.format(it)} STEPS") }
+        if (stats.usageGranted) {
+            add("${stats.use.unlocks} PICKED UP")
+            val minutes = stats.use.screenOnMinutes
+            if (minutes > 0) {
+                add(if (minutes >= 60) "${minutes / 60}H ${minutes % 60}M ON" else "${minutes}M ON")
             }
-            Daylight.Result.AlwaysDay -> add("THE SUN DOES NOT SET")
-            Daylight.Result.AlwaysNight -> add("THE SUN DOES NOT RISE")
-            null -> Unit
         }
     }
     if (parts.isEmpty()) return
 
-    Column(
+    Row(
         modifier
             .fillMaxWidth()
             .padding(
@@ -282,9 +276,84 @@ fun DayShape(
                 vertical = 0.4f.verticalGridUnitsAsDp(),
             ),
     ) {
-        parts.forEach { part ->
-            LightText(text = part, variant = LightTextVariant.Superfine, lighten = true)
+        LightText(
+            text = parts.joinToString("  ·  "),
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+        )
+    }
+}
+
+/**
+ * The day's steps, hour by hour.
+ *
+ * **A total cannot answer the interesting question.** "Eight thousand steps" says nothing about a
+ * day; a spike between two and four says you walked somewhere. So the graph is the point and the
+ * number is the caption, rather than the other way round.
+ *
+ * Drawn as bars in a `Canvas` — twenty-four composables that recompose together would be absurd for
+ * something this small, and the bars need to share one scale anyway.
+ */
+@Composable
+fun StepGraph(hours: List<Int>, total: Int?, modifier: Modifier = Modifier) {
+    if (hours.isEmpty() || hours.all { it == 0 }) return
+    val colors = LightThemeTokens.colors
+    val peak = hours.max().coerceAtLeast(1)
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.6f.verticalGridUnitsAsDp()),
+    ) {
+        LightText(
+            text = if (total != null) "${Steps.format(total)} STEPS" else "STEPS",
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+        )
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(4f.verticalGridUnitsAsDp())
+                .padding(top = 0.3f.verticalGridUnitsAsDp()),
+        ) {
+            val slot = size.width / hours.size
+            // A gap of a fifth of a slot, so the bars read as separate hours rather than as one
+            // filled shape — at this width a solid block says nothing about when you walked.
+            val barWidth = (slot * 0.8f).coerceAtLeast(1f)
+            hours.forEachIndexed { index, steps ->
+                if (steps <= 0) return@forEachIndexed
+                // Square root, not linear: one big walk would otherwise flatten every other hour of
+                // the day to nothing, and the shape of the day is the thing being drawn.
+                val height = size.height * kotlin.math.sqrt(steps.toFloat() / peak)
+                drawRect(
+                    color = colors.content,
+                    topLeft = Offset(index * slot, size.height - height),
+                    size = Size(barWidth, height),
+                )
+            }
         }
+    }
+}
+
+/**
+ * What the phone cannot tell you, and the one command that fixes it.
+ *
+ * LightOS has no Settings screens, so an appop cannot be granted by sending the user anywhere — the
+ * only route is adb, and an app that silently shows nothing is indistinguishable from a quiet day.
+ */
+@Composable
+fun StatsGrantRow(onCopy: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .lightClickable(onClick = onCopy)
+            .padding(horizontal = lightInset(), vertical = 0.7f.verticalGridUnitsAsDp()),
+    ) {
+        LightText(
+            text = "SCREEN TIME NEEDS ONE ADB COMMAND",
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+        )
     }
 }
 

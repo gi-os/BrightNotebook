@@ -13,6 +13,7 @@ import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
 import com.gios.lightnotebook.data.DevicePhoto
+import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.FolderEntity
 import com.gios.lightnotebook.data.ImportResult
 import com.gios.lightnotebook.data.LightPassBridge
@@ -20,6 +21,7 @@ import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
 import com.gios.lightnotebook.data.PassShowing
 import com.gios.lightnotebook.data.PhotoLibrary
+import com.gios.lightnotebook.data.StepStore
 import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.notify.Reminders
@@ -33,6 +35,8 @@ import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.OnThisDay
 import com.gios.lightnotebook.util.PhotoDays
+import com.gios.lightnotebook.util.ScreenUse
+import com.gios.lightnotebook.util.Steps
 import com.gios.lightnotebook.util.NoteMarkdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -316,21 +320,21 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     val photosGranted: StateFlow<Boolean> = _photosGranted.asStateFlow()
 
     /**
-     * One photograph per visible day: the mark in a month cell, and the picture behind it once
-     * the cells are big enough to carry one.
+     * Per visible day: the photograph to draw behind the cell, and when that day's photographs
+     * started and stopped — which is half of the day's activity span on the planner.
      *
      * Keyed off the planner's own window, so panning a year does not read a year: the same
      * reasoning as [canvasRows], and the same window drives both.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val photoCovers: StateFlow<Map<Long, DevicePhoto>> =
+    val photoSummaries: StateFlow<Map<Long, PhotoLibrary.DaySummary>> =
         combine(_canvasWindow, _photoNudge, _photosGranted) { window, _, granted -> window to granted }
             .mapLatest { (window, granted) ->
                 if (!granted) {
                     emptyMap()
                 } else {
                     withContext(Dispatchers.IO) {
-                        PhotoLibrary.covers(getApplication(), window.first, window.last)
+                        PhotoLibrary.summaries(getApplication(), window.first, window.last)
                     }
                 }
             }
@@ -401,13 +405,32 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         .map { it.first }
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.showDaylight())
 
-    // Combined with the settings rather than reading them inside the map: a toggle has to take
-    // effect now, and reading prefs in a flow keyed only on the day means it takes effect the next
-    // time you change days, which reads as a setting that does nothing.
-    val daylight: StateFlow<Daylight.Result?> =
-        combine(_selectedDay, _daylightSettings) { day, (on, lat, lon) ->
-            if (!on) null else Daylight.of(day, lat, lon, ZoneId.systemDefault())
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /**
+     * Daylight for every day the planner can see, so a cell can draw its own.
+     *
+     * Keyed off the canvas window rather than the open day, because this is drawn *on the calendar*
+     * — panning a year should show the day length breathing, which is the thing a wall planner can
+     * say that a single day screen cannot. Computed off the main thread on each new window: the
+     * trigonometry is cheap but a year of it per frame would not be.
+     *
+     * Combined with the settings rather than reading prefs inside the map, or the toggle only takes
+     * effect the next time the window changes.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val daylightByDay: StateFlow<Map<Long, Daylight.Result>> =
+        combine(_canvasWindow, _daylightSettings) { window, settings -> window to settings }
+            .mapLatest { (window, settings) ->
+                val (on, lat, lon) = settings
+                if (!on) {
+                    emptyMap()
+                } else {
+                    withContext(Dispatchers.Default) {
+                        val zone = ZoneId.systemDefault()
+                        (window.first..window.last).associateWith { Daylight.of(it, lat, lon, zone) }
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun setShowDaylight(enabled: Boolean) {
         repo.setShowDaylight(enabled)
@@ -445,6 +468,58 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /* ---- what the phone itself noticed ---- */
+
+    private val steps = StepStore(getApplication())
+
+    /**
+     * The day's own numbers.
+     *
+     * Steps are nullable and screen use is not, and the difference is honest rather than untidy: the
+     * usage events are **retroactive**, so any past day can be answered, while the step counter
+     * remembers nothing and a day before this app was installed is permanently unknowable. A zero
+     * there would read as "you did not move".
+     */
+    data class DayStats(
+        val steps: Int?,
+        /** Steps by hour since local midnight — a walk is a spike, not a total. */
+        val stepHours: List<Int>,
+        val use: ScreenUse.Result,
+        val usageGranted: Boolean,
+        val stepsGranted: Boolean,
+        val stepsEverRecorded: Boolean,
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayStats: StateFlow<DayStats> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val window = PhotoDays.windowMs(day, day, ZoneId.systemDefault())
+                    DayStats(
+                        steps = steps.stepsOn(day),
+                        stepHours = steps.hoursOn(day),
+                        use = DeviceUse.forDay(getApplication(), window.first, window.last + 1),
+                        usageGranted = DeviceUse.granted(getApplication()),
+                        stepsGranted = steps.granted(),
+                        stepsEverRecorded = steps.everRecorded(),
+                    )
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                DayStats(null, emptyList(), ScreenUse.EMPTY, false, false, false),
+            )
+
+    /**
+     * Read the step counter and fold in whatever has happened since the last reading.
+     *
+     * Called on arrival, because the counter is cumulative: one sample carries everything since the
+     * last one, so opening the app is enough to keep the days filled in without a service running.
+     */
+    fun sampleSteps() = steps.sample { _photoNudge.value += 1 }
 
     /**
      * Re-read the library.

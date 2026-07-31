@@ -66,6 +66,7 @@ import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.PhotoLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.gios.lightnotebook.util.Daylight
 
 /**
  * The calendar as one endless wall planner: seven columns, weeks running downwards, pinch to
@@ -95,7 +96,16 @@ fun CalendarCanvas(
      * per frame. That is the whole trick — the draw only ever reads an already-decoded map, and
      * a day whose picture has not arrived draws no picture.
      */
-    photoCovers: Map<Long, DevicePhoto>,
+    photoSummaries: Map<Long, PhotoLibrary.DaySummary>,
+    /**
+     * Daylight per visible day, drawn as a band down each cell.
+     *
+     * On the planner rather than on a day screen because this is the one thing a wall calendar can
+     * say that a single day cannot: pan a year and the band grows and shrinks, and you can see the
+     * winter. Computed in the view model for the whole window — trigonometry is cheap, but not a
+     * year of it per frame.
+     */
+    daylightByDay: Map<Long, Daylight.Result>,
     today: Long,
     anchorDay: Long,
     /** Told which day the surface has opened, so the day pane knows what to show. */
@@ -177,18 +187,18 @@ fun CalendarCanvas(
         val context = LocalContext.current
         val coverPx = with(LocalDensity.current) { COVER_REQUEST_DP.dp.roundToPx() }
 
-        LaunchedEffect(photoCovers, wantsCovers, coverPx) {
+        LaunchedEffect(photoSummaries, wantsCovers, coverPx) {
             if (!wantsCovers) {
                 // Dropped rather than kept: zooming out is the moment there is nothing to show
                 // them in, and a map of every cell a long pan crossed is a slow leak of bitmaps.
                 coverBitmaps.clear()
                 return@LaunchedEffect
             }
-            coverBitmaps.keys.retainAll(photoCovers.keys)
-            for ((day, photo) in photoCovers) {
+            coverBitmaps.keys.retainAll(photoSummaries.keys)
+            for ((day, summary) in photoSummaries) {
                 if (coverBitmaps.containsKey(day)) continue
                 val bitmap = withContext(Dispatchers.IO) {
-                    PhotoLibrary.thumbnail(context, photo, coverPx)
+                    PhotoLibrary.thumbnail(context, summary.cover, coverPx)
                 } ?: continue
                 // Published one at a time, so the cells fill in as they arrive instead of the
                 // whole grid waiting on the slowest thumbnail.
@@ -533,8 +543,13 @@ fun CalendarCanvas(
                     drawDay(
                         day = day,
                         rows = rows[day].orEmpty(),
-                        hasPhotos = day in photoCovers,
+                        hasPhotos = day in photoSummaries,
                         cover = coverBitmaps[day],
+                        daylight = daylightByDay[day],
+                        // The day's activity span: earliest to latest of anything on it. Entries
+                        // come from the rows already loaded, photographs from the summary, so
+                        // neither costs an extra query.
+                        activity = activitySpan(rows[day].orEmpty(), photoSummaries[day]),
                         // Struck through once it has gone. Not today, which is the inverted
                         // block, and not a day already carrying a photograph — a line across a
                         // picture reads as damage to the picture.
@@ -659,6 +674,33 @@ private const val HANDOVER_MS = 190
 private const val SLIDE_SETTLE_MS = 130
 
 /**
+ * Earliest to latest of anything on a day, in minutes from midnight, or null when there is nothing
+ * or only one moment.
+ *
+ * A single point is not a span — drawing a one-pixel line for a day with one photograph on it says
+ * less than drawing nothing, and invites the reading that you were up for a minute.
+ */
+private fun activitySpan(rows: List<AgendaRow>, photos: PhotoLibrary.DaySummary?): IntRange? {
+    val times = buildList {
+        rows.forEach { row -> row.minutes?.let { add(it) } }
+        photos?.let { add(it.firstMinutes); add(it.lastMinutes) }
+    }
+    if (times.size < 2) return null
+    val from = times.min()
+    val to = times.max()
+    return if (from == to) null else from..to
+}
+
+/** Both marks read vertical position as time of day, so both divide by a day's minutes. */
+private const val MINUTES_IN_DAY_F = 1440f
+
+/** Enough to see as light, faint enough that the day number stays the brightest thing in the cell. */
+private const val DAYLIGHT_ALPHA = 0.22f
+
+/** A stripe down the left of the cell, not the whole width: the text needs the rest. */
+private const val DAYLIGHT_WIDTH = 0.16f
+
+/**
  * A cell's photograph, centre-cropped to fill it.
  *
  * `loadThumbnail` returns whatever aspect the photograph was, and a cell is nearly square, so
@@ -732,6 +774,8 @@ private fun DrawScope.drawDay(
     rows: List<AgendaRow>,
     hasPhotos: Boolean,
     cover: ImageBitmap?,
+    daylight: Daylight.Result?,
+    activity: IntRange?,
     struck: Boolean,
     isToday: Boolean,
     inFocusMonth: Boolean,
@@ -784,6 +828,32 @@ private fun DrawScope.drawDay(
             color = background.copy(alpha = COVER_SCRIM_ALPHA),
             topLeft = Offset(left, top),
             size = Size(width, height),
+        )
+    }
+
+    // **Down each cell, the day runs from midnight at the top to midnight at the bottom.** The
+    // daylight band and the activity line both read as vertical position = time of day, which is
+    // the only way a cell a few millimetres wide can carry a whole day's shape.
+    if (daylight is Daylight.Result.Times) {
+        val top0 = top + height * (daylight.sunriseMinutes / MINUTES_IN_DAY_F)
+        val bottom0 = top + height * (daylight.sunsetMinutes / MINUTES_IN_DAY_F)
+        drawRect(
+            // Faint fill, not an outline: this is the *amount* of light, so it has to have area.
+            color = (if (isToday) background else content).copy(alpha = DAYLIGHT_ALPHA),
+            topLeft = Offset(left + inset * 0.5f, top0),
+            size = Size(width * DAYLIGHT_WIDTH, (bottom0 - top0).coerceAtLeast(1f)),
+        )
+    }
+
+    // The span you were up and doing things, over the light you had to do it in.
+    if (activity != null && !activity.isEmpty()) {
+        val from = top + height * (activity.first / MINUTES_IN_DAY_F)
+        val to = top + height * (activity.last / MINUTES_IN_DAY_F)
+        drawLine(
+            color = if (isToday) background else content,
+            start = Offset(left + inset * 0.5f + width * DAYLIGHT_WIDTH * 0.5f, from),
+            end = Offset(left + inset * 0.5f + width * DAYLIGHT_WIDTH * 0.5f, to.coerceAtLeast(from + 1f)),
+            strokeWidth = 2f,
         )
     }
 

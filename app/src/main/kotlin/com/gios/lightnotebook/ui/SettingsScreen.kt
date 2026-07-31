@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
@@ -44,6 +45,7 @@ fun SettingsScreen(
     val status by vm.importStatus.collectAsStateWithLifecycle()
     val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
+    val usageGranted = remember { DeviceUse.granted(context) }
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
     var leadSheet by remember { mutableStateOf(false) }
@@ -218,6 +220,36 @@ fun SettingsScreen(
                     homeSheet = true
                 },
             )
+            LightText(
+                text = "SCREEN TIME",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.2f.verticalGridUnitsAsDp()),
+            )
+            LightText(
+                text = if (usageGranted) {
+                    "Granted. A day shows how often you picked the phone up and how long it was on."
+                } else {
+                    // Printed in full because there is nowhere to send the user: LightOS has no
+                    // Usage Access screen, and an app that shows nothing is indistinguishable from
+                    // a day you genuinely did not touch it.
+                    DeviceUse.GRANT_COMMAND
+                },
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+            )
+            LightText(
+                text = "Steps can only be counted from the day this app was installed — the " +
+                    "phone's counter keeps no history to look back through.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(
+                    top = 0.5f.verticalGridUnitsAsDp(),
+                    bottom = 1.2f.verticalGridUnitsAsDp(),
+                ),
+            )
+
             LightText(
                 text = if (daylightOn) {
                     "Sunrise and sunset are computed on the phone from the date and " +

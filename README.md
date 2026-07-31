@@ -270,7 +270,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.6.0 | this commit | The day's shape: bookends, daylight, and the same date in years before |
+| v1.7.0 | this commit | Steps by the hour, screen time, and daylight down the calendar's cells |
+| v1.6.25 | `526fb1d` | The day's shape: bookends, daylight, and the same date in years before |
 | v1.5.24 | `0aa0e07` | Notes you wrote or came back to are part of the day |
 | v1.4.23 | `23310f9` | The planner's cells carry the day's photograph, and days gone are struck through |
 | v1.3.22 | `3b164d8` | A day past is a diary, a day ahead is a calendar, today is both |

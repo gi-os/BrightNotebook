@@ -36,6 +36,15 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!--
+      Steps. A runtime permission, and the only one here the user can grant from a dialog.
+
+      There is no PACKAGE_USAGE_STATS entry below it on purpose: screen time is an *appop*, not a
+      permission, so declaring it would achieve nothing — it is granted with
+      `adb shell appops set com.gios.lightnotebook GET_USAGE_STATS allow`, which Settings prints.
+    -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!--

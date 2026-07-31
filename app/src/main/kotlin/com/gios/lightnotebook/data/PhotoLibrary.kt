@@ -66,25 +66,45 @@ object PhotoLibrary {
     /**
      * Which days in the window have at least one photograph.
      *
-     * One photograph per day — the earliest — and not all of them. The window can be a year
-     * wide when the planner is zoomed out, and holding every row of a year to decide whether to
-     * draw forty marks would be absurd. Its keys are also the answer to "which days have
-     * photographs", so the mark and the cell background come from one query.
+     * Its keys are also the answer to "which days have photographs", so the mark, the cell
+     * background and the day's photographic bookends all come from one query.
      */
-    fun covers(
+    /**
+     * A per-day summary for the planner: one photograph to draw, and when the day's photographs
+     * started and stopped.
+     *
+     * The first and last are here rather than computed from a list of photographs because the
+     * planner's window can be a year wide, and holding every row of a year to find two times per
+     * day would be absurd. One pass over one cursor answers all of it.
+     */
+    data class DaySummary(
+        val cover: DevicePhoto,
+        val firstMinutes: Int,
+        val lastMinutes: Int,
+        val count: Int,
+    )
+
+    fun summaries(
         context: Context,
         fromDay: Long,
         toDay: Long,
         zone: ZoneId = ZoneId.systemDefault(),
-    ): Map<Long, DevicePhoto> {
-        val out = HashMap<Long, DevicePhoto>()
+    ): Map<Long, DaySummary> {
+        val out = HashMap<Long, DaySummary>()
         query(context, fromDay, toDay, zone) { id, day, ms ->
-            // The earliest of the day wins. One query rather than one per day, and the same pass
-            // answers both questions the planner asks — which days have photographs, and which
-            // one to draw behind the cell.
+            val photo = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms)
+            val minutes = photo.minutesOfDay(zone)
             val existing = out[day]
-            if (existing == null || ms < existing.takenAt) {
-                out[day] = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms)
+            out[day] = if (existing == null) {
+                DaySummary(photo, minutes, minutes, 1)
+            } else {
+                DaySummary(
+                    // The earliest of the day is the cover, so the cell shows the day starting.
+                    cover = if (ms < existing.cover.takenAt) photo else existing.cover,
+                    firstMinutes = minOf(existing.firstMinutes, minutes),
+                    lastMinutes = maxOf(existing.lastMinutes, minutes),
+                    count = existing.count + 1,
+                )
             }
         }
         return out

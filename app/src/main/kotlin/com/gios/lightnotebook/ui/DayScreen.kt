@@ -121,8 +121,8 @@ fun DayPane(
 
     val photos by vm.dayPhotos.collectAsStateWithLifecycle()
     val dayNotes by vm.dayNotes.collectAsStateWithLifecycle()
-    val daylight by vm.daylight.collectAsStateWithLifecycle()
     val past by vm.onThisDay.collectAsStateWithLifecycle()
+    val stats by vm.dayStats.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -134,6 +134,9 @@ fun DayPane(
     LaunchedEffect(epochDay) {
         vm.refreshShowings()
         vm.refreshPhotos()
+        // The step counter is cumulative, so opening the app is enough to fold in everything since
+        // the last reading — no service, no listener held open all day.
+        vm.sampleSteps()
     }
 
     // The clock, for the line between what has happened and what has not.
@@ -165,7 +168,6 @@ fun DayPane(
             nowMinutes = nowMinutes,
         )
     }
-    val bookends = remember(items) { DayTimeline.bookends(items) }
     val nowLineIndex = remember(items, epochDay, today, nowMinutes) {
         DayTimeline.nowLineIndex(items, DayTimeline.nowLine(epochDay, today, nowMinutes))
     }
@@ -174,6 +176,12 @@ fun DayPane(
     val askPhotos = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { vm.refreshPhotos() }
+
+    // Steps are a runtime permission and can be asked for here. Screen time is an appop with no
+    // dialog at all, and Settings carries the adb command for it.
+    val askSteps = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { vm.sampleSteps() }
 
     // Asked for on the way in, not at first launch: a reminder is the only thing here that
     // needs it, and this screen is where reminders come from.
@@ -212,11 +220,7 @@ fun DayPane(
         )
         LightRule()
 
-        DayShape(
-            bookends = bookends,
-            daylight = daylight,
-            unfinished = epochDay >= today,
-        )
+        DayShape(stats = stats)
 
         if (!photosGranted) {
             PhotoPermissionRow(onAsk = { askPhotos.launch(PhotoLibrary.permission) })
@@ -317,6 +321,20 @@ fun DayPane(
                 // Last, and inside the list rather than pinned under it: it is the least urgent
                 // thing on the screen, and a footer that never scrolls away would be claiming
                 // otherwise.
+                // Scroll to the end of a day and it tells you what the phone noticed: the walk
+                // you took shows as a spike in the graph rather than as a number.
+                if (stats.stepHours.any { it > 0 }) {
+                    item(key = "steps") {
+                        LightRule()
+                        StepGraph(hours = stats.stepHours, total = stats.steps)
+                    }
+                } else if (!stats.usageGranted || !stats.stepsGranted) {
+                    item(key = "stats-grant") {
+                        LightRule()
+                        StatsGrantRow(onCopy = { askSteps.launch(Manifest.permission.ACTIVITY_RECOGNITION) })
+                    }
+                }
+
                 if (past.isNotEmpty()) {
                     item(key = "on-this-day") {
                         LightRule()
