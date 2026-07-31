@@ -839,7 +839,12 @@ private fun DrawScope.drawDay(
     // From the middle stop onwards, never on the month grid: at three millimetres they are two more
     // marks in a square already carrying a number, a dot and a strike, and the grid stops being a
     // grid. Given a cell with room, they are the frame the entries below are positioned against.
-    if (showEntries && daylight is Daylight.Result.Times) {
+    // **Only on a day there is something to say about.** Sunrise can be computed for any date in
+    // either direction, which is exactly the problem: drawn on every cell it turns the planner into
+    // an almanac, and the band means nothing next to a day with no activity line to read it
+    // against. So it appears only where the day also has a span — which is to say, only where the
+    // phone actually knows what you did.
+    if (showEntries && activity != null && daylight is Daylight.Result.Times) {
         val top0 = top + height * (daylight.sunriseMinutes / MINUTES_IN_DAY_F)
         val bottom0 = top + height * (daylight.sunsetMinutes / MINUTES_IN_DAY_F)
         drawRect(

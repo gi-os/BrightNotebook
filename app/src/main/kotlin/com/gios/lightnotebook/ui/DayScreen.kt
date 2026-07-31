@@ -199,13 +199,15 @@ fun DayPane(
     // Built here rather than in the view model: it is a pure function of three flows and a
     // clock, and putting it in the view model would mean the clock lived there too.
     val photosById = remember(photos) { photos.associateBy { it.id } }
-    val items = remember(rows, photos, dayNotes, places, listening, epochDay, today, nowMinutes) {
+    val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
+    val items = remember(rows, photos, dayNotes, places, listening, pickups, epochDay, today, nowMinutes) {
         DayTimeline.build(
             rows = rows,
             photos = photos.map { DayTimeline.PhotoAt(it.id, it.minutesOfDay(ZoneId.systemDefault())) },
             notes = dayNotes,
             places = places,
             listening = listening,
+            pickups = pickups,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -280,8 +282,9 @@ fun DayPane(
         )
         LightRule()
 
+        // Picking the phone up counts as something happening: the first time you looked at it is
+        // very often the real start of a day, earlier than anything you wrote down.
         val bookends = remember(moments) { DayTimeline.bookends(moments) }
-        DayShape(stats = stats)
 
         if (!photosGranted) {
             PhotoPermissionRow(onAsk = { askPhotos.launch(PhotoLibrary.permission) })
@@ -321,6 +324,7 @@ fun DayPane(
                             is DayTimeline.Item.Note -> "note-" + item.noteId
                             is DayTimeline.Item.Place -> "place-" + item.startMinutes
                             is DayTimeline.Item.Listening -> "heard-" + item.minutes
+                            is DayTimeline.Item.Pickups -> "picked-" + item.minutes
                         }
                     },
                 ) { index, item ->
@@ -364,6 +368,26 @@ fun DayPane(
                                 sub = if (item.tracks == 1) "1 track" else "${item.tracks} tracks",
                                 detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
                                 leading = LightIcons.Star,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Pickups -> {
+                            LightListRow(
+                                title = if (item.times == 1) {
+                                    "Picked up the phone"
+                                } else {
+                                    "Picked up ${item.times} times"
+                                },
+                                sub = if (item.untilMinutes > item.minutes) {
+                                    "until " + NoteDates.clock(
+                                        JournalDay.clockMinutes(item.untilMinutes),
+                                    )
+                                } else {
+                                    null
+                                },
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                leading = LightIcons.Alarm,
                             )
                             LightRule()
                         }
@@ -426,15 +450,19 @@ fun DayPane(
                 // otherwise.
                 // Scroll to the end of a day and it tells you what the phone noticed: the walk
                 // you took shows as a spike in the graph rather than as a number.
+                // The day's own numbers, at the end of it, scrolling with everything else. There
+                // is no line about a missing adb grant: an app that explains its own permissions on
+                // the screen you read your diary on is an app talking about itself.
                 if (stats.stepHours.any { it > 0 }) {
                     item(key = "steps") {
                         LightRule()
                         StepGraph(hours = stats.stepHours, total = stats.steps)
                     }
-                } else if (!stats.usageGranted || !stats.stepsGranted) {
-                    item(key = "stats-grant") {
+                }
+                if (stats.usageGranted) {
+                    item(key = "use") {
                         LightRule()
-                        StatsGrantRow(onCopy = { askSteps.launch(Manifest.permission.ACTIVITY_RECOGNITION) })
+                        DayShape(stats = stats)
                     }
                 }
 

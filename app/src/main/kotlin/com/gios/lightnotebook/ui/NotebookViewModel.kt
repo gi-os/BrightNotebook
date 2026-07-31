@@ -566,6 +566,8 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         val usageGranted: Boolean,
         val stepsGranted: Boolean,
         val stepsEverRecorded: Boolean,
+        /** When the phone was picked up, as minutes into the journal day. */
+        val pickupMinutes: List<Int> = emptyList(),
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -573,11 +575,15 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         combine(_selectedDay, _photoNudge) { day, _ -> day }
             .mapLatest { day ->
                 withContext(Dispatchers.IO) {
-                    val window = PhotoDays.windowMs(day, day, ZoneId.systemDefault())
+                    val zone = ZoneId.systemDefault()
+                    val window = PhotoDays.windowMs(day, day, zone)
                     DayStats(
                         steps = steps.stepsOn(day),
                         stepHours = steps.hoursOn(day),
                         use = DeviceUse.forDay(getApplication(), window.first, window.last + 1),
+                        pickupMinutes = DeviceUse
+                            .pickupsForDay(getApplication(), window.first, window.last + 1)
+                            .map { JournalDay.minutesInto(it, day, zone) },
                         usageGranted = DeviceUse.granted(getApplication()),
                         stepsGranted = steps.granted(),
                         stepsEverRecorded = steps.everRecorded(),
@@ -587,7 +593,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             .stateIn(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
-                DayStats(null, emptyList(), ScreenUse.EMPTY, false, false, false),
+                DayStats(null, emptyList(), ScreenUse.EMPTY, false, false, false, emptyList()),
             )
 
     /**

@@ -578,27 +578,7 @@ fun StepGraph(hours: List<Int>, total: Int?, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * What the phone cannot tell you, and the one command that fixes it.
- *
- * LightOS has no Settings screens, so an appop cannot be granted by sending the user anywhere — the
- * only route is adb, and an app that silently shows nothing is indistinguishable from a quiet day.
- */
-@Composable
-fun StatsGrantRow(onCopy: () -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .lightClickable(onClick = onCopy)
-            .padding(horizontal = lightInset(), vertical = 0.7f.verticalGridUnitsAsDp()),
-    ) {
-        LightText(
-            text = "SCREEN TIME NEEDS ONE ADB COMMAND",
-            variant = LightTextVariant.Superfine,
-            lighten = true,
-        )
-    }
-}
+
 
 /**
  * The same date, in the years before it — a small row at the very bottom of the day.

@@ -51,6 +51,22 @@ object DeviceUse {
      * at the boundary rather than guess it. Without the lookback a night spent up past midnight
      * reads as no screen time at all until the next time the phone was locked.
      */
+    /** When the phone was picked up, in milliseconds — so a day can show it happening. */
+    fun pickupsForDay(context: Context, windowStartMs: Long, windowEndMs: Long): List<Long> {
+        if (!granted(context)) return emptyList()
+        val manager = context.getSystemService(UsageStatsManager::class.java) ?: return emptyList()
+        return runCatching {
+            val events = manager.queryEvents(windowStartMs, windowEndMs)
+            val out = ArrayList<Long>()
+            val event = UsageEvents.Event()
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.eventType == UsageEvents.Event.KEYGUARD_HIDDEN) out.add(event.timeStamp)
+            }
+            out.sorted()
+        }.getOrDefault(emptyList())
+    }
+
     fun forDay(context: Context, windowStartMs: Long, windowEndMs: Long): ScreenUse.Result {
         if (!granted(context)) return ScreenUse.EMPTY
         val manager = context.getSystemService(UsageStatsManager::class.java) ?: return ScreenUse.EMPTY

@@ -419,4 +419,45 @@ class DayTimelineTest {
         assertTrue(items.first() is DayTimeline.Item.Place)
         assertTrue(items.last() is DayTimeline.Item.Listening)
     }
+
+    /* ---- picking the phone up ---- */
+
+    @Test
+    fun `a flurry of pickups is one row, not thirty`() {
+        val times = (0..29).map { 14 * 60 + it * 3 }
+        val runs = DayTimeline.pickups(times)
+        assertEquals(1, runs.size)
+        assertEquals(30, runs.single().times)
+    }
+
+    @Test
+    fun `checking it at lunch and again in the evening is two`() {
+        assertEquals(2, DayTimeline.pickups(listOf(12 * 60, 12 * 60 + 5, 20 * 60)).size)
+    }
+
+    @Test
+    fun `a run carries when it began and ended`() {
+        val run = DayTimeline.pickups(listOf(9 * 60, 9 * 60 + 10)).single()
+        assertEquals(9 * 60, run.minutes)
+        assertEquals(9 * 60 + 10, run.untilMinutes)
+    }
+
+    @Test
+    fun `the first time you looked at the phone can be the start of the day`() {
+        // Often earlier than anything written down, and it is genuinely when the day started.
+        val items = DayTimeline.build(
+            rows = listOf(row("breakfast", 9 * 60)),
+            photos = emptyList(),
+            pickups = DayTimeline.pickups(listOf(6 * 60 + 40)),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertEquals(6 * 60 + 40, DayTimeline.bookends(items)!!.firstMinutes)
+    }
+
+    @Test
+    fun `no pickups is no rows`() {
+        assertTrue(DayTimeline.pickups(emptyList()).isEmpty())
+    }
 }

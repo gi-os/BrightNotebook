@@ -58,6 +58,21 @@ object DayTimeline {
         ) : Item
 
         /**
+         * Picking the phone up.
+         *
+         * Grouped into runs the way listening is, because a day has dozens and a row each would be
+         * the only thing on the screen. "Seven times, 14:10 to 15:40" is the shape of an afternoon
+         * spent on your phone; thirty identical rows are not.
+         */
+        data class Pickups(
+            override val minutes: Int,
+            val untilMinutes: Int,
+            val times: Int,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
+        /**
          * Somewhere you stopped, from LightFog.
          *
          * A place rather than a track: a tile says which square of the world you crossed, and
@@ -150,6 +165,7 @@ object DayTimeline {
         notes: List<Item.Note> = emptyList(),
         places: List<Item.Place> = emptyList(),
         listening: List<Item.Listening> = emptyList(),
+        pickups: List<Item.Pickups> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -159,7 +175,7 @@ object DayTimeline {
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
-        return (entries + clustered + notes + places + listening).sortedWith(
+        return (entries + clustered + notes + places + listening + pickups).sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
                 // At the same minute: what you planned, then what you wrote, then what you
@@ -173,6 +189,7 @@ object DayTimeline {
                         is Item.Note -> 2
                         is Item.Photos -> 3
                         is Item.Listening -> 4
+                        is Item.Pickups -> 5
                     }
                 },
             ),
@@ -326,6 +343,38 @@ object DayTimeline {
 
     /** Longer than this between tracks and you stopped listening and started again. */
     const val LISTENING_GAP_MINUTES = 25
+
+    /**
+     * Runs of picking the phone up.
+     *
+     * Same reasoning as [listening]: a day has dozens of these and one row each would bury
+     * everything that actually happened. A run breaks after a quarter of an hour untouched, which
+     * separates "kept checking it through lunch" from "looked at it once in the evening".
+     */
+    fun pickups(minutes: List<Int>, gapMinutes: Int = PICKUP_GAP_MINUTES): List<Item.Pickups> {
+        if (minutes.isEmpty()) return emptyList()
+        val sorted = minutes.sorted()
+        val out = ArrayList<Item.Pickups>()
+        var start = sorted.first()
+        var last = start
+        var count = 1
+
+        sorted.drop(1).forEach { at ->
+            if (at - last <= gapMinutes) {
+                last = at
+                count++
+            } else {
+                out.add(Item.Pickups(start, last, count))
+                start = at
+                last = at
+                count = 1
+            }
+        }
+        out.add(Item.Pickups(start, last, count))
+        return out
+    }
+
+    const val PICKUP_GAP_MINUTES = 15
 
     const val MINUTES_IN_DAY = 24 * 60
 }
