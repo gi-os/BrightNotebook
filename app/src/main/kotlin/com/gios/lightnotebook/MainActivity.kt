@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -65,6 +67,7 @@ import com.gios.lightnotebook.ui.NoteEditorScreen
 import com.gios.lightnotebook.ui.NotebookViewModel
 import com.gios.lightnotebook.ui.NotesScreen
 import com.gios.lightnotebook.ui.ReportReason
+import com.gios.lightnotebook.ui.ReportChip
 import com.gios.lightnotebook.ui.ReportSheet
 import com.gios.lightnotebook.ui.SettingsScreen
 import com.gios.lightnotebook.ui.theme.LightBarItem
@@ -74,6 +77,8 @@ import com.gios.lightnotebook.ui.theme.LightNotebookTheme
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
+import com.gios.lightnotebook.ui.theme.lightInset
+import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -126,8 +131,14 @@ class MainActivity : ComponentActivity() {
     /** Wheel notches on their way to whichever screen is up. */
     private val wheel = WheelBus()
 
-    /** Set by a shake, or by finding a crash log left over from the last run. */
+    /**
+     * Set by a shake, by a failure the app noticed, or by finding a crash log from the last run.
+     * This raises the corner chip; only tapping the chip opens the sheet.
+     */
     private val reportRequest = MutableStateFlow<ReportRequest?>(null)
+
+    /** True once the chip has been tapped. Ignoring the chip never gets here. */
+    private val reportSheetOpen = MutableStateFlow(false)
 
     /** Null until [onCreate]; also null for good on a phone with no accelerometer. */
     private var shake: ShakeDetector? = null
@@ -333,7 +344,8 @@ class MainActivity : ComponentActivity() {
 
                 val reports = rememberCoroutineScope()
                 val report by reportRequest.collectAsStateWithLifecycle()
-                report?.let { pending ->
+                val sheetOpen by reportSheetOpen.collectAsStateWithLifecycle()
+                report?.takeIf { sheetOpen }?.let { pending ->
                     ReportSheet(
                         reason = pending.reason,
                         hasScreenshot = pending.shot != null,
@@ -342,13 +354,16 @@ class MainActivity : ComponentActivity() {
                         // would be a tax for no information.
                         seedNote = pending.failure?.let { "Could not ${it.what}" }.orEmpty(),
                         onDismiss = {
-                            // Saying no to a crash log throws it away. Otherwise the same
-                            // question waits at every launch until the app crashes again.
+                            // Cancelling here throws a crash log away, because you opened it and
+                            // decided. Letting the chip fade does not — that is not a decision,
+                            // and the log is offered again on the next launch.
                             if (pending.reason == ReportReason.Crashed) CrashLog.clear(this@MainActivity)
+                            reportSheetOpen.value = false
                             reportRequest.value = null
                             shake?.start()
                         },
                         onSend = { symptom, note, includeScreenshot ->
+                            reportSheetOpen.value = false
                             reportRequest.value = null
                             shake?.start()
                             reports.launch {
@@ -539,6 +554,31 @@ class MainActivity : ComponentActivity() {
                                         nav.popBackStack()
                                     },
                                     onBack = { nav.popBackStack() },
+                                )
+                            }
+                        }
+
+                        // Above everything and out of the way, rather than across it. Lifted
+                        // clear of the bottom bar so it never sits on the one control that is
+                        // always there.
+                        report?.takeIf { !sheetOpen }?.let { pending ->
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(
+                                        end = lightInset(),
+                                        bottom = 4.6f.verticalGridUnitsAsDp(),
+                                    ),
+                            ) {
+                                ReportChip(
+                                    reason = pending.reason,
+                                    onOpen = { reportSheetOpen.value = true },
+                                    onExpire = {
+                                        // Silence is "not now" and nothing more: an unsent
+                                        // crash log stays on disk for the next launch to offer.
+                                        reportRequest.value = null
+                                        shake?.start()
+                                    },
                                 )
                             }
                         }

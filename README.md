@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.28.0**.
+`com.gios.lightnotebook`. Current release: **v1.35.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -228,8 +228,9 @@ importing other calendars — works with none.
 
 ## Reporting a glitch
 
-Shake the phone twice — there and back, there and back — and Notebook asks whether you
-meant to send an error report. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
+Shake the phone twice — there and back, there and back — and a small **SEND ERROR?**
+chip appears in the corner. Tap it within four seconds and the report sheet opens; ignore
+it and it fades, costing you nothing. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
 tracker carrying what went wrong, the build and firmware it happened on, which screen you
 were on, the last crash log if there is one, and — only while the row stays ticked — a
 screenshot of the moment you started shaking. The same sheet is on the settings screen
@@ -240,8 +241,11 @@ sent from the dying process: the trace goes to a file, and a healthy launch asks
 
 Some things about how it is built that are easy to get wrong:
 
-- **The question comes before anything else**, which is what lets the gesture be loose. A
-  false positive costs one tap on NO, so `util/ShakeGesture` sits nearer the loose end than
+- **The question is a chip in the corner, not a sheet**, which is what lets the gesture be
+  loose. A shake the phone misreads costs four seconds of a small box you can ignore, rather
+  than a modal across a 3.92" screen asking about something you did not ask about. Silence
+  is an answer, and it is the safe one — nothing is deleted by letting it fade, and an unsent
+  crash log is offered again on the next launch. So `util/ShakeGesture` sits nearer the loose end than
   the strict one: four reversals of the deviation from rest past 0.46g, each within 500ms of
   the last. Six past 0.55g never fired; three past 0.38g fired on its own. It counts
   *reversals* rather than force, which is what separates a flick from a bag or a dropped
@@ -339,7 +343,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.34.0 | this commit | The star sits on the print, and a tall photograph fills its frame |
+| v1.35.0 | this commit | The report offer is a corner chip that fades, not a sheet |
+| v1.34.53 | `30b6e63` | The star sits on the print, and a tall photograph fills its frame |
 | v1.33.0 | (folded in) | The pile scatters instead of batching, and stops popping as you scroll |
 | v1.32.49 | `0053c07` | The pile scrolls, a starred photograph leads it, and it stops covering the text |
 | v1.31.48 | `deebd09` | Prints keep their own shape, and sit at their own angle and height |

@@ -33,15 +33,15 @@ import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 enum class ReportReason { Shaken, Crashed, Failed }
 
 /**
- * "Did you mean to send an error report?"
+ * What went wrong, once you have said you want to tell somebody.
  *
- * The question comes first and on its own, because the gesture that opens this is one the phone
- * can mistake — a shake is a bag, a run, a set of keys — and an app that starts asking what went
- * wrong every time you put it in a pocket is worse than one with no reporting at all. One tap
- * dismisses it and the accelerometer goes quiet for four seconds.
+ * This used to open with "did you mean to send an error report?" on its own step, because a shake
+ * is a gesture the phone can misread. That question now belongs to [ReportChip] in the corner, so
+ * by the time this sheet is on screen the answer is already yes — and it can get straight to the
+ * part that carries information.
  *
- * The second step assumes typing on this phone is expensive: a chip is a complete report on its
- * own, and the note is genuinely optional.
+ * It assumes typing on this phone is expensive: a chip is a complete report on its own, and the
+ * note is genuinely optional.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +55,6 @@ fun ReportSheet(
     onSend: (symptom: Symptom, note: String, includeScreenshot: Boolean) -> Unit,
 ) {
     val colors = LightThemeTokens.colors
-    var asked by remember { mutableStateOf(false) }
     var symptom by remember {
         mutableStateOf(if (reason == ReportReason.Crashed) Symptom.Crashed else Symptom.Other)
     }
@@ -78,47 +77,15 @@ fun ReportSheet(
                     bottom = 1.5f.verticalGridUnitsAsDp(),
                 ),
         ) {
-            if (!asked) {
+            // Said back as the app's own failure, so it is clear the phone already knows and
+            // this is not a question you have to answer from memory.
+            if (failure != null) {
                 LightText(
-                    text = when (reason) {
-                        ReportReason.Shaken -> "Did you mean to send an error report?"
-                        ReportReason.Crashed -> "Notebook closed itself last time."
-                        // Said as the app's own failure, not the phone's and not yours.
-                        ReportReason.Failed -> "Notebook could not ${failure ?: "do that"}."
-                    },
+                    text = "Notebook could not $failure.",
                     variant = LightTextVariant.Paragraph,
+                    modifier = Modifier.padding(bottom = 1f.verticalGridUnitsAsDp()),
                 )
-                LightText(
-                    text = when (reason) {
-                        ReportReason.Shaken -> "You shook the phone."
-                        ReportReason.Crashed -> "There is a crash log. Send it?"
-                        ReportReason.Failed -> "Send a report about it?"
-                    },
-                    variant = LightTextVariant.Detail,
-                    lighten = true,
-                    modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
-                )
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 1.2f.verticalGridUnitsAsDp()),
-                    horizontalArrangement = Arrangement.spacedBy(0.8f.gridUnitsAsDp()),
-                ) {
-                    LightWideButton(
-                        label = "NO",
-                        filled = false,
-                        modifier = Modifier.weight(1f),
-                        onClick = onDismiss,
-                    )
-                    LightWideButton(
-                        label = "YES",
-                        modifier = Modifier.weight(1f),
-                        onClick = { asked = true },
-                    )
-                }
-                return@Column
             }
-
             LightText("WHAT HAPPENED", LightTextVariant.Superfine, lighten = true)
             // Two rows of chips rather than a list of full-width rows: five rows would push
             // the note field and the send button off a 3.92" panel.
