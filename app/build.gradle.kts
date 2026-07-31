@@ -16,7 +16,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.20.0"
+        versionName = "1.21.0"
 
         // The LPIII is arm64 only; shipping four ABIs tripled the APK for nothing.
         ndk { abiFilters += "arm64-v8a" }
@@ -73,6 +73,10 @@ dependencies {
 
     // Images
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // The nightly archive job. WorkManager rather than an alarm because "overnight *and* on a
+    // charger" is a constraint it enforces through Doze; an alarm would mean policing the charger by
+    // hand and rescheduling every time the phone was unplugged.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // Networking (Claude vision)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

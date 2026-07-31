@@ -135,6 +135,7 @@ fun DayPane(
     val stats by vm.dayStats.collectAsStateWithLifecycle()
     val places by vm.dayPlaces.collectAsStateWithLifecycle()
     val listening by vm.dayListening.collectAsStateWithLifecycle()
+    val weather by vm.dayWeather.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -276,6 +277,8 @@ fun DayPane(
         )
         }
 
+        DayWeatherLine(weather = weather, unfinished = epochDay >= today)
+
         AllDayRow(
             entries = allDay,
             onOpen = { entry -> vm.entryById(entry.entryId)?.let { actionsFor = it } },
@@ -357,7 +360,9 @@ fun DayPane(
                                 sub = DayLayout.labelFor(item.endMinutes - item.startMinutes)
                                     ?: "${item.endMinutes - item.startMinutes} min",
                                 detail = NoteDates.clock(JournalDay.clockMinutes(item.startMinutes)),
-                                leading = LightIcons.Calendar,
+                                // A pin, not a calendar glyph: this is a place, and the calendar
+                                // icon means "this came from a calendar" everywhere else in the app.
+                                leading = LightIcons.Pin,
                             )
                             LightRule()
                         }

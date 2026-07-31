@@ -14,6 +14,7 @@ import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
 import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.DayBridges
+import com.gios.lightnotebook.data.DayWeather
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.FolderEntity
 import com.gios.lightnotebook.data.ImportResult
@@ -26,6 +27,7 @@ import com.gios.lightnotebook.data.RollStars
 import com.gios.lightnotebook.data.StepStore
 import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
+import com.gios.lightnotebook.data.Weather
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.util.Agenda
@@ -562,6 +564,27 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private val weather = Weather(getApplication())
+
+    /**
+     * The weather on the open day, from the archive alone.
+     *
+     * No network here, ever — see [Weather.cached] and the nightly worker. A day with nothing
+     * archived says nothing about the weather, which is the right answer for a day nobody has
+     * prepared yet.
+     */
+    val dayWeather: StateFlow<DayWeather?> = _selectedDay
+        .map { day -> weather.cached(day, day)[day] }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** And for every visible day on the planner. Also cache-only. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val weatherByDay: StateFlow<Map<Long, DayWeather>> = _canvasWindow
+        .mapLatest { window ->
+            withContext(Dispatchers.IO) { weather.cached(window.first, window.last) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /* ---- what the phone itself noticed ---- */
 

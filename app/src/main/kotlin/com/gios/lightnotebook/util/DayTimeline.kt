@@ -99,10 +99,16 @@ object DayTimeline {
         data class Listening(
             override val minutes: Int,
             val untilMinutes: Int,
-            val artist: String,
+            /** Most played first. Only the few worth naming; the rest are a count. */
+            val artists: List<String>,
+            /** How many distinct artists there were altogether, named or not. */
+            val distinctArtists: Int,
             val tracks: Int,
         ) : Item {
             override val behind: Boolean get() = true
+
+            /** How many were left over after the named ones. */
+            val moreArtists: Int get() = (distinctArtists - artists.size).coerceAtLeast(0)
         }
 
         /**
@@ -312,34 +318,62 @@ object DayTimeline {
      * is what you would say about an afternoon; a run of one artist broken by a single track from
      * another is two runs, which is right — you changed what you were listening to.
      */
-    fun listening(plays: List<Pair<Int, String>>, gapMinutes: Int = LISTENING_GAP_MINUTES): List<Item.Listening> {
+    fun listening(
+        plays: List<Pair<Int, String>>,
+        gapMinutes: Int = LISTENING_GAP_MINUTES,
+        name: Int = NAMED_ARTISTS,
+    ): List<Item.Listening> {
         if (plays.isEmpty()) return emptyList()
         val sorted = plays.sortedBy { it.first }
         val out = ArrayList<Item.Listening>()
+
         var start = sorted.first().first
         var last = start
-        var artist = sorted.first().second
-        var count = 1
+        var counts = LinkedHashMap<String, Int>()
 
         fun flush() {
-            out.add(Item.Listening(minutes = start, untilMinutes = last, artist = artist, tracks = count))
+            if (counts.isEmpty()) return
+            // Most played first, and ties broken by the order they were first heard — a stable
+            // rule, so the same afternoon always reads the same way. `sortedByDescending` is
+            // stable, and `counts` is insertion-ordered, which together give exactly that.
+            val ranked = counts.entries.sortedByDescending { it.value }.map { it.key }
+            out.add(
+                Item.Listening(
+                    minutes = start,
+                    untilMinutes = last,
+                    artists = ranked.take(name),
+                    distinctArtists = ranked.size,
+                    tracks = counts.values.sum(),
+                ),
+            )
         }
 
-        sorted.drop(1).forEach { (at, who) ->
-            if (who == artist && at - last <= gapMinutes) {
+        sorted.forEachIndexed { index, (at, who) ->
+            if (index == 0) {
+                counts[who] = 1
+                return@forEachIndexed
+            }
+            if (at - last <= gapMinutes) {
+                // **Grouped by time, not by artist.** A run is a stretch of the day you had music
+                // on, and what makes it one stretch is that it did not stop — not that you played
+                // one person the whole way through. Splitting on every change of artist turned a
+                // shuffled afternoon into thirty rows, each of them true and none of them useful.
                 last = at
-                count++
+                counts[who] = (counts[who] ?: 0) + 1
             } else {
                 flush()
                 start = at
                 last = at
-                artist = who
-                count = 1
+                counts = LinkedHashMap()
+                counts[who] = 1
             }
         }
         flush()
         return out
     }
+
+    /** Three is enough to recognise an afternoon; past that it is a list rather than a sentence. */
+    const val NAMED_ARTISTS = 3
 
     /** Longer than this between tracks and you stopped listening and started again. */
     const val LISTENING_GAP_MINUTES = 25

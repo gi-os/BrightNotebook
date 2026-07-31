@@ -60,6 +60,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import com.gios.lightnotebook.util.AgendaRow
 import androidx.compose.foundation.layout.Arrangement
+import com.gios.lightnotebook.data.DayWeather
+import com.gios.lightnotebook.util.WeatherCodes
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -457,10 +459,13 @@ fun ListeningSpan(item: DayTimeline.Item.Listening, modifier: Modifier = Modifie
 }
 
 /**
- * "Listened to music for 2h", or the artist when there was really only one.
+ * "Listened to Talk Talk, Slowdive and Cocteau Twins and 4 more for 2h".
  *
- * A run of a single artist is worth naming — that is what the afternoon sounded like. A run that
- * happens to be one track is just a track, and claiming two hours of it would be wrong.
+ * The artists are named most-played first, and only a few of them: three is enough to recognise an
+ * afternoon, and past that it stops being a sentence and becomes a list. The rest are a count,
+ * because "and 4 more" says something ("it was on shuffle") that four extra names do not.
+ *
+ * A run of one artist just names them, which is the common and the most useful case.
  */
 private fun phraseFor(item: DayTimeline.Item.Listening, minutes: Int): String {
     val howLong = when {
@@ -469,12 +474,16 @@ private fun phraseFor(item: DayTimeline.Item.Listening, minutes: Int): String {
         minutes > 0 -> "${minutes}m"
         else -> null
     }
-    val what = item.artist.takeIf { it.isNotBlank() } ?: "music"
-    return if (howLong == null) {
-        "Listened to $what"
-    } else {
-        "Listened to $what for $howLong"
+    val named = item.artists.filter { it.isNotBlank() }
+    val who = when {
+        named.isEmpty() -> "music"
+        // An Oxford-less list, then the leftovers. "A, B and C and 4 more" is clumsy read aloud and
+        // clear on a screen, which is the one that matters here.
+        item.moreArtists > 0 -> named.joinToString(", ") + " and ${item.moreArtists} more"
+        named.size == 1 -> named.single()
+        else -> named.dropLast(1).joinToString(", ") + " and " + named.last()
     }
+    return if (howLong == null) "Listened to $who" else "Listened to $who for $howLong"
 }
 
 /**
@@ -512,6 +521,41 @@ fun AllDayRow(
                     .lightClickable { onOpen(entry.row) },
             )
         }
+    }
+}
+
+/**
+ * What the weather did, or is expected to.
+ *
+ * The tense is the whole point: a day that has gone says "It rained", a day still to come says
+ * "Rain". Same field, two different questions, and writing "Rain" on last Tuesday would be a diary
+ * that had not noticed Tuesday happened.
+ *
+ * Nothing is drawn on an ordinary cloudy day. Most days are cloudy, and a journal that writes
+ * "Cloudy" on two hundred of them has said nothing on any — so only the days you would remember get
+ * a line. Temperatures come along when they are known, because "It rained, 4 to 9" is a day you can
+ * picture and "It rained" is only half of one.
+ */
+@Composable
+fun DayWeatherLine(weather: DayWeather?, unfinished: Boolean, modifier: Modifier = Modifier) {
+    if (weather == null) return
+    val kind = weather.kind
+    if (!WeatherCodes.notable(kind)) return
+
+    val what = if (unfinished) WeatherCodes.ahead(kind) else WeatherCodes.past(kind)
+    val range = listOfNotNull(weather.minC?.let { Math.round(it) }, weather.maxC?.let { Math.round(it) })
+    val temperatures = if (range.size == 2) "${range[0]}° to ${range[1]}°" else null
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.4f.verticalGridUnitsAsDp()),
+    ) {
+        LightText(
+            text = listOfNotNull(what.uppercase(), temperatures).joinToString("  ·  "),
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+        )
     }
 }
 

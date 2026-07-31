@@ -41,6 +41,7 @@ import com.gios.lightnotebook.hw.LightKeys
 import com.gios.lightnotebook.hw.LocalWheelBus
 import com.gios.lightnotebook.hw.WheelBus
 import com.gios.lightnotebook.notify.Notifier
+import com.gios.lightnotebook.notify.WeatherArchiveWorker
 import com.gios.lightnotebook.ui.AgendaScreen
 import com.gios.lightnotebook.ui.CalendarScreen
 import com.gios.lightnotebook.ui.CalendarsScreen
@@ -224,6 +225,10 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     vm.rearmReminders()
                     vm.scheduleSync()
+                    // Asked for once a day, on a charger. Nothing on a screen ever fetches weather;
+                    // this is what makes that possible. KEEP, so opening the app often does not keep
+                    // resetting the period.
+                    WeatherArchiveWorker.schedule(this@MainActivity)
                 }
 
                 val requestedDay by pendingDay.collectAsStateWithLifecycle()

@@ -363,20 +363,41 @@ class DayTimelineTest {
         val plays = (0..19).map { (14 * 60 + it * 4) to "Talk Talk" }
         val runs = DayTimeline.listening(plays)
         assertEquals(1, runs.size)
-        assertEquals("Talk Talk", runs.single().artist)
+        assertEquals(listOf("Talk Talk"), runs.single().artists)
         assertEquals(20, runs.single().tracks)
     }
 
     @Test
-    fun `changing what you are listening to starts a new run`() {
+    fun `a shuffled afternoon is one run, not one per artist`() {
+        // Grouped by time, not by artist: what makes a stretch one stretch is that the music did not
+        // stop. Splitting on every change turned a shuffled afternoon into thirty true, useless rows.
         val plays = listOf(
             (14 * 60) to "Talk Talk",
             (14 * 60 + 5) to "Talk Talk",
             (14 * 60 + 10) to "Slowdive",
         )
-        val runs = DayTimeline.listening(plays)
-        assertEquals(listOf("Talk Talk", "Slowdive"), runs.map { it.artist })
-        assertEquals(2, runs.first().tracks)
+        val run = DayTimeline.listening(plays).single()
+        assertEquals(3, run.tracks)
+        assertEquals(2, run.distinctArtists)
+        // Most played first.
+        assertEquals("Talk Talk", run.artists.first())
+    }
+
+    @Test
+    fun `only a few artists are named and the rest are counted`() {
+        val plays = listOf("A", "A", "A", "B", "B", "C", "D", "E")
+            .mapIndexed { i, who -> (14 * 60 + i * 3) to who }
+        val run = DayTimeline.listening(plays).single()
+        assertEquals(DayTimeline.NAMED_ARTISTS, run.artists.size)
+        assertEquals(listOf("A", "B", "C"), run.artists)
+        assertEquals(5, run.distinctArtists)
+        assertEquals(2, run.moreArtists)
+    }
+
+    @Test
+    fun `nothing is left over when there are few enough to name`() {
+        val plays = listOf((14 * 60) to "A", (14 * 60 + 3) to "B")
+        assertEquals(0, DayTimeline.listening(plays).single().moreArtists)
     }
 
     @Test
@@ -411,7 +432,7 @@ class DayTimelineTest {
             rows = emptyList(),
             photos = emptyList(),
             places = listOf(DayTimeline.Item.Place(noon, noon + 60, 0.0, 0.0, null)),
-            listening = listOf(DayTimeline.Item.Listening(noon, noon + 30, "A", 3)),
+            listening = listOf(DayTimeline.Item.Listening(noon, noon + 30, listOf("A"), 1, 3)),
             epochDay = today - 1,
             today = today,
             nowMinutes = noon,
