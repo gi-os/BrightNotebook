@@ -41,6 +41,40 @@ class NotebookRepository(private val context: Context) {
     fun mirrorToSystemCalendar(): Boolean = prefs.getBoolean(KEY_MIRROR, true)
 
     /**
+     * Where the sun rises and sets, until something knows better.
+     *
+     * Sunrise needs a place and nothing on this phone records one yet, so this is a setting with a
+     * sensible default rather than a reason to go without daylight. When a location recorder lands,
+     * the day's own coordinates should win for days that have them; a single home position is only
+     * ever the fallback.
+     *
+     * Stored as `Float` because `SharedPreferences` has no double. A float carries about seven
+     * significant figures — a hundred metres or so at these magnitudes, and thousands of times more
+     * precision than a sunrise minute needs.
+     */
+    fun homeLatitude(): Double =
+        prefs.getFloat(KEY_LAT, Daylight.DEFAULT_LATITUDE.toFloat()).toDouble()
+
+    fun homeLongitude(): Double =
+        prefs.getFloat(KEY_LON, Daylight.DEFAULT_LONGITUDE.toFloat()).toDouble()
+
+    /** Refuses nonsense rather than storing it: a bad latitude is a crash inside `asin` later. */
+    fun setHome(latitude: Double, longitude: Double): Boolean {
+        if (!Daylight.validLatitude(latitude) || !Daylight.validLongitude(longitude)) return false
+        prefs.edit()
+            .putFloat(KEY_LAT, latitude.toFloat())
+            .putFloat(KEY_LON, longitude.toFloat())
+            .apply()
+        return true
+    }
+
+    fun showDaylight(): Boolean = prefs.getBoolean(KEY_DAYLIGHT, true)
+
+    fun setShowDaylight(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DAYLIGHT, enabled).apply()
+    }
+
+    /**
      * Lead time given to a new timed entry, in minutes. Null is "don't remind me", stored
      * as -1 because SharedPreferences has no absent-but-set state for an Int.
      */
