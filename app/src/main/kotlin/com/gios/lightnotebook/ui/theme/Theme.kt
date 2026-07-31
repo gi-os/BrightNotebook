@@ -380,6 +380,7 @@ private const val DAY_AXIS_BIAS = 1.3f
  * Same, with a long press. Long press is where a note's own actions live — pin, move,
  * delete — so that the list itself stays a list of notes and nothing else.
  */
+@OptIn(ExperimentalFoundationApi::class)
 fun Modifier.lightCombinedClickable(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
