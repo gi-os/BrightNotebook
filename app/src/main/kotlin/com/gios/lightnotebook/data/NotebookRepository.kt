@@ -269,9 +269,23 @@ class NotebookRepository(private val context: Context) {
     fun observeRange(from: Long, to: Long): Flow<List<DayEntryEntity>> =
         dao.observeRange(from, to)
 
+    /**
+     * How many days an entry covers.
+     *
+     * Null or the same day ends the span. A range that runs backwards is refused rather than stored:
+     * every query tests containment with `BETWEEN epochDay AND COALESCE(endEpochDay, epochDay)`, and
+     * a backwards range makes that false everywhere — the entry would disappear from every day,
+     * including the one it starts on.
+     */
+    suspend fun setEntrySpan(entry: DayEntryEntity, endEpochDay: Long?): DayEntryEntity {
+        val end = endEpochDay?.takeIf { it > entry.epochDay }
+        return updateDayEntry(entry.copy(endEpochDay = end))
+    }
+
     suspend fun addDayEntry(
         epochDay: Long,
         text: String,
+        endEpochDay: Long? = null,
         startMinutes: Int? = null,
         endMinutes: Int? = null,
         fromPhoto: Boolean = false,
@@ -282,6 +296,10 @@ class NotebookRepository(private val context: Context) {
         val entry = DayEntryEntity(
             id = UUID.randomUUID().toString(),
             epochDay = epochDay,
+            // Normalised rather than trusted: a backwards range would make every containment test
+            // in the queries silently false, and the entry would vanish from every day including
+            // its own.
+            endEpochDay = endEpochDay?.takeIf { it > epochDay },
             text = text.trim(),
             startMinutes = startMinutes,
             endMinutes = endMinutes,

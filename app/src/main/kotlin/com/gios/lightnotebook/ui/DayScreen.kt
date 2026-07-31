@@ -123,6 +123,7 @@ fun DayPane(
     var remindingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var timingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var movingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    var spanningFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var photoFor by remember { mutableStateOf<String?>(null) }
     var attaching by remember { mutableStateOf<DevicePhoto?>(null) }
     var viewing by remember { mutableStateOf<DevicePhoto?>(null) }
@@ -491,6 +492,13 @@ fun DayPane(
                 movingFor = entry
                 actionsFor = null
             }
+            LightSheetAction(
+                label = "Runs until",
+                sub = entry.endEpochDay?.let { NoteDates.dayTitle(it) } ?: "Just this day",
+            ) {
+                spanningFor = entry
+                actionsFor = null
+            }
             if (entry.imagePath != null) {
                 LightSheetAction("See the photo", sub = "The page this was read off") {
                     photoFor = entry.imagePath
@@ -572,6 +580,22 @@ fun DayPane(
                 editing = null
             },
             onDismiss = { editing = null },
+        )
+    }
+
+    spanningFor?.let { entry ->
+        LightNameSheet(
+            title = "RUNS UNTIL · YYYY-MM-DD, OR BLANK",
+            initial = entry.endEpochDay?.let { NoteDates.isoDate(it) }.orEmpty(),
+            confirmLabel = "SET",
+            allowBlank = true,
+            onConfirm = { typed ->
+                // Blank ends the span. A date before the start is refused in the repository rather
+                // than here, so every route in agrees.
+                vm.setEntrySpan(entry, NoteDates.parseIsoDate(typed))
+                spanningFor = null
+            },
+            onDismiss = { spanningFor = null },
         )
     }
 

@@ -98,6 +98,18 @@ data class DayEntryEntity(
     val text: String,
     val startMinutes: Int? = null,
     val endMinutes: Int? = null,
+    /**
+     * The last day this covers, when it spans more than one.
+     *
+     * Null for the overwhelming majority — a thing that happens on a day. A trip, a holiday or a
+     * conference is one entry that is true of several days rather than several copies of an entry,
+     * which is why this is a column and not a row per day: re-dating it, renaming it or deleting it
+     * has to be one act, and a week's holiday as seven rows means seven of everything.
+     *
+     * Always greater than [epochDay] when set; the repository normalises a backwards range rather
+     * than trusting it.
+     */
+    val endEpochDay: Long? = null,
     val fromPhoto: Boolean = false,
     val systemEventId: Long? = null,
     /** Null means the notebook's own calendar, which needs no row to exist. */
@@ -113,6 +125,12 @@ data class DayEntryEntity(
 ) {
     /** Whether this row can be edited here, or belongs to whatever it was imported from. */
     val isImported: Boolean get() = sourceUid != null
+
+    /** Whether this covers more than the day it starts on. */
+    val isMultiDay: Boolean get() = (endEpochDay ?: epochDay) > epochDay
+
+    /** The last day covered, which is the first when it is not a span. */
+    val lastDay: Long get() = endEpochDay ?: epochDay
 }
 
 /** How many entries a day holds — enough to mark the month grid without loading it all. */
@@ -235,7 +253,10 @@ interface NotebookDao {
     // no way to share a SQL fragment, so it is repeated by hand.
 
     @Query(
-        "SELECT * FROM day_entries WHERE epochDay = :epochDay AND " +
+        // A span that began days ago still belongs to this day, so the test is containment
+        // rather than equality. COALESCE because the column is null for the ordinary case.
+        "SELECT * FROM day_entries WHERE " +
+            ":epochDay BETWEEN epochDay AND COALESCE(endEpochDay, epochDay) AND " +
             "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1)) " +
             "ORDER BY startMinutes IS NULL DESC, startMinutes ASC, createdAt ASC",
     )
@@ -243,7 +264,7 @@ interface NotebookDao {
 
     @Query(
         "SELECT epochDay, COUNT(*) AS entries FROM day_entries " +
-            "WHERE epochDay BETWEEN :from AND :to AND " +
+            "WHERE epochDay <= :to AND COALESCE(endEpochDay, epochDay) >= :from AND " +
             "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1)) " +
             "GROUP BY epochDay",
     )
@@ -258,7 +279,10 @@ interface NotebookDao {
 
     /** Every entry in a span of days, for the zoomable planner's visible window. */
     @Query(
-        "SELECT * FROM day_entries WHERE epochDay BETWEEN :from AND :to AND " +
+        // Overlap, not containment: a fortnight's trip is visible in a window that shows none of
+        // its ends, and asking only for entries whose *start* falls inside would hide it entirely.
+        "SELECT * FROM day_entries WHERE " +
+            "epochDay <= :to AND COALESCE(endEpochDay, epochDay) >= :from AND " +
             "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1)) " +
             "ORDER BY epochDay ASC, startMinutes IS NULL DESC, startMinutes ASC, createdAt ASC",
     )
@@ -353,6 +377,20 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+/**
+ * A day entry gains an end.
+ *
+ * Nullable rather than defaulted to `epochDay`: null means "one day", which is what almost every row
+ * is, and a column full of copies of another column is a column that will eventually disagree with
+ * it. Written out exactly as Room declares it, because Room validates the schema on open and a
+ * mismatch is a crash on the phone rather than a warning.
+ */
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `day_entries` ADD COLUMN `endEpochDay` INTEGER")
+    }
+}
+
 @Database(
     entities = [
         NoteEntity::class,
@@ -360,7 +398,7 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
         DayEntryEntity::class,
         CalendarEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class NotebookDatabase : RoomDatabase() {
@@ -376,7 +414,7 @@ abstract class NotebookDatabase : RoomDatabase() {
                 NotebookDatabase::class.java,
                 "lightnotebook.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 // Upgrades migrate; only a downgrade — installing an older APK over a
                 // newer database — starts over, and that is a choice the user made.
                 .fallbackToDestructiveMigrationOnDowngrade()

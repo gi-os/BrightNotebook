@@ -22,14 +22,33 @@ data class AgendaRow(
     val passId: String? = null,
     /** Set when there is a calendar entry behind this row: its own sheet still works. */
     val entryId: String? = null,
+    /** Which day of a span this is, and how long the span is. Both 1 for an ordinary entry. */
+    val dayOfSpan: Int = 1,
+    val spanDays: Int = 1,
 ) {
+    val isSpan: Boolean get() = spanDays > 1
+
+    /**
+     * What a span says about itself, which depends on where you are looking at it from.
+     *
+     * On the day it begins — and in the agenda, which lists a trip once — the useful fact is how
+     * long it runs. On any later day the useful fact is how far through it you are. "Day 1 of 5"
+     * would be true on the first day and is the less useful of the two things it could say.
+     */
+    val spanLabel: String? get() = when {
+        !isSpan -> null
+        dayOfSpan == 1 -> "$spanDays days"
+        else -> "Day $dayOfSpan of $spanDays"
+    }
+
     /** "Regal Union Square · 10 min before", whichever parts exist. */
     val subtitle: String?
         get() {
             val remind = reminderMinutes?.let {
                 if (it <= 0) "at the time" else "$it min before"
             }
-            return listOfNotNull(label, remind).joinToString(" · ").takeIf { it.isNotBlank() }
+            return listOfNotNull(spanLabel, label, remind).joinToString(" · ")
+                .takeIf { it.isNotBlank() }
         }
 }
 

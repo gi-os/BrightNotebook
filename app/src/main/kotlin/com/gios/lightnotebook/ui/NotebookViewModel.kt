@@ -243,9 +243,16 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
      * showing both was how the day ended up saying "Dune" twice.
      */
     val dayRows: StateFlow<List<AgendaRow>> =
-        combine(dayEntries, dayShowings, repo.observeCalendars()) { entries, showings, calendars ->
+        combine(
+            dayEntries,
+            dayShowings,
+            repo.observeCalendars(),
+            _selectedDay,
+        ) { entries, showings, calendars, day ->
             Agenda.collapse(
-                entries = entries.map { it.toAgendaRow(calendars) },
+                // Clipped to the one day, so a span becomes exactly one row saying which day of it
+                // this is rather than one row per day of the trip.
+                entries = entries.acrossDays(day, day, calendars),
                 films = showings.map { it.toAgendaRow() },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -290,7 +297,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             ) { entries, showings, calendars ->
                 val films = showings.filter { it.epochDay in window }
                 Agenda.collapse(
-                    entries = entries.map { it.toAgendaRow(calendars) },
+                    entries = entries.acrossDays(window.first, window.last, calendars),
                     films = films.map { it.toAgendaRow() },
                 ).groupBy { it.epochDay }
             }
@@ -636,6 +643,11 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             Reminders.schedule(getApplication(), entry)
         }
 
+    /** How many days an entry covers. Null, or a day at or before the start, ends the span. */
+    fun setEntrySpan(entry: DayEntryEntity, endEpochDay: Long?) = viewModelScope.launch {
+        repo.setEntrySpan(entry, endEpochDay)
+    }
+
     fun updateDayEntry(entry: DayEntryEntity, text: String) = viewModelScope.launch {
         val updated = repo.updateDayEntry(entry.copy(text = text.trim()))
         Reminders.schedule(getApplication(), updated)
@@ -976,16 +988,48 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
 
     /* ---------------- mapping to agenda rows ---------------- */
 
-    private fun DayEntryEntity.toAgendaRow(calendars: List<CalendarEntity>) = AgendaRow(
-        // Namespaced so an entry and a ticket can never collide on a list key.
-        id = "entry:$id",
-        epochDay = epochDay,
-        minutes = startMinutes,
-        title = text,
-        label = calendars.firstOrNull { it.id == calendarId }?.label,
-        reminderMinutes = reminderMinutes,
-        entryId = id,
-    )
+    /**
+     * One entry as a row **on a particular day**, which matters once entries can span several.
+     *
+     * A span appears on every day it covers, so the row's `epochDay` is the day being shown rather
+     * than the day the entry began — and the id is namespaced with it, because otherwise a five-day
+     * trip is five rows sharing one key and a LazyColumn throws on the duplicate.
+     *
+     * Only the first day keeps the time: a trip starting at 09:40 on Monday did not also start at
+     * 09:40 on Tuesday, and drawing it at that position on the planner every day would be a lie.
+     * The later days are all-day, which is what they are.
+     */
+    private fun DayEntryEntity.toAgendaRow(calendars: List<CalendarEntity>, onDay: Long = epochDay) =
+        AgendaRow(
+            // Namespaced so an entry and a ticket can never collide on a list key, and so the same
+            // span on two days is two distinct rows.
+            id = if (onDay == epochDay) "entry:$id" else "entry:$id@$onDay",
+            epochDay = onDay,
+            minutes = if (onDay == epochDay) startMinutes else null,
+            title = text,
+            label = calendars.firstOrNull { it.id == calendarId }?.label,
+            reminderMinutes = if (onDay == epochDay) reminderMinutes else null,
+            entryId = id,
+            dayOfSpan = (onDay - epochDay).toInt() + 1,
+            spanDays = (lastDay - epochDay).toInt() + 1,
+        )
+
+    /**
+     * A window's entries, with a span appearing on each day it covers.
+     *
+     * The queries return an entry once, however many days it spans — one row is one thing that is
+     * happening. Fanning it out is a view concern and belongs here, clipped to the window so a
+     * fortnight's trip does not produce fourteen rows for a screen showing three of them.
+     */
+    private fun List<DayEntryEntity>.acrossDays(
+        from: Long,
+        to: Long,
+        calendars: List<CalendarEntity>,
+    ): List<AgendaRow> = flatMap { entry ->
+        val first = maxOf(entry.epochDay, from)
+        val last = minOf(entry.lastDay, to)
+        if (last < first) emptyList() else (first..last).map { entry.toAgendaRow(calendars, it) }
+    }
 
     private fun PassShowing.toAgendaRow() = AgendaRow(
         id = "pass:$passId",

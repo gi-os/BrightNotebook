@@ -197,4 +197,41 @@ class AgendaTest {
         assertEquals("Work", entry("1", "x", label = "Work").subtitle)
         assertNull(entry("1", "x").subtitle)
     }
+
+    /* ---- entries that cover more than a day ---- */
+
+    @Test
+    fun `a span says how long it runs on the day it starts`() {
+        val row = AgendaRow(
+            id = "e", epochDay = 100, minutes = 9 * 60, title = "Trip",
+            dayOfSpan = 1, spanDays = 5,
+        )
+        assertEquals("5 days", row.spanLabel)
+        assertTrue(row.isSpan)
+    }
+
+    @Test
+    fun `and how far through it you are on any later day`() {
+        val row = AgendaRow(
+            id = "e", epochDay = 102, minutes = null, title = "Trip",
+            dayOfSpan = 3, spanDays = 5,
+        )
+        assertEquals("Day 3 of 5", row.spanLabel)
+    }
+
+    @Test
+    fun `an ordinary entry says nothing about spans`() {
+        val row = AgendaRow(id = "e", epochDay = 100, minutes = 9 * 60, title = "Dentist")
+        assertNull(row.spanLabel)
+        assertTrue(!row.isSpan)
+    }
+
+    @Test
+    fun `the span shows up in the subtitle alongside everything else`() {
+        val row = AgendaRow(
+            id = "e", epochDay = 102, minutes = null, title = "Trip",
+            label = "Work", reminderMinutes = 10, dayOfSpan = 2, spanDays = 3,
+        )
+        assertEquals("Day 2 of 3 · Work · 10 min before", row.subtitle)
+    }
 }
