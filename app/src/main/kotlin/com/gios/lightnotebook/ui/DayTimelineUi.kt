@@ -50,6 +50,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import com.gios.lightnotebook.util.Steps
+import androidx.compose.foundation.layout.fillMaxHeight
+import com.gios.lightnotebook.util.DayLayout
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -79,9 +81,8 @@ fun TimelinePhotos(
     val burstEdge = BURST_THUMB_UNITS.verticalGridUnitsAsDp()
     val density = LocalDensity.current
     val burstPx = with(density) { burstEdge.roundToPx() }
-    val fullWidthPx = with(density) {
-        (LocalConfiguration.current.screenWidthDp.dp - lightInset() * 2).roundToPx()
-    }
+    // Edge to edge: a photograph of a moment in your day should be the moment, not a card of it.
+    val fullWidthPx = with(density) { LocalConfiguration.current.screenWidthDp.dp.roundToPx() }
 
     Column(
         Modifier
@@ -94,15 +95,18 @@ fun TimelinePhotos(
         // The time above the picture, not beside it. A left-hand gutter wide enough for
         // "14:30" costs a fifth of a 3.92" panel on every row of the day, and the entries
         // below already carry their times on the right.
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(horizontal = lightInset()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             LightText(
-                text = NoteDates.clock(item.minutes).orEmpty(),
+                text = clockOf(item.minutes),
                 variant = LightTextVariant.Superfine,
                 lighten = true,
             )
             if (!item.single) {
                 LightText(
-                    text = "–" + NoteDates.clock(item.untilMinutes).orEmpty() +
+                    text = "–" + clockOf(item.untilMinutes) +
                         "  ·  ${resolved.size}",
                     variant = LightTextVariant.Superfine,
                     lighten = true,
@@ -124,7 +128,7 @@ fun TimelinePhotos(
                 onLongClick = { onAttach(photo) },
             )
         } else {
-            LazyRow {
+            LazyRow(Modifier.padding(horizontal = lightInset())) {
                 items(resolved, key = { it.id }) { photo ->
                     PhotoFrame(
                         photo = photo,
@@ -249,6 +253,52 @@ fun PhotoPermissionRow(onAsk: () -> Unit, modifier: Modifier = Modifier) {
  * Nothing is shown for a day with only one thing on it — "6:40 to 6:40" is not a day, it is the
  * row already on screen.
  */
+/**
+ * The time between two moments, drawn as the room it took.
+ *
+ * If you photographed something at eight and the next thing happened at two, they did not happen
+ * next to each other, and stacking them as adjacent rows tells a lie about the day. So the emptiness
+ * is drawn — compressed hard, because six hours at true scale is six screens of nothing, but never
+ * so hard that a long wait stops looking longer than a short one. See [DayLayout].
+ *
+ * Past an hour it also says how long: at this compression an hour and five hours look more alike
+ * than they are, and the number is what stops the squashing from lying.
+ */
+@Composable
+fun TimeGap(units: Float, gapMinutes: Int, modifier: Modifier = Modifier) {
+    if (units <= 0f) return
+    val colors = LightThemeTokens.colors
+    val label = DayLayout.labelFor(gapMinutes)
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(units.verticalGridUnitsAsDp()),
+        contentAlignment = Alignment.Center,
+    ) {
+        // A hairline down the middle of the emptiness, so a gap reads as time passing rather than
+        // as a layout mistake. Faint: it is the absence of events, and it should not compete with
+        // them.
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .width(1.dp)
+                .background(colors.rule),
+        )
+        if (label != null) {
+            // Set on the background so the rule appears to run behind it rather than through it.
+            LightText(
+                text = label,
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier
+                    .background(colors.background)
+                    .padding(vertical = 0.15f.verticalGridUnitsAsDp()),
+            )
+        }
+    }
+}
+
 /**
  * "Started the day at 07:12" — the first thing that happened, at the top of the day.
  *

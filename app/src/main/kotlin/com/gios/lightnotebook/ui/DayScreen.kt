@@ -43,6 +43,7 @@ import com.gios.lightnotebook.ui.theme.lightClickable
 import com.gios.lightnotebook.ui.theme.lightDayGestures
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
+import com.gios.lightnotebook.util.DayLayout
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.delay
@@ -168,6 +169,8 @@ fun DayPane(
             nowMinutes = nowMinutes,
         )
     }
+    // The emptiness between moments, so a morning and an afternoon are not drawn adjacent.
+    val gaps = remember(items) { DayLayout.gaps(items.map { it.minutes }) }
     val nowLineIndex = remember(items, epochDay, today, nowMinutes) {
         DayTimeline.nowLineIndex(items, DayTimeline.nowLine(epochDay, today, nowMinutes))
     }
@@ -257,6 +260,18 @@ fun DayPane(
                         }
                     },
                 ) { index, item ->
+                    if (index > 0) {
+                        val previous = items[index - 1].minutes
+                        val current = item.minutes
+                        TimeGap(
+                            units = gaps.getOrElse(index - 1) { 0f },
+                            gapMinutes = if (previous != null && current != null) {
+                                (current - previous).coerceAtLeast(0)
+                            } else {
+                                0
+                            },
+                        )
+                    }
                     if (index == nowLineIndex) NowLine()
 
                     when (item) {
