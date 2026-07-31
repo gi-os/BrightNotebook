@@ -53,8 +53,6 @@ import androidx.compose.ui.geometry.Size
 import com.gios.lightnotebook.util.Steps
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.gios.lightnotebook.util.DayLayout
-import androidx.compose.foundation.layout.BoxWithConstraints
-import com.gios.lightnotebook.util.PhotoTiles
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -62,6 +60,8 @@ import com.gios.lightnotebook.util.AgendaRow
 import androidx.compose.foundation.layout.Arrangement
 import com.gios.lightnotebook.data.DayWeather
 import com.gios.lightnotebook.util.WeatherCodes
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.itemsIndexed
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -132,69 +132,79 @@ fun TimelinePhotos(
             PhotoFrame(
                 photo = photo,
                 requestPx = fullWidthPx,
-                // Not the full width. A photograph pinned to a page has paper around it, and edge
-                // to edge reads as a website hero rather than as something someone stuck in a book.
-                // 4:3 is held explicitly rather than left to the bitmap: a portrait shot would
-                // otherwise be taller than the screen and a day of them could not be scrolled past.
+                // **The photograph's own shape.** Everything was 4:3 landscape, so a portrait shot —
+                // which on a phone is most of them — lost the top and bottom of itself to a centre
+                // crop. Capped, because an unbounded portrait is taller than the panel and a day of
+                // them cannot be scrolled past.
                 modifier = Modifier
                     .fillMaxWidth(PAGE_PHOTO_WIDTH)
-                    .aspectRatio(1f / PhotoTiles.FRAME_ASPECT)
+                    .aspectRatio((photo.aspect ?: LANDSCAPE).coerceAtLeast(TALLEST))
                     .tiltedLike(photo.id, 0),
                 onClick = { onOpen(photo) },
                 onLongClick = { onAttach(photo) },
             )
         } else {
-            // **Tiled like a page of a photo book, not laid out like a contact sheet.** Rows of
-            // different counts mean pictures of different sizes, which is most of what makes a
-            // group of photographs read as a page rather than as a filmstrip. The arrangement is
-            // fixed for a given count ([PhotoTiles]) so adding a photograph does not reshuffle the
-            // page while you are looking at it.
-            val ranges = remember(resolved.size) { PhotoTiles.rowRanges(resolved.size) }
-            // Centred as a block, and each row centred inside it, so a tail row of two under a row
-            // of three sits under the middle of the page rather than shoved against its left edge.
-            BoxWithConstraints(
-                Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH),
-                contentAlignment = Alignment.Center,
+            // **A pile of prints you scroll through, not a grid of them.**
+            //
+            // Rows of neat tiles read as a contact sheet, and a fixed grid can only ever show as many
+            // photographs as it has cells. One overlapping row that scrolls sideways solves both: the
+            // prints lap over each other and lean at slightly different angles the way photographs
+            // stuck on a page do, every one of the day's pictures is reachable, and the block is one
+            // row tall however many there are — which is the property the very first filmstrip had
+            // and the tiled version gave away.
+            val edge = PILE_PRINT_UNITS.verticalGridUnitsAsDp()
+            val edgePx = with(density) { edge.roundToPx() }
+            LazyRow(
+                Modifier.fillMaxWidth(),
+                // Negative spacing: each print laps over the one before it. This is the whole look —
+                // with a positive gap it is a filmstrip again.
+                horizontalArrangement = Arrangement.spacedBy(-edge * PILE_LAP),
+                contentPadding = PaddingValues(horizontal = lightInset()),
             ) {
-                val blockWidth = maxWidth
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    ranges.forEach { range ->
-                        val inRow = range.last - range.first + 1
-                        val rowHeight = blockWidth * PhotoTiles.rowHeightFraction(inRow)
-                        val cellPx = with(density) { (blockWidth / inRow).roundToPx() }
-                        Row(
-                            Modifier
-                                // The row is only as wide as the pictures on it, so a short last
-                                // row centres instead of stretching to fill.
-                                .width(blockWidth * inRow / ranges.maxOf { it.last - it.first + 1 })
-                                .height(rowHeight)
-                                .padding(vertical = TILE_GAP_UNITS.verticalGridUnitsAsDp()),
-                        ) {
-                            range.forEach { index ->
-                                val photo = resolved[index]
-                                PhotoFrame(
-                                    photo = photo,
-                                    requestPx = cellPx,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .padding(horizontal = TILE_GAP_UNITS.gridUnitsAsDp())
-                                        // Index across the whole block, not within the row, so the
-                                        // alternation carries down the page instead of restarting
-                                        // and putting two identical leans either side of a row end.
-                                        .tiltedLike(photo.id, index),
-                                    onClick = { onOpen(photo) },
-                                    onLongClick = { onAttach(photo) },
-                                )
-                            }
-                        }
-                    }
+                itemsIndexed(resolved, key = { _, photo -> photo.id }) { index, photo ->
+                    PhotoFrame(
+                        photo = photo,
+                        requestPx = edgePx,
+                        modifier = Modifier
+                            .size(edge)
+                            // Bolder in a pile than alone. A single photograph on a page wants a
+                            // hint of a lean; overlapping prints need enough angle that the overlap
+                            // reads as stacking rather than as a misaligned grid.
+                            .tiltedLike(photo.id, index, boldness = PILE_TILT_BOLDNESS),
+                        onClick = { onOpen(photo) },
+                        onLongClick = { onAttach(photo) },
+                    )
                 }
             }
         }
     }
 }
 
+/**
+ * The tallest a photograph is allowed to be, as width over height.
+ *
+ * 0.72 is a little narrower than a phone's own 3:4 portrait, which is deliberate: it keeps nearly all
+ * of a portrait shot while stopping a single picture from filling the whole panel and turning the day
+ * into a slideshow you have to scroll through.
+ */
+private const val TALLEST = 0.72f
+
+/**
+ * How big a print in the pile is.
+ *
+ * Larger than the old filmstrip thumbnails, because these overlap: a print with a fifth of itself
+ * behind its neighbour needs the extra size to still be a picture of something.
+ */
+private const val PILE_PRINT_UNITS = 7.2f
+
+/** How far each print laps over the one before it, as a fraction of its own size. */
+private const val PILE_LAP = 0.18f
+
+/** Prints in a pile lean about twice as far as a photograph standing on its own. */
+private const val PILE_TILT_BOLDNESS = 2.2f
+
+/** 4:3, the shape assumed for a photograph whose own dimensions MediaStore did not report. */
+private const val LANDSCAPE = 4f / 3f
 
 /**
  * How wide a photograph sits on the page.
@@ -227,13 +237,13 @@ private const val MAX_TILT_DEGREES = 1.8f
  * Kept under two degrees. Past that it stops being charm and becomes a layout bug, and across a
  * grid of tiles the misalignment compounds at the edges.
  */
-private fun Modifier.tiltedLike(id: Long, index: Int): Modifier {
+private fun Modifier.tiltedLike(id: Long, index: Int, boldness: Float = 1f): Modifier {
     // 0.55..1.0 of the maximum, so no photograph sits perfectly straight among leaning ones and
     // none of them reaches the full angle unless its id says so.
     val magnitude = MIN_TILT_FRACTION +
         ((id % 5L).toInt() / 4f) * (1f - MIN_TILT_FRACTION)
     val direction = if (index % 2 == 0) 1f else -1f
-    return graphicsLayer { rotationZ = direction * magnitude * MAX_TILT_DEGREES }
+    return graphicsLayer { rotationZ = direction * magnitude * MAX_TILT_DEGREES * boldness }
 }
 
 /** No photograph sits perfectly straight among leaning ones; it reads as the odd one out. */

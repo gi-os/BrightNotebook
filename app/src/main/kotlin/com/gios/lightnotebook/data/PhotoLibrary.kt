@@ -24,7 +24,19 @@ data class DevicePhoto(
     val takenAt: Long,
     /** The file's name, which is how Roll records a star. Blank when MediaStore had none. */
     val name: String = "",
+    /** Pixel dimensions, so a portrait photograph is not cropped into a landscape frame. */
+    val width: Int = 0,
+    val height: Int = 0,
 ) {
+    /**
+     * Width over height, or null when MediaStore did not say.
+     *
+     * The whole reason this is carried: everything was drawn 4:3 landscape, so a portrait photograph
+     * lost most of itself to a centre crop — which on a phone, where most photographs are portrait,
+     * is nearly all of them.
+     */
+    val aspect: Float? get() = if (width > 0 && height > 0) width.toFloat() / height else null
+
     /**
      * Minutes into its journal day, for sitting a photograph among timed entries.
      *
@@ -100,8 +112,8 @@ object PhotoLibrary {
         starred: Set<String> = emptySet(),
     ): Map<Long, DaySummary> {
         val out = HashMap<Long, DaySummary>()
-        query(context, fromDay, toDay, zone) { id, day, ms, name ->
-            val photo = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name)
+        query(context, fromDay, toDay, zone) { id, day, ms, name, w, h ->
+            val photo = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name, w, h)
             val minutes = photo.minutesOfDay(zone)
             val existing = out[day]
             out[day] = if (existing == null) {
@@ -157,8 +169,8 @@ object PhotoLibrary {
     /** Every photograph on one day, in the order they were taken. */
     fun photosOn(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<DevicePhoto> {
         val out = mutableListOf<DevicePhoto>()
-        query(context, epochDay, epochDay, zone) { id, day, ms, name ->
-            out.add(DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name))
+        query(context, epochDay, epochDay, zone) { id, day, ms, name, w, h ->
+            out.add(DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name, w, h))
         }
         // Sorted here rather than in the query: the sort key is the *reconciled* instant, and
         // SQL cannot reconcile two columns in two units. A day holds few enough photographs
@@ -179,7 +191,7 @@ object PhotoLibrary {
         fromDay: Long,
         toDay: Long,
         zone: ZoneId,
-        crossinline row: (id: Long, epochDay: Long, takenAt: Long, name: String) -> Unit,
+        crossinline row: (id: Long, epochDay: Long, takenAt: Long, name: String, w: Int, h: Int) -> Unit,
     ) {
         if (!granted(context)) return
         val window = PhotoDays.windowMs(fromDay, toDay, zone)
@@ -190,6 +202,8 @@ object PhotoLibrary {
             MediaStore.Images.Media.DATE_TAKEN,
             MediaStore.Images.Media.DATE_ADDED,
             MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.WIDTH,
+            MediaStore.Images.Media.HEIGHT,
         )
         val selection =
             "(${MediaStore.Images.Media.DATE_TAKEN} >= ? AND ${MediaStore.Images.Media.DATE_TAKEN} < ?)" +
@@ -207,13 +221,17 @@ object PhotoLibrary {
                 val takenCol = c.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
                 val addedCol = c.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
                 val nameCol = c.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+                val wCol = c.getColumnIndex(MediaStore.Images.Media.WIDTH)
+                val hCol = c.getColumnIndex(MediaStore.Images.Media.HEIGHT)
                 while (c.moveToNext()) {
                     val taken = takenCol.takeIf { it >= 0 && !c.isNull(it) }?.let { c.getLong(it) }
                     val added = addedCol.takeIf { it >= 0 && !c.isNull(it) }?.let { c.getLong(it) }
                     val day = PhotoDays.dayIfWithin(taken, added, fromDay, toDay, zone) ?: continue
                     val ms = PhotoDays.instantMs(taken, added) ?: continue
                     val name = nameCol.takeIf { it >= 0 }?.let { c.getString(it) }.orEmpty()
-                    row(c.getLong(idCol), day, ms, name)
+                    val w = wCol.takeIf { it >= 0 }?.let { c.getLong(it).toInt() } ?: 0
+                    val h = hCol.takeIf { it >= 0 }?.let { c.getLong(it).toInt() } ?: 0
+                    row(c.getLong(idCol), day, ms, name, w, h)
                 }
             }
         }

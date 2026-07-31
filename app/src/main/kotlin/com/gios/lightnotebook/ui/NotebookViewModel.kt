@@ -25,6 +25,7 @@ import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
 import com.gios.lightnotebook.data.PassShowing
 import com.gios.lightnotebook.data.PhotoLibrary
+import com.gios.lightnotebook.data.Places
 import com.gios.lightnotebook.data.RollStars
 import com.gios.lightnotebook.data.StepStore
 import com.gios.lightnotebook.data.Sync
@@ -485,8 +486,13 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                     WorkInfo.State.RUNNING -> "FETCHING…"
                     WorkInfo.State.SUCCEEDED -> {
                         val added = info.outputData.getInt(WeatherArchiveWorker.KEY_DAYS_ADDED, 0)
+                        val named = info.outputData.getInt(WeatherArchiveWorker.KEY_PLACES_NAMED, 0)
+                        val parts = buildList {
+                            if (added > 0) add("$added DAYS")
+                            if (named > 0) add("$named PLACES NAMED")
+                        }
                         when {
-                            added > 0 -> "ADDED $added DAYS"
+                            parts.isNotEmpty() -> "ADDED " + parts.joinToString(", ")
                             // Nothing added is the common and correct outcome of asking twice, and
                             // saying so is the difference between "done" and "did that work?".
                             else -> "NOTHING MISSING"
@@ -579,15 +585,17 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             .mapLatest { day ->
                 withContext(Dispatchers.IO) {
                     val zone = ZoneId.systemDefault()
+                    val places = Places(getApplication())
                     DayBridges.stays(getApplication(), day, zone).map { stay ->
                         DayTimeline.Item.Place(
                             startMinutes = JournalDay.minutesInto(stay.startMs, day, zone),
                             endMinutes = JournalDay.minutesInto(stay.endMs, day, zone),
                             latitude = stay.latitude,
                             longitude = stay.longitude,
-                            // Naming a coordinate has no offline source on this phone; the nightly
-                            // lookup fills this in later.
-                            name = null,
+                            // From the cache only. Naming a coordinate needs a network and a screen
+                            // never waits on one — the nightly job fills these in, so a stay reads
+                            // "Somewhere" until it has been looked at once.
+                            name = places.cached(stay.latitude, stay.longitude),
                         )
                     }
                 }

@@ -12,6 +12,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.gios.lightnotebook.data.NotebookRepository
+import com.gios.lightnotebook.data.Places
+import com.gios.lightnotebook.data.DayBridges
 import com.gios.lightnotebook.data.Weather
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -53,18 +55,45 @@ class WeatherArchiveWorker(
         )
         // The count goes back out so a button can say what it did. A job that finishes silently is
         // indistinguishable from one that never started, which is exactly how this looked.
-        val output = Data.Builder().putInt(KEY_DAYS_ADDED, result.daysAdded).build()
+        // While we are here and on a charger: give names to the places visited recently. Same rule
+        // as the weather — a screen never does this, so a day is never waiting on a lookup.
+        val named = runCatching { namePlaces() }.getOrDefault(0)
+
+        val output = Data.Builder()
+            .putInt(KEY_DAYS_ADDED, result.daysAdded)
+            .putInt(KEY_PLACES_NAMED, named)
+            .build()
         // Retry rather than fail: a phone on a charger overnight with no usable network is a normal
         // evening, and the archive is no worse off for waiting. WorkManager backs off on its own.
         if (result.ok) Result.success(output) else Result.retry()
     }
 
+    /**
+     * Look up the places you stopped recently, for the ones with no name yet.
+     *
+     * Only the last few weeks: a stay from a year ago is not worth a request, and the ones you will
+     * actually scroll to are recent. The lookup itself caches misses as well as hits, so a lay-by
+     * with no name is asked about once ever rather than every night.
+     */
+    private fun namePlaces(): Int {
+        val zone = java.time.ZoneId.systemDefault()
+        val today = com.gios.lightnotebook.util.JournalDay.today(zone)
+        val spots = ((today - PLACE_LOOKBACK_DAYS)..today).flatMap { day ->
+            DayBridges.stays(applicationContext, day, zone).map { it.latitude to it.longitude }
+        }
+        return Places(applicationContext).fill(spots)
+    }
+
     companion object {
         private const val NAME = "weather-archive"
+
+        /** How far back to give places names. Three weeks of scrolling is plenty. */
+        private const val PLACE_LOOKBACK_DAYS = 21L
         private const val NOW = "weather-archive-now"
         private const val KEY_REFETCH = "refetch"
         private const val KEY_ALL_DATA = "all_data"
         const val KEY_DAYS_ADDED = "days_added"
+        const val KEY_PLACES_NAMED = "places_named"
 
         /** The unique name of the by-hand run, so its progress can be watched. */
         const val NOW_NAME = NOW
