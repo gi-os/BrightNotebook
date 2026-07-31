@@ -65,6 +65,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.offset
 import com.gios.lightnotebook.ui.theme.LightIcon
 import com.gios.lightnotebook.ui.theme.ownsHorizontalDrag
+import com.gios.lightnotebook.ui.theme.LightIcons
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
