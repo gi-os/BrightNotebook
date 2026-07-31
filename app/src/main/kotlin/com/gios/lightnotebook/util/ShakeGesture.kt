@@ -21,16 +21,22 @@ class ShakeGesture(
      * A brisk walk peaks around 0.3g, which is what sets the floor. Everything above that is
      * a deliberate movement of the wrist.
      */
-    private val thresholdG: Float = 0.38f,
+    private val thresholdG: Float = 0.46f,
     /**
-     * Three alternations — a flick out, back, and out again. It started at six, which was
-     * three full shakes and turned out to be something you had to *mean*, hard, twice, before
-     * anything happened. The confirmation sheet is the thing that makes a low number safe: a
-     * false positive costs one tap on NO, so the gesture should err towards firing.
+     * Four alternations — two quick shakes, there and back and there and back.
+     *
+     * Landed on from both directions, on the phone. Six past 0.55g was something you had to
+     * *mean*, hard, twice, before anything happened; three past 0.38g went off on its own. Four
+     * past 0.46g is a movement you would not make by accident but would not think twice about
+     * making on purpose.
+     *
+     * The confirmation sheet is what allows it to sit nearer the loose end than the strict one:
+     * a false positive costs one tap on NO, and a gesture that never fires costs the whole
+     * feature.
      */
-    private val reversalsToFire: Int = 3,
+    private val reversalsToFire: Int = 4,
     /** A reversal this long after the last one starts a new gesture instead of joining it. */
-    private val gapMs: Long = 550,
+    private val gapMs: Long = 500,
     /** Nothing fires again for this long: one shake should not become three reports. */
     private val cooldownMs: Long = 3_000,
 ) {

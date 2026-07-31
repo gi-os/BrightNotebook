@@ -12,7 +12,7 @@ data class ShakeReading(
     /** Turns counted towards the gesture so far. */
     val turns: Int = 0,
     /** How many it takes. */
-    val turnsNeeded: Int = 3,
+    val turnsNeeded: Int = 4,
     /** Rising count of completed shakes, so the screen can say one just landed. */
     val fires: Int = 0,
 )

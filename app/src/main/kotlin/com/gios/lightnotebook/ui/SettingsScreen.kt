@@ -313,10 +313,10 @@ fun SettingsScreen(
             ShakeMeter()
             LightText(
                 text = buildString {
-                    append("Flick the phone out and back and out again — a firm turn of the ")
-                    append("wrist, not a rattle — and Notebook asks whether you meant to ")
-                    append("report something. It files what went wrong, this build, and — ")
-                    append("only if you leave it ticked — a screenshot.")
+                    append("Shake the phone twice — there and back, there and back — and ")
+                    append("Notebook asks whether you meant to report something. It files ")
+                    append("what went wrong, this build, and — only if you leave it ticked ")
+                    append("— a screenshot. Watch the numbers below while you do it.")
                     if (queuedReports > 0) {
                         append(" ")
                         append(

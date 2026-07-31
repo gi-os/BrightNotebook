@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.25.0**.
+`com.gios.lightnotebook`. Current release: **v1.27.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -228,8 +228,8 @@ importing other calendars — works with none.
 
 ## Reporting a glitch
 
-Flick the phone out and back and out again — a firm turn of the wrist, not a rattle — and
-Notebook asks whether you meant to send an error report. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
+Shake the phone twice — there and back, there and back — and Notebook asks whether you
+meant to send an error report. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
 tracker carrying what went wrong, the build and firmware it happened on, which screen you
 were on, the last crash log if there is one, and — only while the row stays ticked — a
 screenshot of the moment you started shaking. The same sheet is on the settings screen
@@ -241,8 +241,9 @@ sent from the dying process: the trace goes to a file, and a healthy launch asks
 Some things about how it is built that are easy to get wrong:
 
 - **The question comes before anything else**, which is what lets the gesture be loose. A
-  false positive costs one tap on NO, so `util/ShakeGesture` errs towards firing: three
-  reversals of the deviation from rest past 0.38g, each within 550ms of the last. It counts
+  false positive costs one tap on NO, so `util/ShakeGesture` sits nearer the loose end than
+  the strict one: four reversals of the deviation from rest past 0.46g, each within 500ms of
+  the last. Six past 0.55g never fired; three past 0.38g fired on its own. It counts
   *reversals* rather than force, which is what separates a flick from a bag or a dropped
   phone — a walk peaks around 0.3g, and a drop is one jolt rather than three turns. Plain
   arithmetic with no Android imports, so `ShakeGestureTest` holds it to that.
@@ -331,7 +332,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.26.0 | this commit | Weather on the planner, pull a day to refresh, and the fetch says what it did |
+| v1.27.0 | this commit | The shake lands between too stiff and too eager |
+| v1.26.43 | `2a849d6` | Weather on the planner, pull a day to refresh, and the fetch says what it did |
 | v1.25.0 | (on main) | A flick reports a glitch, the app reports itself, releases carry notes |
 | v1.24.41 | `9321442` | Who you talked to, from LightChat |
 | v1.23.40 | `7d30795` | Fill in the weather now, as far back as there is data |
