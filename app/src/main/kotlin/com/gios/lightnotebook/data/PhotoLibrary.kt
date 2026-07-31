@@ -22,6 +22,8 @@ data class DevicePhoto(
     val epochDay: Long,
     /** Milliseconds, already reconciled by [PhotoDays.instantMs]. */
     val takenAt: Long,
+    /** The file's name, which is how Roll records a star. Blank when MediaStore had none. */
+    val name: String = "",
 ) {
     /**
      * Minutes into its journal day, for sitting a photograph among timed entries.
@@ -85,6 +87,8 @@ object PhotoLibrary {
         val firstMinutes: Int,
         val lastMinutes: Int,
         val count: Int,
+        /** Whether the cover is one you starred, rather than merely the earliest. */
+        val coverStarred: Boolean = false,
     )
 
     fun summaries(
@@ -92,21 +96,32 @@ object PhotoLibrary {
         fromDay: Long,
         toDay: Long,
         zone: ZoneId = ZoneId.systemDefault(),
+        /** File names starred in Roll. A starred photograph wins the cell over an earlier one. */
+        starred: Set<String> = emptySet(),
     ): Map<Long, DaySummary> {
         val out = HashMap<Long, DaySummary>()
-        query(context, fromDay, toDay, zone) { id, day, ms ->
-            val photo = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms)
+        query(context, fromDay, toDay, zone) { id, day, ms, name ->
+            val photo = DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name)
             val minutes = photo.minutesOfDay(zone)
             val existing = out[day]
             out[day] = if (existing == null) {
-                DaySummary(photo, minutes, minutes, 1)
+                DaySummary(photo, minutes, minutes, 1, name in starred)
             } else {
+                val isStar = name in starred
                 DaySummary(
-                    // The earliest of the day is the cover, so the cell shows the day starting.
-                    cover = if (ms < existing.cover.takenAt) photo else existing.cover,
+                    // **A star beats the clock.** Otherwise the earliest of the day is the cover, so
+                    // a cell shows the day starting; but if you went to the trouble of starring one,
+                    // that is the picture of the day and it should be the one on the calendar. Among
+                    // several starred, the earliest still wins, so the rule stays stable.
+                    cover = when {
+                        isStar && !existing.coverStarred -> photo
+                        isStar == existing.coverStarred && ms < existing.cover.takenAt -> photo
+                        else -> existing.cover
+                    },
                     firstMinutes = minOf(existing.firstMinutes, minutes),
                     lastMinutes = maxOf(existing.lastMinutes, minutes),
                     count = existing.count + 1,
+                    coverStarred = existing.coverStarred || isStar,
                 )
             }
         }
@@ -116,8 +131,8 @@ object PhotoLibrary {
     /** Every photograph on one day, in the order they were taken. */
     fun photosOn(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<DevicePhoto> {
         val out = mutableListOf<DevicePhoto>()
-        query(context, epochDay, epochDay, zone) { id, day, ms ->
-            out.add(DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms))
+        query(context, epochDay, epochDay, zone) { id, day, ms, name ->
+            out.add(DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name))
         }
         // Sorted here rather than in the query: the sort key is the *reconciled* instant, and
         // SQL cannot reconcile two columns in two units. A day holds few enough photographs
@@ -138,7 +153,7 @@ object PhotoLibrary {
         fromDay: Long,
         toDay: Long,
         zone: ZoneId,
-        crossinline row: (id: Long, epochDay: Long, takenAt: Long) -> Unit,
+        crossinline row: (id: Long, epochDay: Long, takenAt: Long, name: String) -> Unit,
     ) {
         if (!granted(context)) return
         val window = PhotoDays.windowMs(fromDay, toDay, zone)
@@ -148,6 +163,7 @@ object PhotoLibrary {
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DATE_TAKEN,
             MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.DISPLAY_NAME,
         )
         val selection =
             "(${MediaStore.Images.Media.DATE_TAKEN} >= ? AND ${MediaStore.Images.Media.DATE_TAKEN} < ?)" +
@@ -164,12 +180,14 @@ object PhotoLibrary {
                 val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
                 val takenCol = c.getColumnIndex(MediaStore.Images.Media.DATE_TAKEN)
                 val addedCol = c.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
+                val nameCol = c.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
                 while (c.moveToNext()) {
                     val taken = takenCol.takeIf { it >= 0 && !c.isNull(it) }?.let { c.getLong(it) }
                     val added = addedCol.takeIf { it >= 0 && !c.isNull(it) }?.let { c.getLong(it) }
                     val day = PhotoDays.dayIfWithin(taken, added, fromDay, toDay, zone) ?: continue
                     val ms = PhotoDays.instantMs(taken, added) ?: continue
-                    row(c.getLong(idCol), day, ms)
+                    val name = nameCol.takeIf { it >= 0 }?.let { c.getString(it) }.orEmpty()
+                    row(c.getLong(idCol), day, ms, name)
                 }
             }
         }

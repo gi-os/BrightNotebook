@@ -68,6 +68,8 @@
           reroute would silently always fall back to the in-app camera.
         -->
         <package android:name="com.gios.lightcamera" />
+        <!-- Roll's starred list, which decides which photograph a planner cell shows. -->
+        <provider android:authorities="com.gios.lightcamera.stars" />
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>

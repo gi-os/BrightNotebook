@@ -21,6 +21,7 @@ import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
 import com.gios.lightnotebook.data.PassShowing
 import com.gios.lightnotebook.data.PhotoLibrary
+import com.gios.lightnotebook.data.RollStars
 import com.gios.lightnotebook.data.StepStore
 import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
@@ -334,7 +335,15 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                     emptyMap()
                 } else {
                     withContext(Dispatchers.IO) {
-                        PhotoLibrary.summaries(getApplication(), window.first, window.last)
+                        // Re-read on each window: a star is toggled in Roll while this app is in the
+                        // background, so there is no moment here worth watching for.
+                        val starred = RollStars.names(getApplication())
+                        PhotoLibrary.summaries(
+                            getApplication(),
+                            window.first,
+                            window.last,
+                            starred = starred,
+                        )
                     }
                 }
             }

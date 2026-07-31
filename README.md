@@ -277,7 +277,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.15.0 | this commit | Hours down the gaps, pages actually centred, and the day's first line scrolls |
+| v1.16.0 | this commit | A starred photograph is the one a day shows |
+| v1.15.32 | `802b85b` | Hours down the gaps, pages actually centred, and the day's first line scrolls |
 | v1.13.31 | `6d84c19` | Entries sit at the time they happened, and photographs lean opposite ways |
 | v1.13.31 | `6d84c19` | Entries sit at the time they happened, and photographs lean opposite ways |
 | v1.12.30 | `61681d4` | Colour everywhere, bars that get out of the way, centred pages |
