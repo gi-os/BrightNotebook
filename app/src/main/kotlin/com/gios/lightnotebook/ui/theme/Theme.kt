@@ -38,6 +38,10 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 
 /**
  * The Light Phone III design language, ported from `lightphone/light-sdk` (MIT licence,
@@ -314,6 +318,42 @@ private const val PINCH_OUT_RATIO = 0.75f
  * whole gesture — and a horizontal decision is consumed before the list ever sees it, while a
  * vertical one is left entirely alone so scrolling still feels native.
  */
+/**
+ * Regions that own horizontal drags, so the day does not steal them.
+ *
+ * [lightDayGestures] watches on `PointerEventPass.Initial`, and Initial travels **ancestor to
+ * descendant** — so the day pane sees a horizontal drag before any child does and consumes it. That
+ * is right almost everywhere: it is what lets a swipe move the day whether it starts over text, a
+ * photograph or empty space. It is wrong over something that scrolls sideways itself, which simply
+ * never received a single event.
+ *
+ * A child cannot pre-empt an ancestor on Initial, so the ancestor has to be told. Each sideways
+ * scroller registers its bounds here with [ownsHorizontalDrag] and the day skips claiming a drag that
+ * began inside one.
+ */
+val LocalHorizontalDragOwners = staticCompositionLocalOf { mutableListOf<Rect>() }
+
+/**
+ * Claim horizontal drags starting inside this composable for itself.
+ *
+ * Bounds in root coordinates, since that is the space pointer positions arrive in. Removed on
+ * disposal, or a recycled row in a lazy list would leave a dead rectangle behind that quietly
+ * disabled day-swiping over whatever took its place.
+ */
+fun Modifier.ownsHorizontalDrag(): Modifier = composed {
+    val owners = LocalHorizontalDragOwners.current
+    var mine by remember { mutableStateOf<Rect?>(null) }
+    DisposableEffect(Unit) {
+        onDispose { mine?.let(owners::remove) }
+    }
+    onGloballyPositioned { coordinates ->
+        mine?.let(owners::remove)
+        val rect = coordinates.boundsInRoot()
+        mine = rect
+        owners.add(rect)
+    }
+}
+
 fun Modifier.lightDayGestures(
     /** Every horizontal pixel of the drag, so the caller can move the planner with it. */
     onSlide: (Float) -> Unit,
@@ -323,10 +363,14 @@ fun Modifier.lightDayGestures(
 ): Modifier = composed {
     val density = LocalDensity.current
     val slop = with(density) { DAY_SLOP_DP.dp.toPx() }
+    val owners = LocalHorizontalDragOwners.current
 
     pointerInput(Unit) {
         awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // Started over something that scrolls sideways itself. Vertical drags and pinches are
+            // still ours — only the horizontal claim is given up, which is the one that collides.
+            val theirs = owners.any { it.contains(down.position) }
             var dx = 0f
             var dy = 0f
             var zoom = 1f
@@ -358,6 +402,11 @@ fun Modifier.lightDayGestures(
                         abs(dy) > slop -> Axis.Vertical
                         else -> Axis.Undecided
                     }
+                }
+
+                if (axis == Axis.Horizontal && theirs) {
+                    // Left entirely alone: not consumed, so the child receives it on Main.
+                    continue
                 }
 
                 if (axis == Axis.Horizontal) {

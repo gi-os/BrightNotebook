@@ -339,7 +339,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.31.0 | this commit | Prints keep their own shape, and sit at their own angle and height |
+| v1.32.0 | this commit | The pile scrolls, a starred photograph leads it, and it stops covering the text |
+| v1.31.48 | `deebd09` | Prints keep their own shape, and sit at their own angle and height |
 | v1.30.47 | `35b3138` | Places get names, and photographs a pile you scroll through |
 | v1.29.46 | `828db48` | Went home, went to work |
 | v1.28.0 | (on main) | Reports actually leave the phone |

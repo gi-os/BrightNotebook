@@ -63,6 +63,8 @@ import com.gios.lightnotebook.util.WeatherCodes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.offset
+import com.gios.lightnotebook.ui.theme.LightIcon
+import com.gios.lightnotebook.ui.theme.ownsHorizontalDrag
 
 /**
  * A moment of a day that has happened: one photograph, or a burst of them.
@@ -145,48 +147,88 @@ fun TimelinePhotos(
                 onLongClick = { onAttach(photo) },
             )
         } else {
-            // **A pile of prints you scroll through, not a grid of them.**
+            // **A highlight, then a pile you scroll through.**
             //
-            // Rows of neat tiles read as a contact sheet, and a fixed grid can only ever show as many
-            // photographs as it has cells. One overlapping row that scrolls sideways solves both: the
-            // prints lap over each other and lean at slightly different angles the way photographs
-            // stuck on a page do, every one of the day's pictures is reachable, and the block is one
-            // row tall however many there are — which is the property the very first filmstrip had
-            // and the tiled version gave away.
-            val edge = PILE_PRINT_UNITS.verticalGridUnitsAsDp()
-            // The longest side a print can be, since a landscape one is wider than it is tall and
-            // asking for its height would fetch a thumbnail too small and scale it up.
-            val edgePx = with(density) { (edge * LANDSCAPE).roundToPx() }
-            LazyRow(
-                Modifier.fillMaxWidth(),
-                // Negative spacing: each print laps over the one before it. This is the whole look —
-                // with a positive gap it is a filmstrip again.
-                horizontalArrangement = Arrangement.spacedBy(-edge * PILE_LAP),
-                contentPadding = PaddingValues(horizontal = lightInset()),
-            ) {
-                itemsIndexed(resolved, key = { _, photo -> photo.id }) { index, photo ->
+            // If you starred one of the day's photographs, that is the picture of the day and it gets
+            // the large frame with a star on it — the rest sit below as a pile. Nothing starred and
+            // the pile is all there is, which is the common case and is why the highlight is
+            // conditional rather than "the first one, always".
+            val highlight = remember(resolved) { resolved.firstOrNull { it.starred } }
+            if (highlight != null) {
+                Box(Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH)) {
                     PhotoFrame(
-                        photo = photo,
-                        requestPx = edgePx,
+                        photo = highlight,
+                        requestPx = fullWidthPx,
                         modifier = Modifier
-                            // **One height, each print its own width.** Square prints cropped every
-                            // portrait photograph to its middle, which on a phone is most of them.
-                            // A common height with varying widths is also what a real pile looks
-                            // like: prints are different shapes and they line up along one edge.
-                            .height(edge)
-                            .aspectRatio(photo.aspect ?: LANDSCAPE)
-                            // **A light stagger up and down.** Prints dropped on a page do not share
-                            // a baseline, and a row that does reads as a strip however much each one
-                            // leans. Small — a fraction of the print — because past that it stops
-                            // being a pile and becomes a wave.
-                            .offset(y = edge * staggerFor(photo.id))
-                            // Bolder in a pile than alone. A single photograph on a page wants a
-                            // hint of a lean; overlapping prints need enough angle that the overlap
-                            // reads as stacking rather than as a misaligned grid.
-                            .tiltedLike(photo.id, index, boldness = PILE_TILT_BOLDNESS),
-                        onClick = { onOpen(photo) },
-                        onLongClick = { onAttach(photo) },
+                            .fillMaxWidth()
+                            .aspectRatio((highlight.aspect ?: LANDSCAPE).coerceAtLeast(TALLEST))
+                            .tiltedLike(highlight.id, 0),
+                        onClick = { onOpen(highlight) },
+                        onLongClick = { onAttach(highlight) },
                     )
+                    // On the picture rather than beside it: the star is a fact about the photograph,
+                    // and a corner of it is the only place there is room on this panel.
+                    LightIcon(
+                        icon = LightIcons.Star,
+                        size = 1.6f,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(0.4f.gridUnitsAsDp()),
+                    )
+                }
+                Spacer(Modifier.padding(top = 0.6f.verticalGridUnitsAsDp()))
+            }
+
+            // Rows of neat tiles read as a contact sheet, and a fixed grid can only ever show as many
+            // photographs as it has cells. One overlapping row that scrolls sideways solves both, and
+            // is one row tall however many there are.
+            val rest = remember(resolved, highlight) {
+                if (highlight == null) resolved else resolved.filter { it.id != highlight.id }
+            }
+            if (rest.isNotEmpty()) {
+                val edge = PILE_PRINT_UNITS.verticalGridUnitsAsDp()
+                // The longest side a print can be, since a landscape one is wider than it is tall and
+                // asking for its height would fetch a thumbnail too small and scale it up.
+                val edgePx = with(density) { (edge * LANDSCAPE * PILE_LARGEST).roundToPx() }
+                LazyRow(
+                    Modifier
+                        .fillMaxWidth()
+                        // **The drag is ours.** The day pane watches for horizontal swipes on the
+                        // Initial pass, which reaches an ancestor before a descendant, so without
+                        // this the carousel never received a single pointer event and simply would
+                        // not scroll. See `ownsHorizontalDrag`.
+                        .ownsHorizontalDrag()
+                        // Room for the stagger. `offset` moves a print without reserving the space,
+                        // so a print nudged downwards was drawing over the text beneath the pile.
+                        .padding(vertical = edge * PILE_STAGGER),
+                    // Negative spacing: each print laps over the one before it. This is the whole
+                    // look — with a positive gap it is a filmstrip again.
+                    horizontalArrangement = Arrangement.spacedBy(-edge * PILE_LAP),
+                    contentPadding = PaddingValues(horizontal = lightInset()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    itemsIndexed(rest, key = { _, photo -> photo.id }) { index, photo ->
+                        PhotoFrame(
+                            photo = photo,
+                            requestPx = edgePx,
+                            modifier = Modifier
+                                // One height, each print its own width. Square prints cropped every
+                                // portrait photograph to its middle, which on a phone is most of them.
+                                // A common height with varying widths is also what a real pile looks
+                                // like: prints are different shapes and lie along one edge.
+                                .height(edge * sizeFor(photo.id))
+                                .aspectRatio(photo.aspect ?: LANDSCAPE)
+                                // Prints dropped on a page do not share a baseline, and a row that
+                                // does reads as a strip however much each one leans.
+                                .offset(y = edge * staggerFor(photo.id))
+                                // Bolder in a pile than alone. A single photograph on a page wants a
+                                // hint of a lean; overlapping prints need enough angle that the
+                                // overlap reads as stacking rather than as a misaligned grid.
+                                .tiltedLike(photo.id, index, boldness = PILE_TILT_BOLDNESS),
+                            onClick = { onOpen(photo) },
+                            onLongClick = { onAttach(photo) },
+                        )
+                    }
                 }
             }
         }
@@ -222,8 +264,35 @@ private const val PILE_LAP = 0.18f
  */
 private const val PILE_TILT_BOLDNESS = 3.4f
 
-/** The most a print sits above or below its neighbours, as a fraction of its own height. */
-private const val PILE_STAGGER = 0.07f
+/**
+ * The most a print sits above or below its neighbours, as a fraction of its own height.
+ *
+ * A fifth. At seven per cent the row still read as a strip; this is enough that the prints clearly do
+ * not share a baseline. The row reserves this much padding above and below, because `offset` does not
+ * claim space and a nudged print was otherwise drawing over the text below the pile.
+ */
+private const val PILE_STAGGER = 0.2f
+
+/** How much bigger or smaller one print is than another. Slight — it is a pile, not a collage. */
+private const val PILE_SIZE_VARIATION = 0.12f
+
+/**
+ * The largest a print grows, so a thumbnail is requested big enough for the biggest of them.
+ *
+ * Declared after the variation it is built from: a top-level constant in Kotlin cannot read one
+ * declared below it in the same file.
+ */
+private const val PILE_LARGEST = 1f + PILE_SIZE_VARIATION
+
+/**
+ * How big one print is relative to the rest.
+ *
+ * From the id again, and for the third time the same reason: the same photograph must be the same size
+ * every time the day is opened, or the pile reshuffles itself as you scroll. Uses a different divisor
+ * from the stagger so size and height do not move together and produce a visible pattern.
+ */
+private fun sizeFor(id: Long): Float =
+    1f + ((((id / 3L) % 5L).toInt() - 2) / 2f) * PILE_SIZE_VARIATION
 
 /**
  * How far up or down one print sits.

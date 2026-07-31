@@ -401,7 +401,13 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 if (!granted) {
                     emptyList()
                 } else {
-                    withContext(Dispatchers.IO) { PhotoLibrary.photosOn(getApplication(), day) }
+                    withContext(Dispatchers.IO) {
+                        PhotoLibrary.photosOn(
+                            getApplication(),
+                            day,
+                            starred = RollStars.names(getApplication()),
+                        )
+                    }
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

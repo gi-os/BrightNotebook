@@ -27,6 +27,8 @@ data class DevicePhoto(
     /** Pixel dimensions, so a portrait photograph is not cropped into a landscape frame. */
     val width: Int = 0,
     val height: Int = 0,
+    /** Starred in Roll. The day gives one of these the large frame. */
+    val starred: Boolean = false,
 ) {
     /**
      * Width over height, or null when MediaStore did not say.
@@ -167,10 +169,27 @@ object PhotoLibrary {
     }
 
     /** Every photograph on one day, in the order they were taken. */
-    fun photosOn(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<DevicePhoto> {
+    fun photosOn(
+        context: Context,
+        epochDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+        /** File names starred in Roll, so the day knows which picture to give the big frame. */
+        starred: Set<String> = emptySet(),
+    ): List<DevicePhoto> {
         val out = mutableListOf<DevicePhoto>()
         query(context, epochDay, epochDay, zone) { id, day, ms, name, w, h ->
-            out.add(DevicePhoto(id, ContentUris.withAppendedId(collection, id), day, ms, name, w, h))
+            out.add(
+                DevicePhoto(
+                    id = id,
+                    uri = ContentUris.withAppendedId(collection, id),
+                    epochDay = day,
+                    takenAt = ms,
+                    name = name,
+                    width = w,
+                    height = h,
+                    starred = name.isNotBlank() && name in starred,
+                ),
+            )
         }
         // Sorted here rather than in the query: the sort key is the *reconciled* instant, and
         // SQL cannot reconcile two columns in two units. A day holds few enough photographs
