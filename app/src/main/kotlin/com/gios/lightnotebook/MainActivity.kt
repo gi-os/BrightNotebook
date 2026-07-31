@@ -2,6 +2,7 @@ package com.gios.lightnotebook
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
@@ -20,6 +21,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +44,12 @@ import com.gios.lightnotebook.hw.LocalWheelBus
 import com.gios.lightnotebook.hw.WheelBus
 import com.gios.lightnotebook.notify.Notifier
 import com.gios.lightnotebook.notify.WeatherArchiveWorker
+import com.gios.lightnotebook.report.CrashLog
+import com.gios.lightnotebook.report.ReportContext
+import com.gios.lightnotebook.report.Reports
+import com.gios.lightnotebook.report.Screenshot
+import com.gios.lightnotebook.report.ShakeDetector
+import com.gios.lightnotebook.report.Symptom
 import com.gios.lightnotebook.ui.AgendaScreen
 import com.gios.lightnotebook.ui.CalendarScreen
 import com.gios.lightnotebook.ui.CalendarsScreen
@@ -54,6 +62,8 @@ import com.gios.lightnotebook.ui.LightSheetAction
 import com.gios.lightnotebook.ui.NoteEditorScreen
 import com.gios.lightnotebook.ui.NotebookViewModel
 import com.gios.lightnotebook.ui.NotesScreen
+import com.gios.lightnotebook.ui.ReportReason
+import com.gios.lightnotebook.ui.ReportSheet
 import com.gios.lightnotebook.ui.SettingsScreen
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightBottomBar
@@ -62,7 +72,10 @@ import com.gios.lightnotebook.ui.theme.LightNotebookTheme
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import com.gios.lightnotebook.ui.ColorMode
@@ -70,6 +83,15 @@ import com.gios.lightnotebook.ui.ColourEffect
 
 /** A `lightnotebook://note/<key>` link, split into the parts [MainActivity] acts on. */
 private data class NoteLink(val key: String, val title: String)
+
+/**
+ * A report waiting to be confirmed.
+ *
+ * The screenshot is taken at the moment of the shake and carried here, rather than taken when
+ * the sheet asks for it: by then the sheet is the thing on screen, and a picture of the sheet
+ * is a picture of nothing.
+ */
+private data class ReportRequest(val reason: ReportReason, val shot: Bitmap?)
 
 private const val NOTE_SCHEME = "lightnotebook"
 private const val NOTE_HOST = "note"
@@ -96,6 +118,12 @@ class MainActivity : ComponentActivity() {
 
     /** Wheel notches on their way to whichever screen is up. */
     private val wheel = WheelBus()
+
+    /** Set by a shake, or by finding a crash log left over from the last run. */
+    private val reportRequest = MutableStateFlow<ReportRequest?>(null)
+
+    /** Null until [onCreate]; also null for good on a phone with no accelerometer. */
+    private var shake: ShakeDetector? = null
 
     /**
      * Every hardware key arrives here first — `DecorView` hands the event to the window
@@ -129,6 +157,22 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         ColorMode.onAppHidden(this)
+    }
+
+    /**
+     * The accelerometer runs only while this app is the one you are looking at.
+     *
+     * Resumed rather than started: a 50Hz stream is a real battery cost, and a shake while
+     * something else is in front is not a complaint about Notebook.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (reportRequest.value == null) shake?.start()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        shake?.stop()
     }
 
     override fun onStart() {
@@ -168,9 +212,30 @@ class MainActivity : ComponentActivity() {
         return NoteLink(key = key, title = uri.getQueryParameter("title").orEmpty().take(MAX_TITLE))
     }
 
+    /**
+     * A shake, caught. Take the picture first and ask afterwards — the sheet is about to cover
+     * whatever it was that looked wrong.
+     */
+    private fun onShaken() {
+        if (reportRequest.value != null) return
+        shake?.stop()
+        Screenshot.capture(window) { bitmap ->
+            reportRequest.value = ReportRequest(ReportReason.Shaken, bitmap)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // First thing, so that a crash anywhere below still leaves a trace to send.
+        CrashLog.install(this)
         Notifier.ensureChannel(this)
+        shake = ShakeDetector(this, ::onShaken).takeIf { it.available }
+        // A crash log that is still on disk was never sent. Ask once, on the next launch,
+        // rather than at the moment of the crash: a dying process has no business opening a
+        // socket, and a dialog on top of a crash is not a thing anyone reads.
+        if (savedInstanceState == null && CrashLog.read(this) != null) {
+            reportRequest.value = ReportRequest(ReportReason.Crashed, null)
+        }
         pendingDay.value = dayIn(intent)
         // Only on a genuinely new launch. `onNewIntent` calls `setIntent`, so the VIEW
         // intent becomes the activity's permanent intent — and a recreation (a theme or
@@ -229,6 +294,68 @@ class MainActivity : ComponentActivity() {
                     // this is what makes that possible. KEEP, so opening the app often does not keep
                     // resetting the period.
                     WeatherArchiveWorker.schedule(this@MainActivity)
+                    // Anything written while the phone was offline, or while the last build
+                    // had no key in it, goes out now.
+                    Reports.flush(this@MainActivity)
+                }
+
+                // Which screen a report was filed from. Read by the crash handler too, which
+                // runs on a dying thread with no view of any of this.
+                LaunchedEffect(nav) {
+                    nav.currentBackStackEntryFlow.collect { entry ->
+                        ReportContext.screen = entry.destination.route ?: "home"
+                    }
+                }
+
+                val reports = rememberCoroutineScope()
+                val report by reportRequest.collectAsStateWithLifecycle()
+                report?.let { pending ->
+                    ReportSheet(
+                        reason = pending.reason,
+                        hasScreenshot = pending.shot != null,
+                        onDismiss = {
+                            // Saying no to a crash log throws it away. Otherwise the same
+                            // question waits at every launch until the app crashes again.
+                            if (pending.reason == ReportReason.Crashed) CrashLog.clear(this@MainActivity)
+                            reportRequest.value = null
+                            shake?.start()
+                        },
+                        onSend = { symptom, note, includeScreenshot ->
+                            reportRequest.value = null
+                            shake?.start()
+                            reports.launch {
+                                withContext(Dispatchers.IO) {
+                                    // The trace goes with a crash prompt, and with a shake
+                                    // that says the app closed itself — the two cases where
+                                    // it is the answer. Not with a report about a slow list,
+                                    // where a week-old stack trace is only noise.
+                                    val crash = if (
+                                        pending.reason == ReportReason.Crashed ||
+                                        symptom == Symptom.Crashed
+                                    ) {
+                                        CrashLog.read(this@MainActivity)
+                                    } else {
+                                        null
+                                    }
+                                    Reports.enqueue(
+                                        this@MainActivity,
+                                        Reports.compose(
+                                            context = this@MainActivity,
+                                            symptom = symptom,
+                                            note = note,
+                                            screen = ReportContext.screen,
+                                            crash = crash,
+                                            shot = pending.shot
+                                                ?.takeIf { includeScreenshot }
+                                                ?.let { Screenshot.encode(it) },
+                                        ),
+                                    )
+                                    if (crash != null) CrashLog.clear(this@MainActivity)
+                                }
+                                Reports.flush(this@MainActivity)
+                            }
+                        },
+                    )
                 }
 
                 val requestedDay by pendingDay.collectAsStateWithLifecycle()
@@ -359,6 +486,10 @@ class MainActivity : ComponentActivity() {
                                     vm = vm,
                                     onScanQr = { nav.navigate("scan") },
                                     onCalendars = { nav.navigate("calendars") },
+                                    // The same sheet the shake opens. Shaking a phone you are
+                                    // already annoyed with is not always something you want to
+                                    // do in front of other people.
+                                    onReport = { onShaken() },
                                     onBack = { nav.popBackStack() },
                                 )
                             }

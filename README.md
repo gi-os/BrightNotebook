@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.1.20**.
+`com.gios.lightnotebook`. Current release: **v1.22.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -226,6 +226,45 @@ importing other calendars — works with none.
   a printed page would need, because the difference between a 3 and an 8 in biro is a
   few pixels.
 
+## Reporting a glitch
+
+Shake the phone hard three times and Notebook asks whether you meant to send an error
+report. Answer yes and it files a GitHub issue against the private `gi-os/light-reports`
+tracker carrying what went wrong, the build and firmware it happened on, which screen you
+were on, the last crash log if there is one, and — only while the row stays ticked — a
+screenshot of the moment you started shaking. The same sheet is on the settings screen
+under **SEND A REPORT**, for when shaking a phone in public is not appealing.
+
+If the app dies, the next launch offers the stack trace instead of losing it. Nothing is
+sent from the dying process: the trace goes to a file, and a healthy launch asks about it.
+
+Some things about how it is built that are easy to get wrong:
+
+- **The question comes before anything else.** A shake is a gesture a bag, a run and a set
+  of keys can all imitate, so `util/ShakeGesture` counts *reversals* rather than force: six
+  alternations of the deviation from rest, each within 400ms of the last. A hard jolt is one
+  reversal, walking never leaves the threshold, and only a deliberate rattle gets there. It
+  is plain arithmetic with no Android imports, so `ShakeGestureTest` can hold it to that.
+- **The accelerometer runs only while the app is in front**, registered in `onResume` and
+  dropped in `onPause`. A 50Hz stream is a real battery cost, and shaking a phone showing
+  something else is not a complaint about Notebook.
+- **The screenshot is taken at the moment of the shake**, not when the sheet asks for it —
+  by then the sheet is what is on screen. `PixelCopy` off this app's own window, which is
+  why no permission is involved.
+- **Reports queue on disk first and post afterwards, always.** A phone reporting a freeze is
+  by definition one that was just misbehaving, and a report that exists only in flight is the
+  one guaranteed to be lost. The queue drains on the next launch.
+- **The screenshot rides inside the issue body as base64**, downscaled to 360px and
+  desaturated. Attaching a file would need `contents: write` on a token that ships inside a
+  sideloaded APK anyone can unzip; kept to `issues: write`, the worst a lifted key can do is
+  write junk into one private tracker.
+
+The key is `REPORT_TOKEN` — a fine-grained PAT with **Issues: read and write** on
+`gi-os/light-reports` and nothing else. Put it in `local.properties` as `reportToken=` for
+local builds, and in the repository secrets as `REPORT_TOKEN` for CI. A build without one
+still compiles and still collects reports; they wait on the phone until a build that has one
+installs over it.
+
 ## Build and test
 
 ```sh
@@ -277,7 +316,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.21.0 | this commit | Weather, archived overnight; artists named; a place gets a pin |
+| v1.22.0 | this commit | Shake the phone to report a glitch |
+| v1.21.38 | `87626e3` | Weather, archived overnight; artists named; a place gets a pin |
 | v1.20.37 | `4dbffea` | Music runs alongside the day, and the planner knows where you were |
 | v1.19.36 | `d7fa722` | Pickups are part of the day, and nothing is anchored to the screen |
 | v1.18.0 | (folded in) | Where you were and what you had on, from LightFog and LightPhono |

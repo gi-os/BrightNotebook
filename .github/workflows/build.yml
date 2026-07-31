@@ -37,7 +37,13 @@ jobs:
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
+      # The key shake-to-report files issues with. Scoped to issues:write on the private
+      # gi-os/light-reports repo and nothing else, because it ends up inside a sideloaded
+      # APK that anyone can unzip. A missing secret is not a build failure: the app queues
+      # reports on the phone and sends them from a later build that has one.
       - name: Build APKs
+        env:
+          REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
         run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
 
       - name: Collect APK
