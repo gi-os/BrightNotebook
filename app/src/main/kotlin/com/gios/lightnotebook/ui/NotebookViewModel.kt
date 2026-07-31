@@ -546,6 +546,23 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Which visible days the other apps have evidence for, and between what times.
+     *
+     * The planner needs to know a day *happened* without needing to know what happened on it. Fed
+     * into the activity line, so a day you went somewhere and put a record on but wrote nothing down
+     * stops looking like an empty square.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val bridgeSpans: StateFlow<Map<Long, IntRange>> =
+        combine(_canvasWindow, _photoNudge) { window, _ -> window }
+            .mapLatest { window ->
+                withContext(Dispatchers.IO) {
+                    DayBridges.spans(getApplication(), window.first, window.last)
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /* ---- what the phone itself noticed ---- */
 
     private val steps = StepStore(getApplication())
@@ -614,6 +631,8 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshPhotos() {
         _photosGranted.value = PhotoLibrary.granted(getApplication())
         PhotoLibrary.clearCache()
+        // The bridges are cached per day; the same nudge that re-reads photographs re-reads them.
+        DayBridges.forget()
         _photoNudge.value += 1
     }
 

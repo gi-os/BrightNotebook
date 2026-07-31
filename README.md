@@ -277,7 +277,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.19.0 | this commit | Pickups are part of the day, and nothing is anchored to the screen |
+| v1.20.0 | this commit | Music runs alongside the day, and the planner knows where you were |
+| v1.19.36 | `d7fa722` | Pickups are part of the day, and nothing is anchored to the screen |
 | v1.18.0 | (folded in) | Where you were and what you had on, from LightFog and LightPhono |
 | v1.17.34 | `87204bf` | Multi-day events: a trip is one thing, on every day it covers |
 | v1.16.0 | (folded in) | A starred photograph is the one a day shows |

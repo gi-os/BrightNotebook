@@ -83,6 +83,53 @@ object DayBridges {
         LocalDate.ofEpochDay(epochDay + 1).toString(),
     )
 
+    /**
+     * The span of each day in a window that the phone has any evidence for, from both apps.
+     *
+     * For the planner, which needs to know a day happened without needing to know what happened.
+     * One query per day per app is not free, so the results are cached: panning back and forth over
+     * the same month asks once. The cache is keyed by day and never invalidated within a session —
+     * a past day's stays do not change, and today is re-read because the nudge that drives the
+     * window also clears it.
+     */
+    fun spans(
+        context: Context,
+        fromDay: Long,
+        toDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Map<Long, IntRange> {
+        val out = HashMap<Long, IntRange>()
+        // Bounded: a year-wide window would be seven hundred file reads for marks too small to see.
+        if (toDay - fromDay > MAX_WINDOW_DAYS) return out
+        for (day in fromDay..toDay) {
+            val cached = spanCache[day]
+            if (cached != null) {
+                cached.value?.let { out[day] = it }
+                continue
+            }
+            val minutes = ArrayList<Int>()
+            stays(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.startMs, day, zone))
+                minutes.add(JournalDay.minutesInto(it.endMs, day, zone))
+            }
+            plays(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.atMs, day, zone))
+            }
+            val span = if (minutes.size < 2) null else minutes.min()..minutes.max()
+            spanCache[day] = Cached(span)
+            span?.let { out[day] = it }
+        }
+        return out
+    }
+
+    fun forget() = spanCache.clear()
+
+    private class Cached(val value: IntRange?)
+
+    private val spanCache = HashMap<Long, Cached>()
+
+    private const val MAX_WINDOW_DAYS = 62L
+
     private inline fun <T> read(context: Context, uri: String, crossinline row: (android.database.Cursor) -> T): List<T> =
         runCatching {
             context.contentResolver.query(Uri.parse(uri), null, null, null, null)?.use { cursor ->

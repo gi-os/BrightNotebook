@@ -106,6 +106,14 @@ fun CalendarCanvas(
      * year of it per frame.
      */
     daylightByDay: Map<Long, Daylight.Result>,
+    /**
+     * When the other apps say a day was happening — where you were, what you had on.
+     *
+     * Folded into the activity line rather than drawn as marks of their own. A day you went out and
+     * put a record on is a day that happened, whether or not you wrote anything down, and a cell
+     * that ignored that would call it empty.
+     */
+    bridgeSpans: Map<Long, IntRange>,
     today: Long,
     anchorDay: Long,
     /** Told which day the surface has opened, so the day pane knows what to show. */
@@ -549,7 +557,11 @@ fun CalendarCanvas(
                         // The day's activity span: earliest to latest of anything on it. Entries
                         // come from the rows already loaded, photographs from the summary, so
                         // neither costs an extra query.
-                        activity = activitySpan(rows[day].orEmpty(), photoSummaries[day]),
+                        activity = activitySpan(
+                            rows[day].orEmpty(),
+                            photoSummaries[day],
+                            bridgeSpans[day],
+                        ),
                         // Struck through once it has gone. Not today, which is the inverted
                         // block, and not a day already carrying a photograph — a line across a
                         // picture reads as damage to the picture.
@@ -680,10 +692,16 @@ private const val SLIDE_SETTLE_MS = 130
  * A single point is not a span — drawing a one-pixel line for a day with one photograph on it says
  * less than drawing nothing, and invites the reading that you were up for a minute.
  */
-private fun activitySpan(rows: List<AgendaRow>, photos: PhotoLibrary.DaySummary?): IntRange? {
+private fun activitySpan(
+    rows: List<AgendaRow>,
+    photos: PhotoLibrary.DaySummary?,
+    bridged: IntRange?,
+): IntRange? {
     val times = buildList {
         rows.forEach { row -> row.minutes?.let { add(it) } }
         photos?.let { add(it.firstMinutes); add(it.lastMinutes) }
+        // Where you were and what you listened to count as the day happening.
+        bridged?.let { add(it.first); add(it.last) }
     }
     if (times.size < 2) return null
     val from = times.min()

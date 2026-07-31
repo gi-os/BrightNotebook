@@ -417,6 +417,67 @@ fun TimeGap(
 }
 
 /**
+ * Music, drawn as something that was going on rather than something that happened.
+ *
+ * **This is the one thing on a day that runs alongside everything else.** A photograph is a moment
+ * and an appointment is a moment, but you listened to a record *while* doing those — so it is drawn
+ * as a duration in the margin, with a rule down its length, rather than as another row in the
+ * sequence pretending the afternoon stopped for it.
+ *
+ * Set against the left edge and quiet, because it is the background of the day. The exact overlap is
+ * not drawn: the page is compressed non-linearly, so a bar of the true height would be a lie in the
+ * other direction. Saying how long it went on, at the point it started, is honest and readable.
+ */
+@Composable
+fun ListeningSpan(item: DayTimeline.Item.Listening, modifier: Modifier = Modifier) {
+    val colors = LightThemeTokens.colors
+    val minutes = (item.untilMinutes - item.minutes).coerceAtLeast(0)
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.4f.verticalGridUnitsAsDp()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // A short rule stands in for the length of it — an actual bar cannot be drawn to scale on a
+        // page whose scale changes.
+        Box(
+            Modifier
+                .width(2.dp)
+                .height(1.6f.verticalGridUnitsAsDp())
+                .background(colors.rule),
+        )
+        LightText(
+            text = phraseFor(item, minutes),
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+            modifier = Modifier.padding(start = 0.6f.gridUnitsAsDp()),
+        )
+    }
+}
+
+/**
+ * "Listened to music for 2h", or the artist when there was really only one.
+ *
+ * A run of a single artist is worth naming — that is what the afternoon sounded like. A run that
+ * happens to be one track is just a track, and claiming two hours of it would be wrong.
+ */
+private fun phraseFor(item: DayTimeline.Item.Listening, minutes: Int): String {
+    val howLong = when {
+        minutes >= 60 && minutes % 60 == 0 -> "${minutes / 60}h"
+        minutes >= 60 -> "${minutes / 60}h ${minutes % 60}m"
+        minutes > 0 -> "${minutes}m"
+        else -> null
+    }
+    val what = item.artist.takeIf { it.isNotBlank() } ?: "music"
+    return if (howLong == null) {
+        "Listened to $what"
+    } else {
+        "Listened to $what for $howLong"
+    }
+}
+
+/**
  * The things that are true of the whole day, next to its date.
  *
  * A birthday, a holiday, a trip — these have no time, so a timeline has nowhere honest to put them.

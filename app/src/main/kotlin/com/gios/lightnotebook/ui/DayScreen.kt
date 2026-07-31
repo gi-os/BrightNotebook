@@ -362,15 +362,9 @@ fun DayPane(
                             LightRule()
                         }
 
-                        is DayTimeline.Item.Listening -> {
-                            LightListRow(
-                                title = item.artist,
-                                sub = if (item.tracks == 1) "1 track" else "${item.tracks} tracks",
-                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
-                                leading = LightIcons.Star,
-                            )
-                            LightRule()
-                        }
+                        // No rule under it, and no row: music ran alongside the day rather than
+                        // interrupting it.
+                        is DayTimeline.Item.Listening -> ListeningSpan(item)
 
                         is DayTimeline.Item.Pickups -> {
                             LightListRow(
