@@ -46,11 +46,16 @@ fun CalendarScreen(
     modifier: Modifier = Modifier,
 ) {
     val rows by vm.canvasRows.collectAsStateWithLifecycle()
+    val photoDays by vm.photoDays.collectAsStateWithLifecycle()
     val anchor by vm.selectedDay.collectAsStateWithLifecycle()
     val today = NoteDates.today()
 
-    // Tickets are added in the other app, so re-read them on arrival here.
-    LaunchedEffect(Unit) { vm.refreshShowings() }
+    // Tickets are added in Movie Tickets and photographs are taken in Roll, so both are
+    // re-read on arrival here rather than observed.
+    LaunchedEffect(Unit) {
+        vm.refreshShowings()
+        vm.refreshPhotos()
+    }
 
     var focusDay by remember { mutableStateOf(today) }
     // What "home" means, and the only thing that springs the planner back. Kept apart from
@@ -69,6 +74,7 @@ fun CalendarScreen(
 
         CalendarCanvas(
             rows = rows,
+            photoDays = photoDays,
             today = today,
             anchorDay = homeAnchor,
             homeRequest = homeRequest,

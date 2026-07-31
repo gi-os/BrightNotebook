@@ -84,6 +84,40 @@ importing other calendars — works with none.
 
 ## Usage notes worth knowing
 
+- **The day's photographs are on the day.** Open a day and the pictures taken on it sit in
+  a strip above its entries; in the month grid a day with photographs carries a hollow
+  square, next to the filled dot that means something is written there. A filled mark for
+  *written*, an outlined one for *photographed* — a frame, which is what a picture is, and
+  the two stay legible on a cell three millimetres wide in a way that two dots would not.
+
+  There is **no bridge to Roll** doing this, and that is the point. [Roll](https://github.com/gi-os/LightCamera)
+  writes every exposure to MediaStore because that is what a camera does, so asking the
+  system what was photographed on a day answers with Roll's pictures, the stock camera's, a
+  screenshot, and anything else — with no content provider, no `<queries>` entry, and no
+  release of the two apps in step. The cheapest integration is the one where neither app
+  knows the other exists.
+
+  Long-press a frame to file it against the day as an entry, which is what lets a
+  photograph be given a time, a reminder, or moved to another day like anything else here.
+  Read-only: filing a photograph stores its uri, and never copies, moves or edits the file.
+  Reading the library needs `READ_MEDIA_IMAGES`, asked for from the strip itself rather than
+  at first launch, so the reason is on screen when the dialog is.
+
+  The month grid gets a mark and not a thumbnail on purpose. Forty-two cells re-measuring
+  text per drag frame is the whole reason the planner is one `Canvas` instead of
+  composables, and decoding bitmaps into it would undo that at the first pinch. The grid
+  says *whether*; the day screen shows *what*.
+- **Pages are photographed by Roll, plainly.** `ADD → Camera` hands the shot to Roll when
+  it is installed and falls back to the camera built in here when it isn't. Roll pins its
+  capture to 4000x3000 rather than the sensor's full 50MP, which is the difference between a
+  shutter that answers and the one-to-three-second lag this phone is known for.
+
+  It is served **with no filter**, and that needed a change on Roll's side: a capture
+  request is plain unless the caller passes `EXTRA_ALLOW_FILTER`. Roll's dial might have
+  been resting on Game Boy three days ago, a dithered page is illegible to Claude, and the
+  failure would have surfaced here as "the notebook can't read my handwriting" with nothing
+  on screen to explain it. Attaching a photograph to a note is the case that will opt in.
+
 - **Another app can keep a note here.** `lightnotebook://note/<key>?title=<label>` opens
   the note filed under `<key>`, and makes it if this is the first ask. The key is opaque
   to this app — it only has to find the same row again — and is held in a unique
@@ -181,7 +215,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.1.20 | this commit | One note per thing another app owns: `lightnotebook://note/<key>` |
+| v1.2.0 | this commit | Photographs on the calendar, and pages photographed by Roll |
+| v1.1.20 | `23aff15` | One note per thing another app owns: `lightnotebook://note/<key>` |
 | v1.0.17 – v1.0.19 | | Keep the photograph and let a transcription be corrected; LightCamera's capture engine |
 | v1.0.16 | `dd4a3c2` | Separate what the notebook does with the wheel from what LightControl does |
 | v1.0.15 | `74028be` | Weekday letters live on the surface, and detail arrives earlier |

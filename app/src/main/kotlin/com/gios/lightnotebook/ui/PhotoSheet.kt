@@ -1,6 +1,7 @@
 package com.gios.lightnotebook.ui
 
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import com.gios.lightnotebook.ui.theme.LightText
 import com.gios.lightnotebook.ui.theme.LightTextVariant
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
@@ -37,13 +39,24 @@ import java.io.File
 @Composable
 fun PhotoSheet(path: String?, onDismiss: () -> Unit) {
     val colors = LightThemeTokens.colors
+    val context = LocalContext.current
     val bitmap = remember(path) {
-        val file = path?.let(::File)?.takeIf { it.exists() } ?: return@remember null
+        if (path == null) return@remember null
+        val options = BitmapFactory.Options().apply { inSampleSize = 4 }
         runCatching {
-            BitmapFactory.decodeFile(
-                file.absolutePath,
-                BitmapFactory.Options().apply { inSampleSize = 4 },
-            )
+            // Two kinds of string arrive here and both have to work. A page Claude read is a
+            // file in `filesDir`; a photograph filed off the day's filmstrip is a MediaStore
+            // `content://` uri, which `decodeFile` cannot open — it returns null silently, so
+            // the failure looked like "that photo is gone" rather than like a bug.
+            if (path.startsWith("content://")) {
+                context.contentResolver.openInputStream(Uri.parse(path))?.use {
+                    BitmapFactory.decodeStream(it, null, options)
+                }
+            } else {
+                File(path).takeIf { it.exists() }?.let {
+                    BitmapFactory.decodeFile(it.absolutePath, options)
+                }
+            }
         }.getOrNull()
     }
 

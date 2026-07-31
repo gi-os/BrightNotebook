@@ -1,10 +1,13 @@
 package com.gios.lightnotebook
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +35,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gios.lightnotebook.ai.ReadMode
+import com.gios.lightnotebook.camera.RollCapture
 import com.gios.lightnotebook.hw.LightKey
 import com.gios.lightnotebook.hw.LightKeys
 import com.gios.lightnotebook.hw.LocalWheelBus
@@ -58,6 +62,7 @@ import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightHorizontalSwipe
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.io.File
 
 /** A `lightnotebook://note/<key>` link, split into the parts [MainActivity] acts on. */
 private data class NoteLink(val key: String, val title: String)
@@ -159,6 +164,36 @@ class MainActivity : ComponentActivity() {
                 val nav = rememberNavController()
                 val vm: NotebookViewModel = viewModel()
 
+                /*
+                 * Photographing a page is Roll's job now, so the result comes back through an
+                 * activity launcher rather than from a screen in this app.
+                 *
+                 * The file is held in a `remember` beside the launcher and not in the view
+                 * model, because it is a property of *this* launch: the process can die while
+                 * Roll is in front, and a path that survived into a restored view model would
+                 * point at a photograph this composition never asked for.
+                 */
+                var pendingCapture by remember { mutableStateOf<File?>(null) }
+                val rollCapture = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { result ->
+                    val file = pendingCapture
+                    pendingCapture = null
+                    if (file == null) return@rememberLauncherForActivityResult
+                    RollCapture.revoke(this@MainActivity, file)
+                    // RESULT_OK is not sufficient — see RollCapture.wrote. A cancelled shot
+                    // leaves an empty file behind, which has to be cleared or the next
+                    // capture inherits it.
+                    if (result.resultCode == Activity.RESULT_OK && RollCapture.wrote(file)) {
+                        // Rotation 0: Roll writes an oriented JPEG and ImageUtils reads EXIF
+                        // first, using the fallback only when the file carries none.
+                        vm.readCapture(file, rotationDegrees = 0)
+                        nav.navigate("capture") { popUpTo("home") }
+                    } else {
+                        file.delete()
+                    }
+                }
+
                 // A force-stop cancels every alarm an app owns and says nothing about it,
                 // so reminders are re-armed on the way in as well as after a reboot.
                 LaunchedEffect(Unit) {
@@ -211,7 +246,17 @@ class MainActivity : ComponentActivity() {
                                     onSettings = { nav.navigate("settings") },
                                     onCamera = { mode ->
                                         vm.setReadMode(mode)
-                                        nav.navigate("camera")
+                                        // Roll first, the in-app camera when it isn't there.
+                                        // Decided here rather than inside the sheet so the
+                                        // fallback is a navigation like any other.
+                                        val file = vm.newCaptureFile()
+                                        val intent = RollCapture.intentFor(this@MainActivity, file)
+                                        if (intent != null) {
+                                            pendingCapture = file
+                                            rollCapture.launch(intent)
+                                        } else {
+                                            nav.navigate("camera")
+                                        }
                                     },
                                 )
                             }

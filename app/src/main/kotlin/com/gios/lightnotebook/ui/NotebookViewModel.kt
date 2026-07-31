@@ -12,12 +12,14 @@ import com.gios.lightnotebook.data.CalendarEntity
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
+import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.FolderEntity
 import com.gios.lightnotebook.data.ImportResult
 import com.gios.lightnotebook.data.LightPassBridge
 import com.gios.lightnotebook.data.NoteEntity
 import com.gios.lightnotebook.data.NotebookRepository
 import com.gios.lightnotebook.data.PassShowing
+import com.gios.lightnotebook.data.PhotoLibrary
 import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.notify.Reminders
@@ -39,11 +41,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.YearMonth
+import java.time.ZoneId
 
 /** Where a photographed page ends up. */
 sealed interface CaptureState {
@@ -288,6 +292,88 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     fun setCanvasWindow(from: Long, to: Long) {
         val next = from..to
         if (_canvasWindow.value != next) _canvasWindow.value = next
+    }
+
+    /* ---- photographs, read out of MediaStore ---- */
+
+    /**
+     * A nudge, because MediaStore is asked rather than observed.
+     *
+     * A content observer would fire for every thumbnail the system generates and every
+     * unrelated download, and the answer is only looked at when a calendar screen is on the
+     * panel. So it is re-read on arrival, exactly like [refreshShowings] — photographs are
+     * taken while the user is in Roll, so there is no moment in this process worth watching.
+     */
+    private val _photoNudge = MutableStateFlow(0)
+
+    private val _photosGranted = MutableStateFlow(PhotoLibrary.granted(getApplication()))
+
+    /** Whether the library can be read at all. The day screen offers to ask when it can't. */
+    val photosGranted: StateFlow<Boolean> = _photosGranted.asStateFlow()
+
+    /**
+     * Which visible days have photographs on them, for the mark in a month cell.
+     *
+     * Keyed off the planner's own window, so panning a year does not read a year: the same
+     * reasoning as [canvasRows], and the same window drives both.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val photoDays: StateFlow<Set<Long>> =
+        combine(_canvasWindow, _photoNudge, _photosGranted) { window, _, granted -> window to granted }
+            .mapLatest { (window, granted) ->
+                if (!granted) {
+                    emptySet()
+                } else {
+                    withContext(Dispatchers.IO) {
+                        PhotoLibrary.daysWithPhotos(getApplication(), window.first, window.last)
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** The open day's photographs, earliest first. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayPhotos: StateFlow<List<DevicePhoto>> =
+        combine(_selectedDay, _photoNudge, _photosGranted) { day, _, granted -> day to granted }
+            .mapLatest { (day, granted) ->
+                if (!granted) {
+                    emptyList()
+                } else {
+                    withContext(Dispatchers.IO) { PhotoLibrary.photosOn(getApplication(), day) }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Re-read the library.
+     *
+     * Clears the thumbnail cache as well, so a photograph deleted in Roll stops being drawn
+     * here — a cached bitmap outlives the row it came from, and a filmstrip full of pictures
+     * that no longer exist is worse than one that is briefly empty.
+     */
+    fun refreshPhotos() {
+        _photosGranted.value = PhotoLibrary.granted(getApplication())
+        PhotoLibrary.clearCache()
+        _photoNudge.value += 1
+    }
+
+    /**
+     * Files a photograph against a day, as an entry that carries it.
+     *
+     * The entry is what makes it *yours* rather than merely something the phone happens to
+     * hold: it can be given a time, a reminder, or moved to another day like anything else on
+     * the planner. `DayEntryEntity.imagePath` already existed for a photographed page, so
+     * this needed no schema change — the string is a `content://` uri here rather than a file
+     * path, which is why everything that renders it has to accept both.
+     */
+    fun attachPhotoToDay(photo: DevicePhoto, text: String) = viewModelScope.launch {
+        repo.addDayEntry(
+            epochDay = photo.epochDay,
+            text = text.ifBlank { "Photo" },
+            startMinutes = photo.minutesOfDay(ZoneId.systemDefault()),
+            fromPhoto = true,
+            imagePath = photo.uri.toString(),
+        )
     }
 
     /** Looks an entry back up for its own sheet, since a row only carries the id. */

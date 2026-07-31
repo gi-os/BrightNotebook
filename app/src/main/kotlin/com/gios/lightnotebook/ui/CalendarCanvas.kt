@@ -74,6 +74,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun CalendarCanvas(
     rows: Map<Long, List<AgendaRow>>,
+    /**
+     * The days with photographs on them, for the mark in a cell.
+     *
+     * A set of days and not the photographs: this draws one mark, the window can be a year
+     * wide when the surface is zoomed out, and *what* was photographed is the day screen's
+     * question. Deliberately not a thumbnail in the cell either — forty-two cells
+     * re-measuring text per drag frame is the whole reason this is one `Canvas` instead of
+     * composables, and decoding bitmaps into it would undo that at the first pinch.
+     */
+    photoDays: Set<Long>,
     today: Long,
     anchorDay: Long,
     /** Told which day the surface has opened, so the day pane knows what to show. */
@@ -483,6 +493,7 @@ fun CalendarCanvas(
                     drawDay(
                         day = day,
                         rows = rows[day].orEmpty(),
+                        hasPhotos = day in photoDays,
                         isToday = day == today,
                         inFocusMonth = YearMonth.from(LocalDate.ofEpochDay(day)) == focusMonth,
                         left = left,
@@ -614,6 +625,7 @@ private const val MAX_WEEKDAY_SP = 22f
 private fun DrawScope.drawDay(
     day: Long,
     rows: List<AgendaRow>,
+    hasPhotos: Boolean,
     isToday: Boolean,
     inFocusMonth: Boolean,
     left: Float,
@@ -674,12 +686,37 @@ private fun DrawScope.drawDay(
     drawText(number, topLeft = Offset(left + inset, top + inset))
 
     if (!showEntries) {
-        // Just a dot: something is written here.
-        if (rows.isNotEmpty()) {
+        // Two marks, and they have to be told apart at a glance on a cell a few millimetres
+        // wide. A filled dot is something *written* on the day; a hollow square is something
+        // *photographed* — a frame, which is what a picture is. Filled versus outline is how
+        // LightOS carries state everywhere else, and it survives being three pixels across
+        // in a way that two different dots would not.
+        val markY = top + height - inset - width * 0.05f
+        val radius = (width * 0.035f).coerceAtLeast(1.5f)
+        val written = rows.isNotEmpty()
+
+        // Both marks present: they share the bottom edge, so each shifts off centre by its
+        // own width rather than overlapping into an ambiguous blob.
+        val shift = if (written && hasPhotos) radius * 2.2f else 0f
+
+        if (written) {
             drawCircle(
                 color = ink,
-                radius = (width * 0.035f).coerceAtLeast(1.5f),
-                center = Offset(left + width / 2f, top + height - inset - width * 0.05f),
+                radius = radius,
+                center = Offset(left + width / 2f - shift, markY),
+            )
+        }
+        if (hasPhotos) {
+            val side = radius * 2f
+            drawRect(
+                color = ink,
+                topLeft = Offset(left + width / 2f + shift - side / 2f, markY - side / 2f),
+                size = Size(side, side),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    // Hairline at this size, but a 1px stroke on a 1080-wide panel is a
+                    // clean line; anything thicker fills the square in and it becomes a dot.
+                    width = (radius * 0.5f).coerceAtLeast(1f),
+                ),
             )
         }
         return

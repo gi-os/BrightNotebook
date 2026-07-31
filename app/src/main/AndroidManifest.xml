@@ -23,6 +23,19 @@
          adb shell appops set com.gios.lightnotebook SYSTEM_ALERT_WINDOW allow -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!--
+      The day's photographs, read out of MediaStore. Renamed at 33, so both are declared and
+      the old one is capped: READ_EXTERNAL_STORAGE on 33+ is silently ignored, which reads as
+      a permission that was granted and then did nothing.
+
+      Read-only, and no `WRITE`: filing a photograph against a day stores its uri, it never
+      copies, moves or edits the file. Roll owns the picture; this app only points at it.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!--
@@ -31,6 +44,15 @@
     -->
     <queries>
         <package android:name="com.gios.lightpass" />
+        <!--
+          Roll, which photographs pages for this app. Without the package entry
+          `getPackageInfo` throws NameNotFoundException even when Roll is installed, and the
+          reroute would silently always fall back to the in-app camera.
+        -->
+        <package android:name="com.gios.lightcamera" />
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
         <provider android:authorities="com.gios.lightpass.passes" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -89,6 +111,21 @@
             android:turnScreenOn="true"
             android:taskAffinity=""
             android:theme="@style/Theme.LightNotebook.Alert" />
+
+        <!--
+          How Roll is handed somewhere to write a photograph. `grantUriPermissions` with a
+          path-scoped `capture_paths.xml`, not a blanket export: this is a hole in the app's
+          private storage and the notebook's database lives in the same place.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.captures"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/capture_paths" />
+        </provider>
 
         <receiver
             android:name=".notify.ReminderReceiver"

@@ -26,6 +26,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.DayEntryEntity
+import com.gios.lightnotebook.data.DevicePhoto
+import com.gios.lightnotebook.data.PhotoLibrary
 import com.gios.lightnotebook.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
@@ -107,12 +109,26 @@ fun DayPane(
     var timingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var movingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var photoFor by remember { mutableStateOf<String?>(null) }
+    var attaching by remember { mutableStateOf<DevicePhoto?>(null) }
+
+    val photos by vm.dayPhotos.collectAsStateWithLifecycle()
+    val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     WheelScroll(listState)
 
-    // Tickets can be added, re-dated or deleted while this app was in the background.
-    LaunchedEffect(epochDay) { vm.refreshShowings() }
+    // Tickets and photographs both change while this app is in the background — a ticket in
+    // Movie Tickets, a photograph in Roll — so both are re-read on arrival rather than
+    // observed. Same reasoning, same place.
+    LaunchedEffect(epochDay) {
+        vm.refreshShowings()
+        vm.refreshPhotos()
+    }
+
+    // Asked for from the strip itself, so the reason is on screen when the dialog appears.
+    val askPhotos = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { vm.refreshPhotos() }
 
     // Asked for on the way in, not at first launch: a reminder is the only thing here that
     // needs it, and this screen is where reminders come from.
@@ -150,6 +166,20 @@ fun DayPane(
             },
         )
         LightRule()
+
+        // Above the entries, not below: what you photographed on a day is context for
+        // reading the day, and a strip under a scrolling list is a strip nobody finds.
+        if (photos.isNotEmpty()) {
+            Filmstrip(
+                photos = photos,
+                onOpen = { photoFor = it.uri.toString() },
+                onAttach = { attaching = it },
+            )
+            LightRule()
+        } else if (!photosGranted) {
+            FilmstripPermissionRow(onAsk = { askPhotos.launch(PhotoLibrary.permission) })
+            LightRule()
+        }
 
         val body = Modifier.weight(1f).fillMaxWidth()
 
@@ -337,6 +367,20 @@ fun DayPane(
                 movingFor = null
             },
             onDismiss = { movingFor = null },
+        )
+    }
+
+    attaching?.let { photo ->
+        LightNameSheet(
+            title = "WHAT WAS THIS?",
+            initial = "",
+            confirmLabel = "ADD",
+            allowBlank = true,
+            onConfirm = { typed ->
+                vm.attachPhotoToDay(photo, typed)
+                attaching = null
+            },
+            onDismiss = { attaching = null },
         )
     }
 

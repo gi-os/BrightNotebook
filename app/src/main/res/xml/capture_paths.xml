@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The one directory a camera app is granted write access to.
+
+  Scoped to `captures/` rather than to `filesDir`, because a FileProvider path is a hole in
+  this app's sandbox and the notebook's database sits in the same private storage. Roll needs
+  to write one JPEG; that is all this offers it.
+-->
+<paths>
+    <files-path name="captures" path="captures/" />
+</paths>
