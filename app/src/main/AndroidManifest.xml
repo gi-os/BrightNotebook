@@ -76,6 +76,9 @@
         <!-- What you listened to, from LightPhono. -->
         <package android:name="com.lightphone.spotify" />
         <provider android:authorities="com.lightphone.spotify.plays" />
+        <!-- Who you talked to, from LightChat. Names only; no message text crosses. -->
+        <package android:name="com.gios.lightchat" />
+        <provider android:authorities="com.gios.lightchat.talked" />
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>

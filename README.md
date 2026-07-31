@@ -316,7 +316,8 @@ one below is a real tag against the commit shown. A branch that is not `main` ru
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.23.0 | this commit | Fill in the weather now, as far back as there is data |
+| v1.24.0 | this commit | Who you talked to, from LightChat |
+| v1.23.40 | `7d30795` | Fill in the weather now, as far back as there is data |
 | v1.22.0 | (on main) | Shake the phone to report a glitch |
 | v1.21.38 | `87626e3` | Weather, archived overnight; artists named; a place gets a pin |
 | v1.20.37 | `4dbffea` | Music runs alongside the day, and the planner knows where you were |

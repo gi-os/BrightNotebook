@@ -19,6 +19,16 @@ data class Stay(
 /** Something you listened to, from LightPhono. */
 data class Play(val atMs: Long, val title: String, val artist: String)
 
+/** Someone you talked to, from LightChat. Names only — no message ever crosses the boundary. */
+data class Talked(
+    val firstMs: Long,
+    val lastMs: Long,
+    val name: String,
+    val isGroup: Boolean,
+    val messages: Int,
+    val theyReplied: Boolean,
+)
+
 /**
  * The two things about a day that live in other apps.
  *
@@ -36,6 +46,7 @@ object DayBridges {
 
     private const val STAYS = "content://com.gios.lightfog.stays/stays/"
     private const val PLAYS = "content://com.lightphone.spotify.plays/plays/"
+    private const val TALKED = "content://com.gios.lightchat.talked/talked/"
 
     fun stays(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Stay> {
         val window = JournalDay.windowMs(epochDay, zone)
@@ -70,6 +81,27 @@ object DayBridges {
             .filter { it.atMs in window }
             .sortedBy { it.atMs }
             .distinctBy { it.atMs }
+    }
+
+    fun talked(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Talked> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, TALKED + date) { c ->
+                Talked(
+                    firstMs = c.getLong(c.getColumnIndexOrThrow("first_ms")),
+                    lastMs = c.getLong(c.getColumnIndexOrThrow("last_ms")),
+                    name = c.getString(c.getColumnIndexOrThrow("name")).orEmpty(),
+                    isGroup = c.getLong(c.getColumnIndexOrThrow("is_group")) == 1L,
+                    messages = c.getLong(c.getColumnIndexOrThrow("messages")).toInt(),
+                    theyReplied = c.getLong(c.getColumnIndexOrThrow("they_replied")) == 1L,
+                )
+            }
+        }
+            // A conversation that spilled over midnight arrives from both dates; keep the one whose
+            // first message falls inside this day, and merge nothing — the other day owns its half.
+            .filter { it.firstMs in window }
+            .sortedBy { it.firstMs }
+            .distinctBy { it.name to it.firstMs }
     }
 
     /**
@@ -114,6 +146,10 @@ object DayBridges {
             }
             plays(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.atMs, day, zone))
+            }
+            talked(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.firstMs, day, zone))
+                minutes.add(JournalDay.minutesInto(it.lastMs, day, zone))
             }
             val span = if (minutes.size < 2) null else minutes.min()..minutes.max()
             spanCache[day] = Cached(span)

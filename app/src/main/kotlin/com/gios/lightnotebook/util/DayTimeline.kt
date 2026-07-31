@@ -58,6 +58,23 @@ object DayTimeline {
         ) : Item
 
         /**
+         * Somebody you talked to, from LightChat.
+         *
+         * Names only, by design at the other end: the journal knows you spoke to Alex and does not
+         * know what either of you said.
+         */
+        data class Talked(
+            override val minutes: Int,
+            val untilMinutes: Int,
+            val name: String,
+            val isGroup: Boolean,
+            val messages: Int,
+            val theyReplied: Boolean,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
+        /**
          * Picking the phone up.
          *
          * Grouped into runs the way listening is, because a day has dozens and a row each would be
@@ -172,6 +189,7 @@ object DayTimeline {
         places: List<Item.Place> = emptyList(),
         listening: List<Item.Listening> = emptyList(),
         pickups: List<Item.Pickups> = emptyList(),
+        talked: List<Item.Talked> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -181,7 +199,7 @@ object DayTimeline {
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
-        return (entries + clustered + notes + places + listening + pickups).sortedWith(
+        return (entries + clustered + notes + places + listening + pickups + talked).sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
                 // At the same minute: what you planned, then what you wrote, then what you
@@ -192,10 +210,11 @@ object DayTimeline {
                     when (it) {
                         is Item.Entry -> 0
                         is Item.Place -> 1
-                        is Item.Note -> 2
-                        is Item.Photos -> 3
-                        is Item.Listening -> 4
-                        is Item.Pickups -> 5
+                        is Item.Talked -> 2
+                        is Item.Note -> 3
+                        is Item.Photos -> 4
+                        is Item.Listening -> 5
+                        is Item.Pickups -> 6
                     }
                 },
             ),

@@ -136,6 +136,7 @@ fun DayPane(
     val places by vm.dayPlaces.collectAsStateWithLifecycle()
     val listening by vm.dayListening.collectAsStateWithLifecycle()
     val weather by vm.dayWeather.collectAsStateWithLifecycle()
+    val talked by vm.dayTalked.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -201,7 +202,7 @@ fun DayPane(
     // clock, and putting it in the view model would mean the clock lived there too.
     val photosById = remember(photos) { photos.associateBy { it.id } }
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
-    val items = remember(rows, photos, dayNotes, places, listening, pickups, epochDay, today, nowMinutes) {
+    val items = remember(rows, photos, dayNotes, places, listening, pickups, talked, epochDay, today, nowMinutes) {
         DayTimeline.build(
             rows = rows,
             photos = photos.map { DayTimeline.PhotoAt(it.id, it.minutesOfDay(ZoneId.systemDefault())) },
@@ -209,6 +210,7 @@ fun DayPane(
             places = places,
             listening = listening,
             pickups = pickups,
+            talked = talked,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -328,6 +330,7 @@ fun DayPane(
                             is DayTimeline.Item.Place -> "place-" + item.startMinutes
                             is DayTimeline.Item.Listening -> "heard-" + item.minutes
                             is DayTimeline.Item.Pickups -> "picked-" + item.minutes
+                            is DayTimeline.Item.Talked -> "talked-" + item.name + item.minutes
                         }
                     },
                 ) { index, item ->
@@ -370,6 +373,21 @@ fun DayPane(
                         // No rule under it, and no row: music ran alongside the day rather than
                         // interrupting it.
                         is DayTimeline.Item.Listening -> ListeningSpan(item)
+
+                        is DayTimeline.Item.Talked -> {
+                            LightListRow(
+                                title = if (item.isGroup) item.name else "Talked to ${item.name}",
+                                // Whether they answered, because talking *at* somebody and talking
+                                // *with* them are different days. The count is the quieter fact.
+                                sub = listOfNotNull(
+                                    if (item.theyReplied) null else "no reply",
+                                    if (item.messages == 1) "1 message" else "${item.messages} messages",
+                                ).joinToString(" · "),
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                leading = LightIcons.Compose,
+                            )
+                            LightRule()
+                        }
 
                         is DayTimeline.Item.Pickups -> {
                             LightListRow(

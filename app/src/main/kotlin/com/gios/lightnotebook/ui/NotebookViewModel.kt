@@ -577,6 +577,27 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** Who you talked to on the open day. Names only; LightChat serves no message text. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayTalked: StateFlow<List<DayTimeline.Item.Talked>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.talked(getApplication(), day, zone).map { talked ->
+                        DayTimeline.Item.Talked(
+                            minutes = JournalDay.minutesInto(talked.firstMs, day, zone),
+                            untilMinutes = JournalDay.minutesInto(talked.lastMs, day, zone),
+                            name = talked.name,
+                            isGroup = talked.isGroup,
+                            messages = talked.messages,
+                            theyReplied = talked.theyReplied,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private val weather = Weather(getApplication())
 
     /**
