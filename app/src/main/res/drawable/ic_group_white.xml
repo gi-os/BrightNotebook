@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  More than one person. Two heads and two shoulders, the back one offset and clipped by the front
+  so it reads as depth without a stroke — a tinted vector cannot draw an outline, so overlap is the
+  only way to say "behind".
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M9,11 C10.93,11 12.5,9.43 12.5,7.5 C12.5,5.57 10.93,4 9,4
+                          C7.07,4 5.5,5.57 5.5,7.5 C5.5,9.43 7.07,11 9,11 Z
+                          M9,12.5 C5.69,12.5 3,14.07 3,16 L3,19 L15,19 L15,16
+                          C15,14.07 12.31,12.5 9,12.5 Z
+                          M16.5,11 C18.16,11 19.5,9.66 19.5,8 C19.5,6.34 18.16,5 16.5,5
+                          C15.95,5 15.44,5.15 15,5.4 C15.62,6.0 16,6.71 16,7.5
+                          C16,8.29 15.62,9.0 15,9.6 C15.44,9.85 15.95,11 16.5,11 Z
+                          M17,12.5 C16.5,12.5 16.03,12.55 15.6,12.64
+                          C16.45,13.5 17,14.65 17,16 L17,19 L21,19 L21,16
+                          C21,14.35 19.21,12.5 17,12.5 Z" />
+</vector>

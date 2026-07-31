@@ -331,7 +331,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.25.0 | this commit | A flick reports a glitch, the app reports itself, releases carry notes |
+| v1.26.0 | this commit | Weather on the planner, pull a day to refresh, and the fetch says what it did |
+| v1.25.0 | (on main) | A flick reports a glitch, the app reports itself, releases carry notes |
 | v1.24.41 | `9321442` | Who you talked to, from LightChat |
 | v1.23.40 | `7d30795` | Fill in the weather now, as far back as there is data |
 | v1.22.0 | (on main) | Shake the phone to report a glitch |

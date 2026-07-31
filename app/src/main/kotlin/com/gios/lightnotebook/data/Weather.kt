@@ -74,6 +74,9 @@ class Weather(private val context: Context) {
      *
      * Blocking, and the caller is a worker on IO.
      */
+    /** What a run of the archive did, so a button can say so. */
+    data class Archived(val ok: Boolean, val daysAdded: Int)
+
     fun archive(
         latitude: Double,
         longitude: Double,
@@ -87,10 +90,11 @@ class Weather(private val context: Context) {
         earliestDay: Long? = null,
         /** Throw away what is cached and ask again — including days already observed. */
         refetch: Boolean = false,
-    ): Boolean {
+    ): Archived {
         val today = LocalDate.now().toEpochDay()
         if (refetch) clear()
 
+        val before = countCached()
         val ahead = load(FORECAST, today, today + FORECAST_DAYS, latitude, longitude, observed = false)
 
         val floor = maxOf(earliestDay ?: (today - BACKFILL_DAYS), today - MAX_BACKFILL_DAYS)
@@ -98,7 +102,7 @@ class Weather(private val context: Context) {
             val cached = readCache(day)
             cached == null || !cached.observed
         }
-        if (stale.isEmpty()) return ahead
+        if (stale.isEmpty()) return Archived(ahead, countCached() - before)
 
         // In chunks, because the archive endpoint is asked for a span and a year in one request is
         // both rude and easy to have refused. Each chunk stands alone: a failure halfway leaves the
@@ -111,8 +115,10 @@ class Weather(private val context: Context) {
             if (!load(ARCHIVE, from, to, latitude, longitude, observed = true)) allWell = false
             from = to + 1
         }
-        return allWell
+        return Archived(allWell, countCached() - before)
     }
+
+    private fun countCached(): Int = runCatching { dir().listFiles()?.size ?: 0 }.getOrDefault(0)
 
     /** How many days between [fromDay] and [toDay] are still missing or unobserved. */
     fun missingCount(fromDay: Long, toDay: Long): Int {

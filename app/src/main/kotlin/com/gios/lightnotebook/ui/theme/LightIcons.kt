@@ -36,6 +36,8 @@ object LightIcons {
     val Star = LightIconSpec("pinned", R.drawable.ic_star_white)
     val Ticket = LightIconSpec("film ticket", R.drawable.ic_ticket_white)
     val Pin = LightIconSpec("a place", R.drawable.ic_pin_white)
+    val Person = LightIconSpec("someone", R.drawable.ic_person_white)
+    val Group = LightIconSpec("a group", R.drawable.ic_group_white)
     val StarOutline = LightIconSpec("pin", R.drawable.ic_star_outline_white)
     val List = LightIconSpec("list", R.drawable.ic_list_white)
     val Alarm = LightIconSpec("time", R.drawable.ic_alarm_white)

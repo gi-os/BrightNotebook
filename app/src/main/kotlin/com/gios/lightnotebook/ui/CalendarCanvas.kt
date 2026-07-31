@@ -67,6 +67,8 @@ import com.gios.lightnotebook.data.PhotoLibrary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.gios.lightnotebook.util.Daylight
+import com.gios.lightnotebook.data.DayWeather
+import com.gios.lightnotebook.util.WeatherCodes
 
 /**
  * The calendar as one endless wall planner: seven columns, weeks running downwards, pinch to
@@ -114,6 +116,14 @@ fun CalendarCanvas(
      * that ignored that would call it empty.
      */
     bridgeSpans: Map<Long, IntRange>,
+    /**
+     * The weather per visible day, from the archive alone — nothing here fetches.
+     *
+     * On the planner because a forecast is only useful *ahead* of you, and a day screen is where you
+     * look at one day: "rain on Thursday" is a thing you want to see while planning the week, which
+     * is the view a wall calendar is for.
+     */
+    weatherByDay: Map<Long, DayWeather>,
     today: Long,
     anchorDay: Long,
     /** Told which day the surface has opened, so the day pane knows what to show. */
@@ -557,6 +567,7 @@ fun CalendarCanvas(
                         // The day's activity span: earliest to latest of anything on it. Entries
                         // come from the rows already loaded, photographs from the summary, so
                         // neither costs an extra query.
+                        weather = weatherByDay[day],
                         activity = activitySpan(
                             rows[day].orEmpty(),
                             photoSummaries[day],
@@ -793,6 +804,7 @@ private fun DrawScope.drawDay(
     hasPhotos: Boolean,
     cover: ImageBitmap?,
     daylight: Daylight.Result?,
+    weather: DayWeather?,
     activity: IntRange?,
     struck: Boolean,
     isToday: Boolean,
@@ -955,6 +967,35 @@ private fun DrawScope.drawDay(
         }
     }
 
+    // The weather, in one word under the number.
+    //
+    // Only where a cell has room, and only on a day worth mentioning — most days are cloudy, and a
+    // planner with "CLOUDY" written on two hundred squares has said nothing on any of them. The
+    // tense follows the day: a week ahead says RAIN, last Tuesday says RAINED.
+    var weatherBottom = top + inset + number.size.height
+    if (showEntries && weather != null && WeatherCodes.notable(weather.kind)) {
+        // `struck` already means "this day has gone", so the tense comes free rather than needing
+        // today passed down again.
+        val word = if (struck) {
+            WeatherCodes.past(weather.kind).removePrefix("It ").removePrefix("There was a ")
+        } else {
+            WeatherCodes.ahead(weather.kind)
+        }
+        val measured = measurer.measure(
+            text = word.uppercase(),
+            style = monthStyle.copy(
+                color = ink,
+                fontSize = (entryStyle.fontSize.value * scale * 0.62f)
+                    .coerceIn(MIN_ENTRY_SP, MAX_ENTRY_SP).sp,
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            constraints = Constraints(maxWidth = (width - inset * 2).roundToInt().coerceAtLeast(1)),
+        )
+        drawText(measured, topLeft = Offset(left + inset, weatherBottom))
+        weatherBottom += measured.size.height
+    }
+
     if (!showEntries) {
         // Two marks, and they have to be told apart at a glance on a cell a few millimetres
         // wide. A filled dot is something *written* on the day; a hollow square is something
@@ -994,7 +1035,8 @@ private fun DrawScope.drawDay(
 
     // A rule under the number turns the cell into a little page with a heading — the clearest
     // way to say "this is a different day" once there is text in both of them.
-    val headerY = top + inset + number.size.height + inset * 0.4f
+    // Below the weather when there is one, so the two never print over each other.
+    val headerY = weatherBottom + inset * 0.4f
     drawLine(
         color = if (isToday) background else rule,
         start = Offset(left + inset, headerY),

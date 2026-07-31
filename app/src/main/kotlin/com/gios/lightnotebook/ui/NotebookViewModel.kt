@@ -4,6 +4,8 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import com.gios.lightnotebook.ai.ParsedEvent
 import com.gios.lightnotebook.ai.ReadMode
 import com.gios.lightnotebook.ai.Vision
@@ -463,6 +465,52 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun fetchWeather(everything: Boolean) {
         WeatherArchiveWorker.runNow(getApplication(), refetchEverything = everything)
+    }
+
+    /**
+     * What the by-hand fetch is doing, in words, so the button is not a no-op with a background job
+     * behind it.
+     *
+     * Watched through WorkManager rather than tracked here, because the job outlives this view model
+     * — leaving Settings mid-fetch and coming back should still show it running, and a flag in
+     * memory could not.
+     */
+    val weatherStatus: StateFlow<String?> =
+        WorkManager.getInstance(getApplication<Application>())
+            .getWorkInfosForUniqueWorkFlow(WeatherArchiveWorker.NOW_NAME)
+            .map { infos ->
+                val info = infos.lastOrNull() ?: return@map null
+                when (info.state) {
+                    WorkInfo.State.ENQUEUED -> "WAITING FOR A NETWORK"
+                    WorkInfo.State.RUNNING -> "FETCHING…"
+                    WorkInfo.State.SUCCEEDED -> {
+                        val added = info.outputData.getInt(WeatherArchiveWorker.KEY_DAYS_ADDED, 0)
+                        when {
+                            added > 0 -> "ADDED $added DAYS"
+                            // Nothing added is the common and correct outcome of asking twice, and
+                            // saying so is the difference between "done" and "did that work?".
+                            else -> "NOTHING MISSING"
+                        }
+                    }
+                    // Retrying, not broken: no network yet, and it will try again on its own.
+                    WorkInfo.State.FAILED -> "COULDN'T REACH THE SERVICE"
+                    WorkInfo.State.BLOCKED -> "WAITING"
+                    WorkInfo.State.CANCELLED -> null
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Re-read everything another app owns, and ask for any weather still missing.
+     *
+     * What pull-to-refresh on a day does. The bridges are a handful of file reads; the weather goes
+     * through the worker because it is a network call and should survive the screen closing.
+     */
+    fun refreshEverything() {
+        refreshPhotos()
+        refreshShowings()
+        sampleSteps()
+        fetchWeather(everything = false)
     }
 
     fun setShowDaylight(enabled: Boolean) {

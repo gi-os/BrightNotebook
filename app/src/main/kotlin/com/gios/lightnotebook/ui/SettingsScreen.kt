@@ -55,6 +55,7 @@ fun SettingsScreen(
     val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
     val usageGranted = remember { DeviceUse.granted(context) }
+    val weatherStatus by vm.weatherStatus.collectAsStateWithLifecycle()
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
     var leadSheet by remember { mutableStateOf(false) }
@@ -266,6 +267,13 @@ fun SettingsScreen(
                 modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
                 onClick = { vm.fetchWeather(everything = true) },
             )
+            weatherStatus?.let { status ->
+                LightText(
+                    text = status,
+                    variant = LightTextVariant.Superfine,
+                    modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                )
+            }
             LightText(
                 text = "Weather is archived overnight while charging, so no screen ever waits on " +
                     "it. Filling in runs now instead, and only reaches back as far as this phone " +

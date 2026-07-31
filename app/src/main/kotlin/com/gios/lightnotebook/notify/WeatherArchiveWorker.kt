@@ -43,7 +43,7 @@ class WeatherArchiveWorker(
         val everything = inputData.getBoolean(KEY_REFETCH, false)
         val reachBack = inputData.getBoolean(KEY_ALL_DATA, false)
 
-        val ok = Weather(applicationContext).archive(
+        val result = Weather(applicationContext).archive(
             latitude = repo.homeLatitude(),
             longitude = repo.homeLongitude(),
             // Asked by hand: go back as far as the journal has anything at all. The nightly run
@@ -51,9 +51,12 @@ class WeatherArchiveWorker(
             earliestDay = if (reachBack) repo.earliestRecordedDay() else null,
             refetch = everything,
         )
+        // The count goes back out so a button can say what it did. A job that finishes silently is
+        // indistinguishable from one that never started, which is exactly how this looked.
+        val output = Data.Builder().putInt(KEY_DAYS_ADDED, result.daysAdded).build()
         // Retry rather than fail: a phone on a charger overnight with no usable network is a normal
         // evening, and the archive is no worse off for waiting. WorkManager backs off on its own.
-        if (ok) Result.success() else Result.retry()
+        if (result.ok) Result.success(output) else Result.retry()
     }
 
     companion object {
@@ -61,6 +64,10 @@ class WeatherArchiveWorker(
         private const val NOW = "weather-archive-now"
         private const val KEY_REFETCH = "refetch"
         private const val KEY_ALL_DATA = "all_data"
+        const val KEY_DAYS_ADDED = "days_added"
+
+        /** The unique name of the by-hand run, so its progress can be watched. */
+        const val NOW_NAME = NOW
 
         /**
          * Ask for it once a day.

@@ -50,6 +50,7 @@ fun CalendarScreen(
     val photoSummaries by vm.photoSummaries.collectAsStateWithLifecycle()
     val daylightByDay by vm.daylightByDay.collectAsStateWithLifecycle()
     val bridgeSpans by vm.bridgeSpans.collectAsStateWithLifecycle()
+    val weatherByDay by vm.weatherByDay.collectAsStateWithLifecycle()
     val anchor by vm.selectedDay.collectAsStateWithLifecycle()
     val today = NoteDates.today()
 
@@ -80,6 +81,7 @@ fun CalendarScreen(
             photoSummaries = photoSummaries,
             daylightByDay = daylightByDay,
             bridgeSpans = bridgeSpans,
+            weatherByDay = weatherByDay,
             today = today,
             anchorDay = homeAnchor,
             homeRequest = homeRequest,

@@ -52,6 +52,8 @@ import java.time.ZoneId
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 
 /**
  * One day. Anything can go on it: a line of text, or a line of text with a time in
@@ -102,6 +104,7 @@ private const val SCROLL_SLOP = 12
  * screen. That is why it takes no bar of its own beyond a header — it may be a cell one
  * moment and the whole display the next.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DayPane(
     vm: NotebookViewModel,
@@ -298,8 +301,28 @@ fun DayPane(
 
         val body = Modifier.weight(1f).fillMaxWidth()
 
+        // **Pull the day down to fetch.** Everything a day shows is prepared in advance — the
+        // bridges are cached, the weather is archived overnight — which is right, and it leaves
+        // nowhere obvious to say "go and look again". This is that place: one gesture that re-reads
+        // every other app and asks for any weather still missing, as far back as there is data.
+        var refreshing by remember { mutableStateOf(false) }
+        LaunchedEffect(refreshing) {
+            if (!refreshing) return@LaunchedEffect
+            vm.refreshEverything()
+            // Held briefly rather than cleared at once: the work is a handful of file reads and
+            // finishes faster than the spinner appears, and a refresh that never visibly happened
+            // reads as a gesture that did nothing.
+            delay(600)
+            refreshing = false
+        }
+
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = { refreshing = true },
+            modifier = body,
+        ) {
         if (moments.isEmpty()) {
-            Column(body) {
+            Column(Modifier.fillMaxSize()) {
                 LightEmptyState(
                     // A day that has gone and a day still to come are empty in different ways.
                     if (epochDay < today) "Nothing was written on this day." else "Nothing on this day yet.",
@@ -310,7 +333,7 @@ fun DayPane(
                 OnThisDayRow(past = past, onOpen = { viewing = it })
             }
         } else {
-            LazyColumn(body, state = listState) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState) {
                 // Inside the list, not pinned above it: it is the day's first line, and a line that
                 // stays put while the day scrolls under it stops being the beginning of anything.
                 item(key = "day-opened") {
@@ -376,7 +399,11 @@ fun DayPane(
 
                         is DayTimeline.Item.Talked -> {
                             LightListRow(
-                                title = if (item.isGroup) item.name else "Talked to ${item.name}",
+                                title = if (item.isGroup) {
+                                    "Talked in ${item.name}"
+                                } else {
+                                    "Talked to ${item.name}"
+                                },
                                 // Whether they answered, because talking *at* somebody and talking
                                 // *with* them are different days. The count is the quieter fact.
                                 sub = listOfNotNull(
@@ -384,7 +411,11 @@ fun DayPane(
                                     if (item.messages == 1) "1 message" else "${item.messages} messages",
                                 ).joinToString(" · "),
                                 detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
-                                leading = LightIcons.Compose,
+                                // Who, not what: a compose glyph said "a message" where the row is
+                                // about a person. A real contact photo would have to come from
+                                // LightChat — nothing here can see one — so this is the person
+                                // itself, and a group is drawn as more than one.
+                                leading = if (item.isGroup) LightIcons.Group else LightIcons.Person,
                             )
                             LightRule()
                         }
