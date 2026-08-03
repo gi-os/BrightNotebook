@@ -513,4 +513,83 @@ class DayTimelineTest {
         )
         assertEquals(19 * 60 + 40, DayTimeline.bookends(items)!!.lastMinutes)
     }
+
+    /* ---- entries and instants share one axis ---- */
+
+    @Test
+    fun `an entry sorts against a photograph taken at the same time`() {
+        // The bug this pins: an entry's minutes are from midnight, a photograph's are from the
+        // 4am cutover. Sorted together unconverted, the entry landed four hours late — a day
+        // that read "started at 11:17, then 8am, then 1pm, then 2pm, then 6pm, then 2:30pm".
+        val items = DayTimeline.build(
+            rows = listOf(row("meeting", 14 * 60 + 30)),
+            photos = listOf(photo(1L, JournalDay.fromClockMinutes(14 * 60))),
+            epochDay = today,
+            today = today,
+            nowMinutes = JournalDay.fromClockMinutes(23 * 60),
+        )
+        // 2pm photograph first, 2:30pm meeting second.
+        assertEquals(listOf("photos", "entry"), items.map { if (it is DayTimeline.Item.Photos) "photos" else "entry" })
+    }
+
+    @Test
+    fun `an entry is measured in journal minutes, not clock minutes`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("standup", 8 * 60)),
+            photos = emptyList(),
+            epochDay = today,
+            today = today,
+            nowMinutes = JournalDay.fromClockMinutes(9 * 60),
+        )
+        val entry = items.single() as DayTimeline.Item.Entry
+        assertEquals(4 * 60, entry.minutes)
+        // The row keeps the clock time, because that is what gets displayed.
+        assertEquals(8 * 60, entry.row.minutes)
+    }
+
+    @Test
+    fun `the now line puts a morning entry behind it and an evening one ahead`() {
+        // Against the old mixed units, an 8am entry compared 480 against a now line of 480 at
+        // noon and called itself the future.
+        val noonNow = JournalDay.fromClockMinutes(12 * 60)
+        val items = DayTimeline.build(
+            rows = listOf(row("morning", 8 * 60), row("evening", 18 * 60)),
+            photos = emptyList(),
+            epochDay = today,
+            today = today,
+            nowMinutes = noonNow,
+        )
+        val morning = items.first { (it as DayTimeline.Item.Entry).row.id == "morning" }
+        val evening = items.first { (it as DayTimeline.Item.Entry).row.id == "evening" }
+        assertTrue(morning.behind)
+        assertTrue(!evening.behind)
+    }
+
+    @Test
+    fun `an entry after midnight sits at the end of the journal day`() {
+        // A 1am entry on a day that runs 4am to 4am is the tail of that day, not its start.
+        val items = DayTimeline.build(
+            rows = listOf(row("late", 60), row("breakfast", 8 * 60)),
+            photos = emptyList(),
+            epochDay = today,
+            today = today,
+            nowMinutes = JournalDay.fromClockMinutes(12 * 60),
+        )
+        assertEquals(
+            listOf("breakfast", "late"),
+            items.map { (it as DayTimeline.Item.Entry).row.id },
+        )
+    }
+
+    @Test
+    fun `an all-day entry still has no time at all`() {
+        val items = DayTimeline.build(
+            rows = listOf(row("holiday", null)),
+            photos = emptyList(),
+            epochDay = today,
+            today = today,
+            nowMinutes = 0,
+        )
+        assertNull(items.single().minutes)
+    }
 }

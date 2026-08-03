@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.37.0**.
+`com.gios.lightnotebook`. Current release: **v1.38.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -373,7 +373,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.37.0 | this commit | US federal holidays with a glyph each, and a time zone you can see |
+| v1.38.0 | this commit | Entries and instants share one axis, so a day is in order |
+| v1.37.0 | `b2a2fe5` | US federal holidays with a glyph each, and a time zone you can see |
 | v1.36.0 | `774d361` | Subscribe to a calendar URL, so a work calendar can live here |
 | v1.35.0 | `36cc68e` | The report offer is a corner chip that fades, not a sheet |
 | v1.34.53 | `30b6e63` | The star sits on the print, and a tall photograph fills its frame |

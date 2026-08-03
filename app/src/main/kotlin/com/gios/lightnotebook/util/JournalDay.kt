@@ -116,6 +116,23 @@ object JournalDay {
     fun clockMinutes(minutesInto: Int, cutoverHour: Int = DEFAULT_CUTOVER_HOUR): Int =
         (minutesInto + cutoverHour * 60) % NOMINAL_MINUTES
 
+    /**
+     * The inverse: how far into the journal day a wall-clock time sits.
+     *
+     * Needed because the two halves of a day arrive in different units. Anything derived from an
+     * instant — a photograph, a place, a pickup — is measured from the cutover by
+     * [minutesInto]. A calendar entry is not derived from an instant at all: it is a time
+     * somebody typed or an importer resolved, stored as minutes from midnight, deliberately, so
+     * that no timezone can move it out of its square. Sorting the two together without
+     * converting puts every entry four hours later than it belongs, which is the bug this
+     * exists to close.
+     *
+     * A time before the cutover wraps to the **end** of the journal day, which is correct: on a
+     * day that runs 4am to 4am, two in the morning is the tail of it, not the start.
+     */
+    fun fromClockMinutes(clockMinutes: Int, cutoverHour: Int = DEFAULT_CUTOVER_HOUR): Int =
+        ((clockMinutes - cutoverHour * 60) % NOMINAL_MINUTES + NOMINAL_MINUTES) % NOMINAL_MINUTES
+
     /** The journal day containing now. */
     fun today(zone: ZoneId, cutoverHour: Int = DEFAULT_CUTOVER_HOUR): Long =
         dayOf(System.currentTimeMillis(), zone, cutoverHour)

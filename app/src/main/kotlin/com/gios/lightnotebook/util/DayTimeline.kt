@@ -36,9 +36,23 @@ object DayTimeline {
         /** Whether this has already happened, and so belongs to the diary half of the day. */
         val behind: Boolean
 
-        data class Entry(val row: AgendaRow, override val behind: Boolean) : Item {
-            override val minutes: Int? get() = row.minutes
-        }
+        /**
+         * A calendar entry, placed on the same axis as everything else.
+         *
+         * [minutes] is **journal minutes**, converted from the row's clock time, because that is
+         * the unit this whole file is in — a photograph at half past two is 630, and an entry at
+         * half past two has to be 630 as well or the two sort four hours apart. The row keeps its
+         * own clock time for display; nothing here reads it.
+         *
+         * This was the bug behind a day that read "started at 11:17, then 8am, then 1pm, then
+         * 2pm, then 6pm, then 2:30pm": entries were being sorted against instants in the wrong
+         * unit, so each one landed four hours late among things that were themselves in order.
+         */
+        data class Entry(
+            val row: AgendaRow,
+            override val behind: Boolean,
+            override val minutes: Int? = row.minutes?.let { JournalDay.fromClockMinutes(it) },
+        ) : Item
 
         /**
          * A note you wrote or came back to on this day.
@@ -217,7 +231,12 @@ object DayTimeline {
         today: Long,
         nowMinutes: Int,
     ): List<Item> {
-        val entries = rows.map { Item.Entry(it, behind(epochDay, it.minutes, today, nowMinutes)) }
+        val entries = rows.map { row ->
+            // `behind` is compared against the now line, which is also journal minutes, so the
+            // conversion has to happen before that question is asked and not only for sorting.
+            val journal = row.minutes?.let { JournalDay.fromClockMinutes(it) }
+            Item.Entry(row, behind(epochDay, journal, today, nowMinutes), journal)
+        }
         val clustered = cluster(photos)
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
