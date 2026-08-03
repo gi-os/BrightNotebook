@@ -293,9 +293,11 @@ class DayTimelineTest {
             today = today,
             nowMinutes = noon,
         )
+        // Journal minutes, which is what DayOpening and DayClosing convert back to a clock
+        // time — and the unit every instant-derived item on the day is already in.
         val ends = DayTimeline.bookends(items)!!
-        assertEquals(6 * 60 + 40, ends.firstMinutes)
-        assertEquals(23 * 60 + 10, ends.lastMinutes)
+        assertEquals(JournalDay.fromClockMinutes(6 * 60 + 40), ends.firstMinutes)
+        assertEquals(JournalDay.fromClockMinutes(23 * 60 + 10), ends.lastMinutes)
     }
 
     @Test
@@ -321,8 +323,8 @@ class DayTimelineTest {
             nowMinutes = noon,
         )
         val ends = DayTimeline.bookends(items)!!
-        assertEquals(7 * 60, ends.firstMinutes)
-        assertEquals(22 * 60, ends.lastMinutes)
+        assertEquals(JournalDay.fromClockMinutes(7 * 60), ends.firstMinutes)
+        assertEquals(JournalDay.fromClockMinutes(22 * 60), ends.lastMinutes)
     }
 
     @Test
@@ -469,12 +471,16 @@ class DayTimelineTest {
         val items = DayTimeline.build(
             rows = listOf(row("breakfast", 9 * 60)),
             photos = emptyList(),
-            pickups = DayTimeline.pickups(listOf(6 * 60 + 40)),
+            // Pickups arrive already measured from the cutover, so the fixture has to be too.
+            pickups = DayTimeline.pickups(listOf(JournalDay.fromClockMinutes(6 * 60 + 40))),
             epochDay = today - 1,
             today = today,
             nowMinutes = noon,
         )
-        assertEquals(6 * 60 + 40, DayTimeline.bookends(items)!!.firstMinutes)
+        assertEquals(
+            JournalDay.fromClockMinutes(6 * 60 + 40),
+            DayTimeline.bookends(items)!!.firstMinutes,
+        )
     }
 
     @Test
