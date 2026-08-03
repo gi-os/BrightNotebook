@@ -50,6 +50,7 @@ import com.gios.lightnotebook.ui.theme.lightTextStyle
 import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.util.Holidays
+import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.CanvasMath
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Pt
@@ -716,7 +717,9 @@ private fun activitySpan(
     bridged: IntRange?,
 ): IntRange? {
     val times = buildList {
-        rows.forEach { row -> row.minutes?.let { add(it) } }
+        // Converted: the photographs and the bridged spans below are measured from the cutover,
+        // and an entry's clock time compared against them would stretch the day by four hours.
+        rows.forEach { row -> row.minutes?.let { add(JournalDay.fromClockMinutes(it)) } }
         photos?.let { add(it.firstMinutes); add(it.lastMinutes) }
         // Where you were and what you listened to count as the day happening.
         bridged?.let { add(it.first); add(it.last) }
@@ -1098,7 +1101,10 @@ private fun DrawScope.drawDay(
 
     rows.forEach { row ->
         // All-day things are drawn beside the date above and must not appear twice.
-        val minutes = row.minutes ?: return@forEach
+        // Journal minutes, like the daylight band and the activity line this is drawn against:
+        // the cell's axis starts at the cutover, not at midnight, so a clock time has to be
+        // converted or every entry sits four hours too low.
+        val minutes = row.minutes?.let { JournalDay.fromClockMinutes(it) } ?: return@forEach
         val wanted = top + height * (minutes / MINUTES_IN_DAY_F)
 
         // Never above the heading, and never off the bottom. Rows are also pushed down past the

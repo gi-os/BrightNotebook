@@ -140,4 +140,23 @@ class JournalDayTest {
         assertEquals(day(2026, 7, 31), JournalDay.dayOf(ms(2026, 7, 31, 1, 0), nyc, cutoverHour = 0))
         assertEquals(0, JournalDay.minutesInto(ms(2026, 7, 30, 0, 0), day(2026, 7, 30), nyc, 0))
     }
+
+    @Test
+    fun `a clock time converts to minutes into the journal day`() {
+        // The cutover itself is zero, and the hours before it belong to the end of the day.
+        assertEquals(0, JournalDay.fromClockMinutes(4 * 60))
+        assertEquals(6 * 60, JournalDay.fromClockMinutes(10 * 60))
+        assertEquals(630, JournalDay.fromClockMinutes(14 * 60 + 30))
+        assertEquals(20 * 60, JournalDay.fromClockMinutes(0))
+        assertEquals(22 * 60, JournalDay.fromClockMinutes(2 * 60))
+    }
+
+    @Test
+    fun `and it is the exact inverse of clockMinutes`() {
+        // These two are used at opposite ends of the same journey — a stored clock time in, a
+        // label out — so a disagreement between them is a four-hour error nobody can see.
+        for (clock in 0 until 24 * 60) {
+            assertEquals(clock, JournalDay.clockMinutes(JournalDay.fromClockMinutes(clock)))
+        }
+    }
 }

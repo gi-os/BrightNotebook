@@ -1,3 +1,26 @@
+## Notebook v1.38 — a day in the order it happened
+
+**Entries were being sorted against everything else in the wrong unit.** A day could read
+"started at 11:17am, then 8am, then 1pm, then 2pm, then 6pm, then 2:30pm, then 7pm, then 3:30pm" —
+every individual time correct, the order nonsense.
+
+Two units had been quietly coexisting. Anything derived from an instant — a photograph, a place,
+a pickup, a conversation — is measured in minutes from the journal day's 4am cutover, which is
+what the now line, the bookends, the daylight band and the hour labels are all in. A calendar
+entry is not derived from an instant at all: it is a time you typed or an importer resolved,
+stored as minutes from midnight on purpose, so that no timezone can move an entry out of its
+square. Sorted together without converting, every entry landed exactly four hours later than it
+belonged, among things that were themselves in perfect order.
+
+`JournalDay.fromClockMinutes` is now the one conversion, applied where the two meet: the
+timeline's ordering, the now-line question of whether a thing has happened yet, the gap sizes and
+their hour labels, the vertical position of an entry inside a month cell, and the activity line
+that spans a day. The displayed time never changed and never was wrong.
+
+Pinned by tests that reconstruct that exact day and assert the order, plus a property test that
+the new conversion is the true inverse of the old one across all 1,440 minutes — a disagreement
+between those two is a four-hour error that nothing on screen would show.
+
 ## Notebook v1.37 — holidays, and a time zone you can see
 
 **The US federal holidays are on the grid, with a glyph each.** A tree on Christmas, an
