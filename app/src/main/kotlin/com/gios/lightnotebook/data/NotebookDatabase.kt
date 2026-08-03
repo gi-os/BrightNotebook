@@ -74,7 +74,10 @@ data class CalendarEntity(
     @PrimaryKey val id: String,
     val label: String,
     val kind: String = KIND_LOCAL,
-    /** ICS file name, or the device calendar's provider id. Null for a typed calendar. */
+    /**
+     * ICS file uri, feed URL, or the device calendar's provider id. Null for a typed
+     * calendar.
+     */
     val sourceRef: String? = null,
     val visible: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
@@ -83,6 +86,15 @@ data class CalendarEntity(
         const val KIND_LOCAL = "local"
         const val KIND_ICS = "ics"
         const val KIND_DEVICE = "device"
+
+        /**
+         * A feed fetched over HTTP every refresh — how a work calendar gets here, since a
+         * server can hold the corporate account and publish an .ics the phone just GETs.
+         *
+         * No schema change was needed to add it: `kind` is a TEXT column, so a new kind is
+         * a new constant and nothing else.
+         */
+        const val KIND_URL = "url"
     }
 }
 

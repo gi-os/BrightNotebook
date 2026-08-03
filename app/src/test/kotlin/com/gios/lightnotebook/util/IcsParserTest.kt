@@ -215,4 +215,28 @@ class IcsParserTest {
         assertEquals(expected, IcsParser.startMillis(event, newYork))
         assertNull(IcsParser.startMillis(event.copy(startMinutes = null), newYork))
     }
+
+    @Test
+    fun feedNameIsReadFromTheCalendarHeader() {
+        // A subscribed URL has no filename to borrow a label from, so this is what keeps the
+        // calendars list from reading "cal.basilnet.com".
+        val text = """
+            BEGIN:VCALENDAR
+            VERSION:2.0
+            X-WR-CALNAME:Work
+            BEGIN:VEVENT
+            UID:1
+            SUMMARY:Standup
+            DTSTART:20260804T130000Z
+            END:VEVENT
+            END:VCALENDAR
+        """.trimIndent()
+        assertEquals("Work", IcsParser.calendarName(text))
+    }
+
+    @Test
+    fun feedNameIsNullWhenTheCalendarDoesNotNameItself() {
+        val text = "BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR"
+        assertNull(IcsParser.calendarName(text))
+    }
 }

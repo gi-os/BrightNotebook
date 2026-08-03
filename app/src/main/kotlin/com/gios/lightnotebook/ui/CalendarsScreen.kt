@@ -42,6 +42,7 @@ import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 @Composable
 fun CalendarsScreen(
     vm: NotebookViewModel,
+    onScanCalendar: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -51,6 +52,8 @@ fun CalendarsScreen(
     var actionsFor by remember { mutableStateOf<CalendarEntity?>(null) }
     var renaming by remember { mutableStateOf<CalendarEntity?>(null) }
     var devicePicker by remember { mutableStateOf<List<DeviceCalendar>?>(null) }
+    var urlSheet by remember { mutableStateOf(false) }
+    var typingUrl by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     WheelScroll(listState)
@@ -101,6 +104,7 @@ fun CalendarsScreen(
                     sub = when (calendar.kind) {
                         CalendarEntity.KIND_ICS -> "From a file"
                         CalendarEntity.KIND_DEVICE -> "From the phone"
+                        CalendarEntity.KIND_URL -> "Subscribed, refreshes hourly"
                         else -> null
                     },
                     detail = if (calendar.visible) null else "HIDDEN",
@@ -118,6 +122,13 @@ fun CalendarsScreen(
                     sub = "An export or an invite, from anywhere",
                     leading = LightIcons.Add,
                     onClick = { pickIcs.launch(arrayOf("*/*")) },
+                )
+                LightRule()
+                LightListRow(
+                    title = "Subscribe to a URL",
+                    sub = "A published feed. Work calendars live here.",
+                    leading = LightIcons.Calendar,
+                    onClick = { urlSheet = true },
                 )
                 LightRule()
                 LightListRow(
@@ -198,6 +209,30 @@ fun CalendarsScreen(
                 actionsFor = null
             }
         }
+    }
+
+    if (urlSheet) {
+        LightActionSheet(heading = "SUBSCRIBE", onDismiss = { urlSheet = false }) {
+            // Scanning is first because it is the one that works: a feed URL carries a long
+            // random secret, and typing one on this phone is a mistake waiting to happen.
+            LightSheetAction("Scan a QR code", sub = "From the page that made the feed") {
+                urlSheet = false
+                onScanCalendar()
+            }
+            LightSheetAction("Type the address") {
+                urlSheet = false
+                typingUrl = true
+            }
+        }
+    }
+
+    if (typingUrl) {
+        LightNameSheet(
+            title = "CALENDAR ADDRESS",
+            initial = "https://",
+            onConfirm = { vm.importUrl(it); typingUrl = false },
+            onDismiss = { typingUrl = false },
+        )
     }
 
     renaming?.let { calendar ->

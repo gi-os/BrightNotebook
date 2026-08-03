@@ -174,6 +174,22 @@ object IcsParser {
     private fun syntheticUid(summary: String?, start: Moment): String =
         "lnb-${start.epochDay}-${start.minutes ?: -1}-${(summary ?: "").hashCode()}"
 
+    /**
+     * The name a feed gives itself (`X-WR-CALNAME`), if it gives one.
+     *
+     * A subscribed URL has no filename to borrow a label from, so this is the difference
+     * between a row that says "Work" and one that says "cal.basilnet.com".
+     */
+    fun calendarName(text: String): String? = unfold(text)
+        .asSequence()
+        .take(40)
+        .firstOrNull { it.startsWith("X-WR-CALNAME", ignoreCase = true) }
+        ?.substringAfter(':', "")
+        ?.let { unescape(it) }
+        ?.trim()
+        ?.take(60)
+        ?.takeIf { it.isNotBlank() }
+
     /** True when the text looks like an iCalendar file at all. */
     fun looksLikeIcs(text: String): Boolean =
         text.lineSequence().take(20).any { it.trim().equals("BEGIN:VCALENDAR", ignoreCase = true) }

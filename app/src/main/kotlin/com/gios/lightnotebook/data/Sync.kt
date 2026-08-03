@@ -46,6 +46,11 @@ object Sync {
                         ?.let { IcsParser.parse(it) }
                 }.getOrNull()
 
+                CalendarEntity.KIND_URL -> runCatching {
+                    CalendarFeed.fetch(sourceRef)?.takeIf { IcsParser.looksLikeIcs(it) }
+                        ?.let { IcsParser.parse(it) }
+                }.getOrNull()
+
                 else -> null
             }
             if (found.isNullOrEmpty()) {

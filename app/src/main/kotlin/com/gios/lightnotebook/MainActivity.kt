@@ -55,6 +55,7 @@ import com.gios.lightnotebook.report.ShakeDetector
 import com.gios.lightnotebook.report.Symptom
 import com.gios.lightnotebook.report.Trouble
 import com.gios.lightnotebook.ui.AgendaScreen
+import com.gios.lightnotebook.ui.CalendarScanScreen
 import com.gios.lightnotebook.ui.CalendarScreen
 import com.gios.lightnotebook.ui.CalendarsScreen
 import com.gios.lightnotebook.ui.CameraScreen
@@ -545,7 +546,20 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             composable("calendars") {
-                                CalendarsScreen(vm = vm, onBack = { nav.popBackStack() })
+                                CalendarsScreen(
+                                    vm = vm,
+                                    onScanCalendar = { nav.navigate("scan-calendar") },
+                                    onBack = { nav.popBackStack() },
+                                )
+                            }
+                            composable("scan-calendar") {
+                                CalendarScanScreen(
+                                    onUrl = { url ->
+                                        vm.importUrl(url)
+                                        nav.popBackStack()
+                                    },
+                                    onBack = { nav.popBackStack() },
+                                )
                             }
                             composable("scan") {
                                 KeyScanScreen(

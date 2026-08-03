@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.35.0**.
+`com.gios.lightnotebook`. Current release: **v1.36.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -64,6 +64,21 @@ importing other calendars — works with none.
   `CalendarContract.Instances` (recurrence expansion comes from the provider itself).
   Each import is a labelled, hideable, removable source; re-importing the same source
   **replaces** its events rather than duplicating them.
+- **Subscribing to a calendar URL.** Settings → CALENDARS → *Subscribe to a URL*. Any
+  published `.ics` feed (or a `webcal://` link, which is rewritten): fetched on the spot so a
+  wrong address says so immediately, then re-fetched by the same hourly refresh as every
+  other import. Scan the address rather than typing it — a feed URL carries a long random
+  secret, and the QR field on
+  [gi-os.github.io/LightNotebook](https://gi-os.github.io/LightNotebook/) makes one in the
+  browser. The calendar names itself from `X-WR-CALNAME` if the feed says so, otherwise from
+  its host.
+
+  This is how a **work calendar** gets here. Microsoft 365 and Google both need an OAuth
+  client the LPIII cannot run, so something else holds the account and publishes one file:
+  [LightSync's](https://github.com/gi-os/LightSync) `calendar_bridge.py` does exactly this
+  against Microsoft Graph, and — because it reads `calendarView` rather than an export —
+  recurring meetings arrive as individual instances, which is the one thing importing a raw
+  `.ics` cannot give you.
 - **Mirroring to the phone's calendar.** Entries are written into a writable
   `CalendarContract` calendar when one exists; the notebook stays the source of truth,
   so deleting an entry removes both copies. The LPIII has no Play Services, so this is
@@ -343,7 +358,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.35.0 | this commit | The report offer is a corner chip that fades, not a sheet |
+| v1.36.0 | this commit | Subscribe to a calendar URL, so a work calendar can live here |
+| v1.35.0 | `36cc68e` | The report offer is a corner chip that fades, not a sheet |
 | v1.34.53 | `30b6e63` | The star sits on the print, and a tall photograph fills its frame |
 | v1.33.0 | (folded in) | The pile scatters instead of batching, and stops popping as you scroll |
 | v1.32.49 | `0053c07` | The pile scrolls, a starred photograph leads it, and it stops covering the text |

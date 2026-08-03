@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LightNotebook · API Key QR</title>
+<title>LightNotebook · QR codes</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -29,6 +29,8 @@
   .qrbox { background: #fff; padding: 16px; border-radius: 16px; }
   .hint { font-size: 12px; color: #7a7a7d; text-align: center; }
   .warn { margin-top: 16px; font-size: 12px; color: #c9a227; text-align: center; }
+  hr.sep { border: 0; border-top: 1px solid #2a2a2e; margin: 32px 0 24px; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
 </style>
 </head>
 <body>
@@ -42,27 +44,46 @@
       <div class="hint">Point the Light Phone at this code — Notebook scans it in-app.</div>
     </div>
     <div class="warn">Generated entirely in your browser. The key never leaves this page.</div>
+
+    <hr class="sep" />
+
+    <h2>Calendar feed QR</h2>
+    <p class="sub">
+      Paste a published calendar address (an .ics feed, or a webcal:// link). Scan it in
+      Notebook → Settings → Calendars → Subscribe to a URL → Scan a QR code.
+    </p>
+    <label for="feed">Calendar URL</label>
+    <input id="feed" type="text" placeholder="https://…/work.ics" autocomplete="off" spellcheck="false" />
+    <div id="feedwrap" class="qrwrap">
+      <div id="feedbox" class="qrbox"></div>
+      <div class="hint">A feed URL contains its own secret — treat this code like a password.</div>
+    </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
   <script>
-    const input = document.getElementById('key');
-    const wrap = document.getElementById('qrwrap');
-    const box = document.getElementById('qrbox');
-    let qr = null;
-    function render() {
-      if (typeof QRCode === 'undefined') { box.innerHTML = '<p style=\"color:#c33\">QR library failed to load — check your connection.</p>'; wrap.classList.add('show'); return; }
-      const val = input.value.trim();
-      box.innerHTML = '';
-      if (!val) { wrap.classList.remove('show'); return; }
-      qr = new QRCode(box, {
-        text: val,
-        width: 320,
-        height: 320,
-        correctLevel: QRCode.CorrectLevel.M
-      });
-      wrap.classList.add('show');
+    // One renderer, two fields: the key and the calendar feed differ only in what goes in.
+    // A feed URL is long, so it gets the higher error-correction level's opposite — L keeps
+    // the modules big enough for the Light Phone's camera to resolve at arm's length.
+    function wire(inputId, wrapId, boxId, correctLevel) {
+      const input = document.getElementById(inputId);
+      const wrap = document.getElementById(wrapId);
+      const box = document.getElementById(boxId);
+      function render() {
+        if (typeof QRCode === 'undefined') {
+          box.innerHTML = '<p style="color:#c33">QR library failed to load — check your connection.</p>';
+          wrap.classList.add('show');
+          return;
+        }
+        const val = input.value.trim();
+        box.innerHTML = '';
+        if (!val) { wrap.classList.remove('show'); return; }
+        new QRCode(box, { text: val, width: 320, height: 320, correctLevel: correctLevel });
+        wrap.classList.add('show');
+      }
+      input.addEventListener('input', render);
     }
-    input.addEventListener('input', render);
+    wire('key', 'qrwrap', 'qrbox', QRCode.CorrectLevel.M);
+    wire('feed', 'feedwrap', 'feedbox', QRCode.CorrectLevel.L);
   </script>
 </body>
 </html>

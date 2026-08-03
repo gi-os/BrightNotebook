@@ -11,6 +11,7 @@ import com.gios.lightnotebook.ai.ReadMode
 import com.gios.lightnotebook.ai.Vision
 import com.gios.lightnotebook.ai.VisionParser
 import com.gios.lightnotebook.data.CalendarEntity
+import com.gios.lightnotebook.data.CalendarFeed
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
@@ -40,6 +41,7 @@ import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.Daylight
+import com.gios.lightnotebook.util.CalendarUrl
 import com.gios.lightnotebook.util.IcsParser
 import com.gios.lightnotebook.util.ImageUtils
 import com.gios.lightnotebook.util.NoteDates
@@ -991,6 +993,45 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                             label = repo.displayName(uri),
                             kind = CalendarEntity.KIND_ICS,
                             sourceRef = uri.toString(),
+                            events = events,
+                            reminderMinutes = repo.defaultReminderMinutes(),
+                        ) to null
+                    }
+                }
+            }
+        }
+        finishImport(outcome.first, outcome.second)
+    }
+
+    /**
+     * Subscribes to a calendar feed URL — the work-calendar path: something else holds the
+     * account and publishes an .ics, and this fetches it now and every hour after.
+     *
+     * The first fetch happens here rather than being left to the alarm, so a wrong URL says
+     * so while the scanner is still in your hand instead of failing silently overnight.
+     */
+    fun importUrl(payload: String) = viewModelScope.launch {
+        val url = CalendarUrl.feedIn(payload)
+        if (url == null) {
+            _importStatus.value = "That doesn't look like a calendar address."
+            return@launch
+        }
+        _importStatus.value = "Fetching\u2026"
+        val outcome = withContext(Dispatchers.IO) {
+            val text = CalendarFeed.fetch(url)
+            when {
+                text == null -> null to "Could not reach that address."
+                !IcsParser.looksLikeIcs(text) -> null to "That address is not a calendar."
+                else -> {
+                    val events = IcsParser.parse(text)
+                    if (events.isEmpty()) {
+                        null to "That calendar has no events."
+                    } else {
+                        repo.importEvents(
+                            // A feed has no filename to borrow, so it names itself if it can.
+                            label = IcsParser.calendarName(text) ?: CalendarUrl.labelFor(url),
+                            kind = CalendarEntity.KIND_URL,
+                            sourceRef = url,
                             events = events,
                             reminderMinutes = repo.defaultReminderMinutes(),
                         ) to null

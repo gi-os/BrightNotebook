@@ -42,6 +42,7 @@ import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.ApiKeyQr
+import com.gios.lightnotebook.util.CalendarUrl
 import com.gios.lightnotebook.util.QrAnalyzer
 import java.util.concurrent.Executors
 
@@ -57,6 +58,48 @@ import java.util.concurrent.Executors
 @Composable
 fun KeyScanScreen(
     onKey: (String) -> Unit,
+    onBack: () -> Unit,
+) = QrScanScreen(
+    title = "SCAN KEY",
+    hint = "Point at the QR on gi-os.github.io/LightNotebook",
+    wrongHint = "That code isn't an API key.",
+    accept = { ApiKeyQr.keyIn(it) },
+    onValue = onKey,
+    onBack = onBack,
+)
+
+/**
+ * Scans a calendar feed URL. Same screen, different thing accepted.
+ *
+ * A published feed URL is a hundred-odd characters with a random secret in the middle —
+ * exactly the sort of string that is unreasonable to type on this phone and trivial to
+ * scan off the computer that generated it.
+ */
+@Composable
+fun CalendarScanScreen(
+    onUrl: (String) -> Unit,
+    onBack: () -> Unit,
+) = QrScanScreen(
+    title = "SCAN CALENDAR",
+    hint = "Point at the calendar's QR code.",
+    wrongHint = "That code isn't a calendar address.",
+    accept = { CalendarUrl.feedIn(it) },
+    onValue = onUrl,
+    onBack = onBack,
+)
+
+/**
+ * The scanner itself. What counts as a valid payload is the caller's business: [accept]
+ * returns the cleaned-up value or null, and null keeps the camera running rather than
+ * ending the scan on a poster.
+ */
+@Composable
+private fun QrScanScreen(
+    title: String,
+    hint: String,
+    wrongHint: String,
+    accept: (String) -> String?,
+    onValue: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -79,7 +122,7 @@ fun KeyScanScreen(
 
     Column(Modifier.fillMaxSize()) {
         LightTopBar(
-            title = "SCAN KEY",
+            title = title,
             left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onBack),
         )
         LightRule()
@@ -88,9 +131,9 @@ fun KeyScanScreen(
             if (granted) {
                 QrCamera(
                     onDecoded = { payload ->
-                        val key = ApiKeyQr.keyIn(payload)
-                        if (key != null) {
-                            onKey(key)
+                        val value = accept(payload)
+                        if (value != null) {
+                            onValue(value)
                             true
                         } else {
                             // Keep the camera running: a poster in frame should not end
@@ -107,11 +150,7 @@ fun KeyScanScreen(
                         .border(1.dp, colors.content),
                 )
                 LightText(
-                    text = if (wrongCode) {
-                        "That code isn't an API key."
-                    } else {
-                        "Point at the QR on gi-os.github.io/LightNotebook"
-                    },
+                    text = if (wrongCode) wrongHint else hint,
                     variant = LightTextVariant.Detail,
                     align = TextAlign.Center,
                     modifier = Modifier
@@ -124,7 +163,7 @@ fun KeyScanScreen(
                         ),
                 )
             } else {
-                LightEmptyState("Notebook needs the camera to scan the key.")
+                LightEmptyState("Notebook needs the camera to scan a code.")
             }
         }
     }
