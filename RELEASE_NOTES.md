@@ -1,3 +1,47 @@
+## Notebook v1.39 — calls, charging, and where the time went
+
+**Calls are on the day.** "Called Alex, 12 min", "Alex called", "Missed call from Mum" — three
+different facts, phrased three different ways, because only one of them is something you did. A
+misdial of zero seconds is not a call and does not appear; a missed call of zero seconds is
+entirely the point and does.
+
+Nothing is recorded for this: the call log already holds weeks, so a day from last month answers
+without the app having been running for it. It needs one grant, and **not** the one you might
+expect — the dialler writes the name it resolved into the log at the time of the call, so
+`READ_CALL_LOG` alone gives named calls and `READ_CONTACTS` would buy almost nothing in exchange
+for read access to every contact you have.
+
+    adb shell pm grant com.gios.lightnotebook android.permission.READ_CALL_LOG
+
+**Charging, which is the closest this phone comes to knowing when you went to bed.** "Charged 7h
+30m, until 07:10." A charge that began before the day says so rather than claiming to have started
+at 4am, and one still going says "on the charger" and counts to now instead of guessing at
+midnight. A cable knocked for two minutes is not a charge and is dropped.
+
+This is the only recorded thing on the day screen, because Android keeps no history of it — but it
+is nearly free: `ACTION_POWER_CONNECTED` and `ACTION_POWER_DISCONNECTED` are exempt from the
+implicit-broadcast ban, so a manifest receiver appends twenty bytes twice a day and **nothing runs
+at all on a day the cable does not move**.
+
+**Where the screen time went.** The day's footer already said "7 PICKED UP · 1H 12M ON"; it now
+also says "38M CHAT · 12M PHONO". Same query, more of the answer.
+
+### Less battery than the version before it, not more
+
+Three features went in and the app's idle cost went *down*:
+
+- **The hourly calendar refresh was an alarm and is now work with a network constraint.** The old
+  `setAndAllowWhileIdle` woke the device every hour and tried to fetch whether or not there was a
+  connection — and whether or not a single calendar had ever been imported. A fresh install woke
+  the phone twenty-four times a day to do nothing. WorkManager can express "when there is a
+  connection", so the system folds the wakeup in with work it was already doing, the schedule
+  survives a reboot with no receiver to re-arm it, and re-scheduling on launch no longer pushes the
+  next sync an hour away. Reminders are untouched: they are the one thing here that has to be on
+  time, and they stay exact alarms.
+- **The day's usage stats are one pass instead of three.** Screen time, pickups and the app
+  breakdown were three separate `queryEvents` calls over the same window — three walks over the
+  same few thousand events, on the screen that rebuilds every time you swipe to another day.
+
 ## Notebook v1.38 — a day in the order it happened
 
 **Entries were being sorted against everything else in the wrong unit.** A day could read

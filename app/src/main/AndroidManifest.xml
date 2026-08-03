@@ -5,6 +5,14 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Parsed events are mirrored into the phone's own calendar when one exists, and its
          calendars can be imported. -->
+    <!--
+      The call log, for the calls on a day. Granted by adb like usage access, since LightOS has
+      no Settings screen to ask through:
+        adb shell pm grant com.gios.lightnotebook android.permission.READ_CALL_LOG
+      Deliberately not READ_CONTACTS: the call log caches the name the dialler resolved, so the
+      name arrives with the call and reading every contact buys almost nothing.
+    -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
 
@@ -171,6 +179,20 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Plug and unplug. These two broadcasts are exempt from the implicit-broadcast ban, which
+          is what lets this be a manifest receiver: nothing runs on a day the cable does not move,
+          and there is no service or alarm behind it.
+        -->
+        <receiver
+            android:name=".notify.ChargeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>
         </receiver>
     </application>

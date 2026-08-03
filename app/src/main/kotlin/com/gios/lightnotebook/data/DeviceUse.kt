@@ -5,6 +5,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Process
+import com.gios.lightnotebook.util.AppUse
 import com.gios.lightnotebook.util.ScreenUse
 
 /**
@@ -44,55 +45,84 @@ object DeviceUse {
     }.getOrDefault(false)
 
     /**
-     * One day's unlocks and screen time.
+     * Everything a day wants from usage stats, in **one** pass over the events.
      *
-     * The query begins **two hours before** the window. That is not caution, it is required: the
-     * screen may have come on before midnight and stayed on, and the fold needs to know the state
-     * at the boundary rather than guess it. Without the lookback a night spent up past midnight
-     * reads as no screen time at all until the next time the phone was locked.
+     * There are three questions here — how long the screen was on, when it was picked up, and
+     * where the time went — and they were three separate `queryEvents` calls over the same
+     * window, which is three walks over the same few thousand events and three copies of them
+     * materialised. On a day screen that rebuilds when you swipe between days, that is the most
+     * expensive thing on the screen and none of it is necessary: the same stream answers all
+     * three.
      */
-    /** When the phone was picked up, in milliseconds — so a day can show it happening. */
-    fun pickupsForDay(context: Context, windowStartMs: Long, windowEndMs: Long): List<Long> {
-        if (!granted(context)) return emptyList()
-        val manager = context.getSystemService(UsageStatsManager::class.java) ?: return emptyList()
-        return runCatching {
-            val events = manager.queryEvents(windowStartMs, windowEndMs)
-            val out = ArrayList<Long>()
-            val event = UsageEvents.Event()
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                if (event.eventType == UsageEvents.Event.KEYGUARD_HIDDEN) out.add(event.timeStamp)
-            }
-            out.sorted()
-        }.getOrDefault(emptyList())
-    }
+    data class DayUse(
+        val screen: ScreenUse.Result,
+        val pickupsMs: List<Long>,
+        val apps: List<AppUse.Total>,
+    )
 
-    fun forDay(context: Context, windowStartMs: Long, windowEndMs: Long): ScreenUse.Result {
-        if (!granted(context)) return ScreenUse.EMPTY
-        val manager = context.getSystemService(UsageStatsManager::class.java) ?: return ScreenUse.EMPTY
-
+    fun dayUse(context: Context, windowStartMs: Long, windowEndMs: Long): DayUse {
+        val empty = DayUse(ScreenUse.EMPTY, emptyList(), emptyList())
+        if (!granted(context)) return empty
+        val manager = context.getSystemService(UsageStatsManager::class.java) ?: return empty
         return runCatching {
-            val lookback = windowStartMs - LOOKBACK_MS
-            val events = manager.queryEvents(lookback, windowEndMs)
-            val collected = ArrayList<ScreenUse.Event>(256)
+            val events = manager.queryEvents(windowStartMs - LOOKBACK_MS, windowEndMs)
+            val screenEvents = ArrayList<ScreenUse.Event>(256)
+            val appEvents = ArrayList<AppUse.Event>(256)
+            val pickups = ArrayList<Long>()
             var onAtStart = false
+            var foregroundAtStart: String? = null
             val event = UsageEvents.Event()
 
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
-                val kind = kindOf(event.eventType) ?: continue
-                if (event.timeStamp < windowStartMs) {
-                    // Before the day: not counted, but it tells us the state at midnight.
-                    if (kind == ScreenUse.Kind.ScreenOn) onAtStart = true
-                    if (kind == ScreenUse.Kind.ScreenOff) onAtStart = false
-                    continue
+                val before = event.timeStamp < windowStartMs
+                when (event.eventType) {
+                    UsageEvents.Event.ACTIVITY_RESUMED, UsageEvents.Event.ACTIVITY_PAUSED -> {
+                        val pkg = event.packageName ?: continue
+                        val kind = if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+                            AppUse.Kind.Resumed
+                        } else {
+                            AppUse.Kind.Paused
+                        }
+                        if (before) {
+                            foregroundAtStart = if (kind == AppUse.Kind.Resumed) pkg else null
+                        } else {
+                            appEvents.add(AppUse.Event(event.timeStamp, pkg, kind))
+                        }
+                    }
+
+                    else -> {
+                        val kind = kindOf(event.eventType) ?: continue
+                        if (kind == ScreenUse.Kind.Unlocked && !before) pickups.add(event.timeStamp)
+                        if (before) {
+                            // Before the day: not counted, but it tells us the state at the
+                            // boundary, which is the whole reason for the lookback.
+                            if (kind == ScreenUse.Kind.ScreenOn) onAtStart = true
+                            if (kind == ScreenUse.Kind.ScreenOff) onAtStart = false
+                        } else {
+                            screenEvents.add(ScreenUse.Event(event.timeStamp, kind))
+                        }
+                    }
                 }
-                collected.add(ScreenUse.Event(event.timeStamp, kind))
             }
 
-            ScreenUse.fold(collected, windowStartMs, windowEndMs, onAtStart)
-        }.getOrDefault(ScreenUse.EMPTY)
+            DayUse(
+                screen = ScreenUse.fold(screenEvents, windowStartMs, windowEndMs, onAtStart),
+                pickupsMs = pickups.sorted(),
+                apps = AppUse.fold(appEvents, windowStartMs, windowEndMs, foregroundAtStart),
+            )
+        }.getOrDefault(empty)
     }
+
+    /**
+     * An app's name as the launcher would say it, falling back to the last part of its package.
+     *
+     * A day that reads "38m COM.GIOS.LIGHTCHAT" is worse than one that says nothing.
+     */
+    fun labelFor(context: Context, packageName: String): String = runCatching {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+    }.getOrNull() ?: packageName.substringAfterLast('.')
 
     /**
      * Which events matter.

@@ -45,6 +45,7 @@ import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.DayLayout
 import com.gios.lightnotebook.util.DayTimeline
+import com.gios.lightnotebook.util.Charging
 import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.delay
@@ -141,6 +142,8 @@ fun DayPane(
     val weather by vm.dayWeather.collectAsStateWithLifecycle()
     val talked by vm.dayTalked.collectAsStateWithLifecycle()
     val arrivals by vm.dayArrivals.collectAsStateWithLifecycle()
+    val calls by vm.dayCalls.collectAsStateWithLifecycle()
+    val charges by vm.dayCharges.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -207,7 +210,7 @@ fun DayPane(
     val photosById = remember(photos) { photos.associateBy { it.id } }
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
-        rows, photos, dayNotes, places, listening, pickups, talked, arrivals,
+        rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
         epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
@@ -219,6 +222,8 @@ fun DayPane(
             pickups = pickups,
             talked = talked,
             arrivals = arrivals,
+            calls = calls,
+            charges = charges,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -360,6 +365,8 @@ fun DayPane(
                             is DayTimeline.Item.Pickups -> "picked-" + item.minutes
                             is DayTimeline.Item.Talked -> "talked-" + item.name + item.minutes
                             is DayTimeline.Item.Arrived -> "arrived-" + item.zone + item.minutes
+                            is DayTimeline.Item.Called -> "call-" + item.minutes + item.call.who
+                            is DayTimeline.Item.Charged -> "charge-" + item.minutes
                         }
                     },
                 ) { index, item ->
@@ -431,6 +438,39 @@ fun DayPane(
                                 // LightChat — nothing here can see one — so this is the person
                                 // itself, and a group is drawn as more than one.
                                 leading = if (item.isGroup) LightIcons.Group else LightIcons.Person,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Called -> {
+                            LightListRow(
+                                title = item.call.phrase,
+                                sub = item.call.length,
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                // The same person glyph a conversation gets: from the day's point
+                                // of view a call and a thread are both somebody you spoke to.
+                                leading = LightIcons.Person,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Charged -> {
+                            LightListRow(
+                                title = if (item.stillGoing) "On the charger" else "Charged",
+                                // "7h 30m, until 07:10" — the length first, because that is the
+                                // fact about the night; the end time only matters if it is over.
+                                sub = listOfNotNull(
+                                    Charging.length(item.lengthMinutes),
+                                    if (item.startedEarlier) "started before this day" else null,
+                                    if (item.stillGoing) {
+                                        null
+                                    } else {
+                                        "until " + NoteDates.clock(
+                                            JournalDay.clockMinutes(item.untilMinutes),
+                                        )
+                                    },
+                                ).joinToString(" · "),
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
                             )
                             LightRule()
                         }

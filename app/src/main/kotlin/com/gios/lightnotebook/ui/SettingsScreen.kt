@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gios.lightnotebook.data.CallHistory
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.hw.WheelScroll
@@ -56,6 +57,7 @@ fun SettingsScreen(
     val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
     val usageGranted = remember { DeviceUse.granted(context) }
+    val callsGranted = remember { CallHistory.granted(context) }
     val weatherStatus by vm.weatherStatus.collectAsStateWithLifecycle()
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
@@ -263,12 +265,30 @@ fun SettingsScreen(
             )
             LightText(
                 text = if (usageGranted) {
-                    "Granted. A day shows how often you picked the phone up and how long it was on."
+                    "Granted. A day shows how often you picked the phone up, how long it was on, " +
+                        "and which apps that time went to."
                 } else {
                     // Printed in full because there is nowhere to send the user: LightOS has no
                     // Usage Access screen, and an app that shows nothing is indistinguishable from
                     // a day you genuinely did not touch it.
                     DeviceUse.GRANT_COMMAND
+                },
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+            )
+            LightText(
+                text = "CALLS",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.2f.verticalGridUnitsAsDp()),
+            )
+            LightText(
+                text = if (callsGranted) {
+                    "Granted. Calls appear on the day they happened, with whoever the phone had " +
+                        "a name for. Nothing is recorded — the call log already holds weeks."
+                } else {
+                    CallHistory.GRANT_COMMAND
                 },
                 variant = LightTextVariant.Detail,
                 lighten = true,

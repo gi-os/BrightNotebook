@@ -34,8 +34,13 @@ import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.data.Weather
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.report.Trouble
+import com.gios.lightnotebook.notify.CalendarSyncWorker
 import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.notify.WeatherArchiveWorker
+import com.gios.lightnotebook.data.CallHistory
+import com.gios.lightnotebook.data.ChargeStore
+import com.gios.lightnotebook.util.AppUse
+import com.gios.lightnotebook.util.Charging
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.DayTimeline
@@ -679,6 +684,59 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Calls on the open day, from the system call log.
+     *
+     * Queried per day rather than kept: the provider holds weeks, so nothing has to have been
+     * running. Empty and silent without the grant, like every other bridge here.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayCalls: StateFlow<List<DayTimeline.Item.Called>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    val window = JournalDay.windowMs(day, zone)
+                    CallHistory.forWindow(getApplication(), window.first, window.last).map { call ->
+                        DayTimeline.Item.Called(
+                            minutes = JournalDay.minutesInto(call.atMs, day, zone),
+                            call = call,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Time on the charger for the open day.
+     *
+     * The only recorded thing on this screen — Android keeps no history of plug and unplug, so
+     * [ChargeReceiver] writes them as they happen and this reads them back.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayCharges: StateFlow<List<DayTimeline.Item.Charged>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    val window = JournalDay.windowMs(day, zone)
+                    val store = ChargeStore(getApplication())
+                    Charging.spansIn(
+                        events = store.eventsAround(window.first, window.last),
+                        windowStartMs = window.first,
+                        windowEndMs = window.last,
+                    ).map { span ->
+                        DayTimeline.Item.Charged(
+                            minutes = JournalDay.minutesInto(span.fromMs, day, zone),
+                            untilMinutes = JournalDay.minutesInto(span.untilMs, day, zone),
+                            startedEarlier = span.startedEarlier,
+                            stillGoing = span.stillGoing,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Who you talked to on the open day. Names only; LightChat serves no message text. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayTalked: StateFlow<List<DayTimeline.Item.Talked>> =
@@ -743,6 +801,14 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         val stepsEverRecorded: Boolean,
         /** When the phone was picked up, as minutes into the journal day. */
         val pickupMinutes: List<Int> = emptyList(),
+        /**
+         * Where the screen time went, biggest first, already named.
+         *
+         * Named here rather than in the composable because resolving a label is a
+         * `PackageManager` call, and doing eleven of them on the main thread while a day is
+         * being drawn is exactly the sort of thing this screen is careful about elsewhere.
+         */
+        val apps: List<String> = emptyList(),
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -752,14 +818,19 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.IO) {
                     val zone = ZoneId.systemDefault()
                     val window = PhotoDays.windowMs(day, day, zone)
+                    // One walk over the usage events answers screen time, pickups and where the
+                    // time went; it used to be three queries over the same window.
+                    val use = DeviceUse.dayUse(getApplication(), window.first, window.last + 1)
                     DayStats(
                         steps = steps.stepsOn(day),
                         stepHours = steps.hoursOn(day),
-                        use = DeviceUse.forDay(getApplication(), window.first, window.last + 1),
-                        pickupMinutes = DeviceUse
-                            .pickupsForDay(getApplication(), window.first, window.last + 1)
-                            .map { JournalDay.minutesInto(it, day, zone) },
+                        use = use.screen,
+                        pickupMinutes = use.pickupsMs.map { JournalDay.minutesInto(it, day, zone) },
                         usageGranted = DeviceUse.granted(getApplication()),
+                        apps = AppUse.summary(
+                            totals = use.apps,
+                            nameOf = { DeviceUse.labelFor(getApplication(), it) },
+                        ),
                         stepsGranted = steps.granted(),
                         stepsEverRecorded = steps.everRecorded(),
                     )
@@ -1096,7 +1167,11 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Arms the hourly refresh. Called at launch; boot does it too. */
     fun scheduleSync() {
-        SyncAlarm.schedule(getApplication())
+        // Work, not an alarm: the old hourly `setAndAllowWhileIdle` woke the phone even with no
+        // network and no calendars imported. Cancelling the alarm here retires it on upgrade —
+        // an alarm nobody cancels outlives the code that armed it.
+        SyncAlarm.cancel(getApplication())
+        CalendarSyncWorker.schedule(getApplication())
     }
 
     private suspend fun finishImport(result: ImportResult?, error: String?) {

@@ -772,6 +772,9 @@ fun DayShape(
             if (minutes > 0) {
                 add(if (minutes >= 60) "${minutes / 60}H ${minutes % 60}M ON" else "${minutes}M ON")
             }
+            // What the screen time went on. "38M CHAT" says more about an afternoon than the
+            // total does, and it is the same query answering both.
+            addAll(stats.apps)
         }
     }
     if (parts.isEmpty()) return

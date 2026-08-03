@@ -29,7 +29,10 @@ class ReminderBootReceiver : BroadcastReceiver() {
                 val entries = NotebookDatabase.get(app).dao()
                     .entriesWithRemindersBlocking(NoteDates.today())
                 Reminders.rearmAll(app, entries)
-                SyncAlarm.schedule(app)
+                // WorkManager's own schedule survives a reboot, so there is nothing to
+                // re-arm here any more — only the stale alarm to retire.
+                SyncAlarm.cancel(app)
+                CalendarSyncWorker.schedule(app)
                 Log.i(TAG, "re-armed ${entries.size} reminder(s) and the hourly sync after boot")
             } catch (t: Throwable) {
                 Log.w(TAG, "could not re-arm reminders: $t")

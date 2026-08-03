@@ -165,6 +165,42 @@ object DayTimeline {
         }
 
         /**
+         * A phone call.
+         *
+         * A row each rather than one row per person: a call is a thing that happened at a time,
+         * and "Alex · 3 calls" would be a summary of a day rather than part of its story. The
+         * phrasing lives in [Calls.Call] because "Called Alex" and "Alex called" are different
+         * facts and only one of them is something you did.
+         */
+        data class Called(
+            override val minutes: Int,
+            val call: Calls.Call,
+        ) : Item {
+            // You cannot be called in the future. A call log entry is by definition a thing that
+            // has already happened, whatever the clock says.
+            override val behind: Boolean get() = true
+        }
+
+        /**
+         * A stretch on the charger.
+         *
+         * Kept because it is the closest thing this phone has to saying when you went to bed —
+         * plugged in at 23:40, unplugged at 7:10 is a night, and nothing else here can see one.
+         * [startedEarlier] is what stops last night's charge claiming to have begun at 4am
+         * because that is where this day's window starts.
+         */
+        data class Charged(
+            override val minutes: Int,
+            val untilMinutes: Int,
+            val startedEarlier: Boolean,
+            val stillGoing: Boolean,
+        ) : Item {
+            override val behind: Boolean get() = true
+
+            val lengthMinutes: Int get() = (untilMinutes - minutes).coerceAtLeast(0)
+        }
+
+        /**
          * One moment, holding one photograph or a burst of them.
          *
          * A single photograph is drawn full width, the way a picture in a diary is. A burst is
@@ -227,6 +263,8 @@ object DayTimeline {
         pickups: List<Item.Pickups> = emptyList(),
         talked: List<Item.Talked> = emptyList(),
         arrivals: List<Item.Arrived> = emptyList(),
+        calls: List<Item.Called> = emptyList(),
+        charges: List<Item.Charged> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -241,7 +279,8 @@ object DayTimeline {
 
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
-        return (entries + clustered + notes + places + listening + pickups + talked + arrivals)
+        return (entries + clustered + notes + places + listening + pickups + talked +
+            arrivals + calls + charges)
             .sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
@@ -258,10 +297,16 @@ object DayTimeline {
                         is Item.Arrived -> 1
                         is Item.Place -> 1
                         is Item.Talked -> 2
+                        // A call is the same kind of fact as a conversation, so they sort
+                        // together rather than in two separate bands.
+                        is Item.Called -> 2
                         is Item.Note -> 3
                         is Item.Photos -> 4
                         is Item.Listening -> 5
                         is Item.Pickups -> 6
+                        // Last: being on the charger is the background of a day, not an event
+                        // competing with the things that happened during it.
+                        is Item.Charged -> 7
                     }
                 },
             ),
