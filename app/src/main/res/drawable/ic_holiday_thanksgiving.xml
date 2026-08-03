@@ -1,0 +1,14 @@
+<!--
+  A holiday glyph, drawn to match LightOS's icon set: a 30-unit viewport, one <path>, solid
+  fill, no stroke. Outlines close up at the size a month cell gives this, so every one of
+  these is a filled silhouette that has to be recognisable at about 12 pixels across.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30.0dp"
+    android:height="30.0dp"
+    android:viewportWidth="30.0"
+    android:viewportHeight="30.0">
+    <path
+        android:pathData="M15,2 C25,10 25,19 15,25 C5,19 5,10 15,2 Z M14.3,24 H15.7 V29 H14.3 Z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

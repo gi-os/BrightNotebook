@@ -260,11 +260,14 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             repo.observeCalendars(),
             _selectedDay,
         ) { entries, showings, calendars, day ->
-            Agenda.collapse(
-                // Clipped to the one day, so a span becomes exactly one row saying which day of it
-                // this is rather than one row per day of the trip.
-                entries = entries.acrossDays(day, day, calendars),
-                films = showings.map { it.toAgendaRow() },
+            Agenda.merge(
+                Agenda.collapse(
+                    // Clipped to the one day, so a span becomes exactly one row saying which day of
+                    // it this is rather than one row per day of the trip.
+                    entries = entries.acrossDays(day, day, calendars),
+                    films = showings.map { it.toAgendaRow() },
+                ),
+                Agenda.holidayRows(day, day),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -281,9 +284,14 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             repo.observeCalendars(),
         ) { entries, showings, calendars ->
             val today = NoteDates.today()
-            Agenda.collapse(
-                entries = entries.map { it.toAgendaRow(calendars) },
-                films = showings.filter { it.epochDay >= today }.map { it.toAgendaRow() },
+            Agenda.merge(
+                Agenda.collapse(
+                    entries = entries.map { it.toAgendaRow(calendars) },
+                    films = showings.filter { it.epochDay >= today }.map { it.toAgendaRow() },
+                ),
+                // The same horizon the agenda already shows, so a holiday appears exactly when
+                // the entries around it do.
+                Agenda.holidayRows(today, today + AGENDA_HORIZON_DAYS),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -307,9 +315,15 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 repo.observeCalendars(),
             ) { entries, showings, calendars ->
                 val films = showings.filter { it.epochDay in window }
-                Agenda.collapse(
-                    entries = entries.acrossDays(window.first, window.last, calendars),
-                    films = films.map { it.toAgendaRow() },
+                // Holidays are merged after the collapse rather than inside it: collapse folds
+                // a ticket onto the entry describing the same plan, and a holiday is never a
+                // duplicate of anything.
+                Agenda.merge(
+                    Agenda.collapse(
+                        entries = entries.acrossDays(window.first, window.last, calendars),
+                        films = films.map { it.toAgendaRow() },
+                    ),
+                    Agenda.holidayRows(window.first, window.last),
                 ).groupBy { it.epochDay }
             }
         }
@@ -985,7 +999,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 text == null -> null to "Could not open that file."
                 !IcsParser.looksLikeIcs(text) -> null to "That is not a calendar file."
                 else -> {
-                    val events = IcsParser.parse(text)
+                    val events = IcsParser.parse(text, repo.calendarZone())
                     if (events.isEmpty()) {
                         null to "No events in that file."
                     } else {
@@ -1023,7 +1037,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 text == null -> null to "Could not reach that address."
                 !IcsParser.looksLikeIcs(text) -> null to "That address is not a calendar."
                 else -> {
-                    val events = IcsParser.parse(text)
+                    val events = IcsParser.parse(text, repo.calendarZone())
                     if (events.isEmpty()) {
                         null to "That calendar has no events."
                     } else {
@@ -1118,6 +1132,40 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     fun setDefaultLead(minutes: Int?) {
         repo.setDefaultReminderMinutes(minutes)
         _defaultLead.value = minutes
+    }
+
+    private val _calendarZone = MutableStateFlow(repo.calendarZoneId())
+
+    /** The chosen zone for imported times, or null while the phone's own is trusted. */
+    val calendarZone: StateFlow<String?> = _calendarZone.asStateFlow()
+
+    /** What the phone says it is, which is worth showing because it is sometimes wrong. */
+    val deviceZone: String get() = ZoneId.systemDefault().id
+
+    /** Zones offered before typing one: where he is, where the company is, and the neutral one. */
+    val zoneChoices: List<String> = listOf(
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles",
+        "Europe/Paris",
+        "Europe/London",
+        "UTC",
+    )
+
+    /**
+     * Sets the zone and re-reads every subscribed calendar, because the stored rows were
+     * converted with the old one.
+     *
+     * Without the re-sync the setting would appear to do nothing until the next hourly pass —
+     * which is exactly when somebody would decide it was broken and change it again. False when
+     * the id is not a zone this platform knows.
+     */
+    fun setCalendarZone(id: String?): Boolean {
+        if (!repo.setCalendarZone(id)) return false
+        _calendarZone.value = repo.calendarZoneId()
+        syncNow()
+        return true
     }
 
     fun setApiKey(key: String) {
@@ -1312,5 +1360,14 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         /** Enough to scroll for a while without holding a year of rows in memory. */
         const val UPCOMING_LIMIT = 60
+
+        /**
+         * How far ahead the agenda lists holidays.
+         *
+         * [UPCOMING_LIMIT] is a count of rows, which says nothing about how many days they
+         * cover, so holidays need a horizon of their own. A year means the agenda always knows
+         * about the next Christmas without ever computing more than eleven dates.
+         */
+        const val AGENDA_HORIZON_DAYS = 365L
     }
 }

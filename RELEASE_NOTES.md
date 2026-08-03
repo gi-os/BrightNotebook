@@ -1,3 +1,30 @@
+## Notebook v1.37 — holidays, and a time zone you can see
+
+**The US federal holidays are on the grid, with a glyph each.** A tree on Christmas, an
+eight-pointed firework on the 4th of July, a five-pointed star for Juneteenth, a bell for Martin
+Luther King Jr. Day, a hard hat for Labor Day. They are worked out on the phone from the rules —
+eleven dates a year is arithmetic, not an API call — so they are right offline, in every year,
+forever, and there is no cache to go stale.
+
+**Observed dates are their own entry.** When Independence Day falls on a Saturday the fireworks
+are on the Saturday and the day off is the Friday. Those are two different facts about your week,
+and neither can be inferred from the other, so the grid shows both: "Independence Day" on the 4th,
+"Independence Day (observed)" on the 3rd.
+
+The glyphs are drawn for this app in LightOS's own idiom — a 30-unit viewport, one filled path, no
+outlines — and chosen to stay apart from each other at about twelve pixels, which is what a month
+cell actually gives them. That is why the firework has eight points and the Juneteenth star has
+five: at that size, point count is the only difference the eye can still use.
+
+**Settings → CALENDARS → TIME ZONE.** An imported calendar carries instants — `20260804T130000Z` —
+and turning one into "9:30, Tuesday" needs a time zone, while everything you type here is already
+local and needs none. So a phone that reports the wrong zone shifts every imported meeting by
+hours and leaves everything you wrote alone, which looks like the calendar being randomly wrong.
+The row now shows the zone the app actually resolved, which makes it a readout as much as a
+setting, and it can be overridden when the phone is the thing that is wrong. Changing it re-reads
+every subscribed calendar on the spot, because the rows already stored were converted with the old
+one.
+
 ## Notebook v1.36 — a work calendar can live here now
 
 **Settings → CALENDARS → Subscribe to a URL.** Point it at a published `.ics` feed and the

@@ -25,6 +25,14 @@ data class AgendaRow(
     /** Which day of a span this is, and how long the span is. Both 1 for an ordinary entry. */
     val dayOfSpan: Int = 1,
     val spanDays: Int = 1,
+    /**
+     * Set when this row is a US federal holiday, to [Holidays.Holiday.id].
+     *
+     * A holiday rides in as an ordinary all-day row rather than as a type of its own, which is
+     * what keeps it out of the database, out of `DayTimeline.Item` and out of every exhaustive
+     * `when` over it. The id is here only so the grid can pick a glyph.
+     */
+    val holidayId: String? = null,
 ) {
     val isSpan: Boolean get() = spanDays > 1
 
@@ -57,6 +65,25 @@ data class AgendaRow(
  * all of it is tested off-device — which is where the crash above should have been caught.
  */
 object Agenda {
+
+    /**
+     * The holidays in a day range, as rows.
+     *
+     * Computed on demand rather than stored: [Holidays] is arithmetic, so there is nothing to
+     * cache and nothing to go stale. Ids are namespaced like every other non-database row, and
+     * an observed date is a row of its own because it is a different day off.
+     */
+    fun holidayRows(fromDay: Long, toDay: Long): List<AgendaRow> =
+        Holidays.inRange(fromDay, toDay).map { holiday ->
+            AgendaRow(
+                id = "holiday:${holiday.id}:${holiday.epochDay}",
+                epochDay = holiday.epochDay,
+                // No time: a holiday is the whole day, and `merge` puts all-day rows first.
+                minutes = null,
+                title = holiday.label,
+                holidayId = holiday.id,
+            )
+        }
 
     /** Two showings of the same film count as one plan if they start about now. */
     private const val SAME_PLAN_MINUTES = 45

@@ -30,6 +30,10 @@ object Sync {
     suspend fun run(context: Context): SyncResult {
         val app = context.applicationContext
         val repo = NotebookRepository(app)
+        // The zone imported instants are read in — the phone's unless it has been overridden,
+        // which it has to be on a device that reports the wrong one. Read once per pass, so a
+        // change cannot land halfway through and split a calendar across two zones.
+        val zone = repo.calendarZone()
         var calendars = 0
         var events = 0
         var failed = 0
@@ -43,12 +47,12 @@ object Sync {
 
                 CalendarEntity.KIND_ICS -> runCatching {
                     repo.readText(Uri.parse(sourceRef))?.takeIf { IcsParser.looksLikeIcs(it) }
-                        ?.let { IcsParser.parse(it) }
+                        ?.let { IcsParser.parse(it, zone) }
                 }.getOrNull()
 
                 CalendarEntity.KIND_URL -> runCatching {
                     CalendarFeed.fetch(sourceRef)?.takeIf { IcsParser.looksLikeIcs(it) }
-                        ?.let { IcsParser.parse(it) }
+                        ?.let { IcsParser.parse(it, zone) }
                 }.getOrNull()
 
                 else -> null

@@ -36,6 +36,40 @@ class NotebookRepository(private val context: Context) {
         prefs.edit().putString(KEY_API, key.trim()).apply()
     }
 
+    /* ---- the zone imported times are read in ---- */
+
+    /**
+     * Which timezone an imported calendar's clock times mean, or null to trust the phone.
+     *
+     * This exists because the phone cannot always be trusted. An `.ics` carries instants —
+     * `20260804T130000Z` — and turning one into "9:30, Tuesday" needs a zone; every other kind
+     * of entry here is typed in local terms and needs none. So a device that reports the wrong
+     * zone shifts every imported event by hours while leaving everything you typed correct,
+     * which is a confusing thing to look at and impossible to explain from the calendar alone.
+     *
+     * Stored as an id rather than a [ZoneId] so a zone the platform later stops recognising
+     * degrades to "use the phone" instead of throwing on read.
+     */
+    fun calendarZoneId(): String? = prefs.getString(KEY_ZONE, null)?.takeIf { it.isNotBlank() }
+
+    /** The zone to actually read imported times in: the chosen one, else the phone's. */
+    fun calendarZone(): ZoneId =
+        calendarZoneId()?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+
+    /** True when the zone is the phone's own, rather than one that was chosen here. */
+    fun calendarZoneIsFromPhone(): Boolean = calendarZoneId() == null
+
+    /** Refuses an id the platform doesn't know rather than storing a zone that can't resolve. */
+    fun setCalendarZone(id: String?): Boolean {
+        if (id == null) {
+            prefs.edit().remove(KEY_ZONE).apply()
+            return true
+        }
+        if (runCatching { ZoneId.of(id) }.getOrNull() == null) return false
+        prefs.edit().putString(KEY_ZONE, id).apply()
+        return true
+    }
+
     fun setMirrorToSystemCalendar(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MIRROR, enabled).apply()
     }
@@ -415,6 +449,7 @@ class NotebookRepository(private val context: Context) {
         const val KEY_LAT = "home_lat"
         const val KEY_LON = "home_lon"
         const val KEY_DAYLIGHT = "show_daylight"
+        const val KEY_ZONE = "calendar_zone"
         const val DEFAULT_LEAD = 10
     }
 }

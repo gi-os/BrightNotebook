@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import com.gios.lightnotebook.R
+import com.gios.lightnotebook.util.Holidays
 
 /**
  * LightOS's own icon set. The vector drawables in `res/drawable/ic_*` are copied from
@@ -47,6 +48,30 @@ object LightIcons {
     val Up = LightIconSpec("up", R.drawable.ic_up_white)
     val Down = LightIconSpec("down", R.drawable.ic_down_white)
     val Spacer = LightIconSpec("", R.drawable.ic_spacer)
+
+    /**
+     * The glyph for a US federal holiday, by [com.gios.lightnotebook.util.Holidays] id.
+     *
+     * Drawn for this app rather than taken from the SDK set, which has no holidays in it, but to
+     * the same rules: a 30-unit viewport, one filled path, no stroke. They are chosen to stay
+     * apart from each other at about twelve pixels, which is what a month cell gives them — the
+     * eight-pointed firework and the five-pointed Juneteenth star differ by their point count
+     * for exactly that reason.
+     */
+    fun holiday(id: String): LightIconSpec? = when (id) {
+        Holidays.NEW_YEAR -> LightIconSpec("new year", R.drawable.ic_holiday_new_year)
+        Holidays.MLK -> LightIconSpec("martin luther king jr day", R.drawable.ic_holiday_mlk)
+        Holidays.PRESIDENTS -> LightIconSpec("presidents day", R.drawable.ic_holiday_presidents)
+        Holidays.MEMORIAL -> LightIconSpec("memorial day", R.drawable.ic_holiday_memorial)
+        Holidays.JUNETEENTH -> LightIconSpec("juneteenth", R.drawable.ic_holiday_juneteenth)
+        Holidays.INDEPENDENCE -> LightIconSpec("independence day", R.drawable.ic_holiday_independence)
+        Holidays.LABOR -> LightIconSpec("labor day", R.drawable.ic_holiday_labor)
+        Holidays.COLUMBUS -> LightIconSpec("columbus day", R.drawable.ic_holiday_columbus)
+        Holidays.VETERANS -> LightIconSpec("veterans day", R.drawable.ic_holiday_veterans)
+        Holidays.THANKSGIVING -> LightIconSpec("thanksgiving", R.drawable.ic_holiday_thanksgiving)
+        Holidays.CHRISTMAS -> LightIconSpec("christmas", R.drawable.ic_holiday_christmas)
+        else -> null
+    }
 }
 
 private const val DEFAULT_SIZE_UNITS = 2f

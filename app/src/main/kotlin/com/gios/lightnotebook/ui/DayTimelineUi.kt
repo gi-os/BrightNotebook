@@ -662,13 +662,24 @@ fun AllDayRow(
             ),
     ) {
         entries.forEach { entry ->
-            LightText(
-                text = entry.row.title,
-                variant = LightTextVariant.Superfine,
+            val holiday = entry.row.holidayId?.let { LightIcons.holiday(it) }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .padding(end = 0.7f.gridUnitsAsDp())
                     .lightClickable { onOpen(entry.row) },
-            )
+            ) {
+                // The same glyph the grid draws in the corner of the cell, so the tree on the
+                // 25th and the word "Christmas Day" are visibly the same fact.
+                if (holiday != null) {
+                    LightIcon(
+                        icon = holiday,
+                        size = 1.1f,
+                        modifier = Modifier.padding(end = 0.25f.gridUnitsAsDp()),
+                    )
+                }
+                LightText(text = entry.row.title, variant = LightTextVariant.Superfine)
+            }
         }
     }
 }

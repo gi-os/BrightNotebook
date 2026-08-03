@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.36.0**.
+`com.gios.lightnotebook`. Current release: **v1.37.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -79,6 +79,21 @@ importing other calendars — works with none.
   against Microsoft Graph, and — because it reads `calendarView` rather than an export —
   recurring meetings arrive as individual instances, which is the one thing importing a raw
   `.ics` cannot give you.
+- **US federal holidays, with a glyph each.** Computed on the phone from the rules — eleven
+  dates, no network, no key, no cache to go stale — and drawn as a small icon in the corner of
+  the day: a tree on Christmas, an eight-pointed firework on the 4th, a bell for MLK Day. They
+  ride in as ordinary all-day rows, so they need no table, no `DayTimeline.Item` of their own
+  and no exhaustive `when` anywhere. **Observed dates are separate entries**: a Saturday
+  Independence Day puts the fireworks on the Saturday and "Independence Day (observed)" on the
+  Friday you actually have off, which are two different facts about the week.
+- **The zone imported times are read in is visible, and can be overridden.** Settings →
+  CALENDARS → TIME ZONE. An `.ics` carries instants, so turning one into "9:30 Tuesday" needs a
+  zone; everything typed here is already local and needs none. A phone that reports the wrong
+  zone therefore shifts every imported meeting by hours and leaves everything you wrote
+  correct — a confusing thing to look at, and impossible to diagnose from the calendar alone.
+  The row shows what the app actually resolved, so it is a readout as much as a setting.
+  Changing it re-reads every subscribed calendar, because the stored rows were converted with
+  the old one.
 - **Mirroring to the phone's calendar.** Entries are written into a writable
   `CalendarContract` calendar when one exists; the notebook stays the source of truth,
   so deleting an entry removes both copies. The LPIII has no Play Services, so this is
@@ -358,7 +373,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.36.0 | this commit | Subscribe to a calendar URL, so a work calendar can live here |
+| v1.37.0 | this commit | US federal holidays with a glyph each, and a time zone you can see |
+| v1.36.0 | `774d361` | Subscribe to a calendar URL, so a work calendar can live here |
 | v1.35.0 | `36cc68e` | The report offer is a corner chip that fades, not a sheet |
 | v1.34.53 | `30b6e63` | The star sits on the print, and a tall photograph fills its frame |
 | v1.33.0 | (folded in) | The pile scatters instead of batching, and stops popping as you scroll |

@@ -26,6 +26,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -47,6 +48,8 @@ import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightDayGestures
 import com.gios.lightnotebook.ui.theme.lightTextStyle
 import com.gios.lightnotebook.util.AgendaRow
+import com.gios.lightnotebook.ui.theme.LightIcons
+import com.gios.lightnotebook.util.Holidays
 import com.gios.lightnotebook.util.CanvasMath
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Pt
@@ -59,6 +62,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -202,6 +207,7 @@ fun CalendarCanvas(
         // want a picture.
         val wantsCovers = CanvasMath.showsEntriesAtScale(scale)
         val coverBitmaps = remember { mutableStateMapOf<Long, ImageBitmap>() }
+        val holidayIcons = rememberHolidayIcons()
         val context = LocalContext.current
         val coverPx = with(LocalDensity.current) { COVER_REQUEST_DP.dp.roundToPx() }
 
@@ -563,6 +569,7 @@ fun CalendarCanvas(
                         rows = rows[day].orEmpty(),
                         hasPhotos = day in photoSummaries,
                         cover = coverBitmaps[day],
+                        holidayIcon = holidayIconFor(rows[day].orEmpty(), holidayIcons),
                         daylight = daylightByDay[day],
                         // The day's activity span: earliest to latest of anything on it. Entries
                         // come from the rows already loaded, photographs from the summary, so
@@ -803,6 +810,8 @@ private fun DrawScope.drawDay(
     rows: List<AgendaRow>,
     hasPhotos: Boolean,
     cover: ImageBitmap?,
+    /** The glyph for a holiday on this day, already tinted at draw time. */
+    holidayIcon: ImageBitmap?,
     daylight: Daylight.Result?,
     weather: DayWeather?,
     activity: IntRange?,
@@ -996,6 +1005,31 @@ private fun DrawScope.drawDay(
         weatherBottom += measured.size.height
     }
 
+    // The holiday glyph, drawn at every zoom — a Christmas tree in the corner of the 25th is
+    // the one mark that is worth as much zoomed out as in. Bottom right, which is the only
+    // corner nothing else claims: the number and the all-day label are top left, the entry dot
+    // and the photo square share the bottom centre.
+    if (holidayIcon != null) {
+        val side = (minOf(width, height) * HOLIDAY_ICON_FRACTION)
+            .coerceAtMost(HOLIDAY_ICON_MAX_PX)
+        // Below this the glyphs stop being distinguishable from each other and a smudge in the
+        // corner of a cell is worse than nothing.
+        if (side >= HOLIDAY_ICON_MIN_PX) {
+            val x = left + width - inset - side
+            val y = top + height - inset - side
+            drawImage(
+                image = holidayIcon,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(holidayIcon.width, holidayIcon.height),
+                dstOffset = IntOffset(x.roundToInt(), y.roundToInt()),
+                dstSize = IntSize(side.roundToInt(), side.roundToInt()),
+                // The glyphs are drawn white; the tint is what makes them obey the inverted
+                // block on today and the dimming of a neighbouring month.
+                colorFilter = ColorFilter.tint(ink),
+            )
+        }
+    }
+
     if (!showEntries) {
         // Two marks, and they have to be told apart at a glance on a cell a few millimetres
         // wide. A filled dot is something *written* on the day; a hollow square is something
@@ -1102,3 +1136,57 @@ private fun DrawScope.drawDay(
 private const val MAX_NUMBER_SP = 34f
 private const val MIN_ENTRY_SP = 8f
 private const val MAX_ENTRY_SP = 15f
+
+/**
+ * The eleven holiday glyphs, rasterised once.
+ *
+ * A vector drawable cannot be handed to a [DrawScope] directly, and this file is deliberately
+ * one draw pass with no composables in it — so the glyphs are turned into bitmaps here, in the
+ * composable, exactly as the photo covers are, and the draw only ever reads a finished map.
+ * Eleven small bitmaps for the life of the screen is nothing; rasterising per frame would not
+ * be.
+ *
+ * Rendered at a fixed size and scaled down at draw time. The alternative — re-rasterising as
+ * the cell size changes — would fire on every frame of a pinch, which is the one thing this
+ * screen must not do.
+ */
+@Composable
+private fun rememberHolidayIcons(): Map<String, ImageBitmap> {
+    val context = LocalContext.current
+    return remember(context) {
+        HOLIDAY_IDS.mapNotNull { id ->
+            val spec = LightIcons.holiday(id) ?: return@mapNotNull null
+            val drawable = ContextCompat.getDrawable(context, spec.res)
+                ?: return@mapNotNull null
+            id to drawable.toBitmap(HOLIDAY_ICON_PX, HOLIDAY_ICON_PX).asImageBitmap()
+        }.toMap()
+    }
+}
+
+/** The glyph for whichever holiday a day carries, if any. */
+private fun holidayIconFor(
+    rows: List<AgendaRow>,
+    icons: Map<String, ImageBitmap>,
+): ImageBitmap? = rows.firstNotNullOfOrNull { row -> row.holidayId?.let { icons[it] } }
+
+private val HOLIDAY_IDS = listOf(
+    Holidays.NEW_YEAR,
+    Holidays.MLK,
+    Holidays.PRESIDENTS,
+    Holidays.MEMORIAL,
+    Holidays.JUNETEENTH,
+    Holidays.INDEPENDENCE,
+    Holidays.LABOR,
+    Holidays.COLUMBUS,
+    Holidays.VETERANS,
+    Holidays.THANKSGIVING,
+    Holidays.CHRISTMAS,
+)
+
+/** Big enough that a day-sized cell does not show the pixels, small enough to be free. */
+private const val HOLIDAY_ICON_PX = 96
+
+/** A quarter of the cell: present without competing with the number or the entries. */
+private const val HOLIDAY_ICON_FRACTION = 0.24f
+private const val HOLIDAY_ICON_MIN_PX = 9f
+private const val HOLIDAY_ICON_MAX_PX = 46f

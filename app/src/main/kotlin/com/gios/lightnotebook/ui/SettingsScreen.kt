@@ -52,6 +52,7 @@ fun SettingsScreen(
     val lead by vm.defaultLead.collectAsStateWithLifecycle()
     val calendars by vm.calendars.collectAsStateWithLifecycle()
     val status by vm.importStatus.collectAsStateWithLifecycle()
+    val zone by vm.calendarZone.collectAsStateWithLifecycle()
     val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
     val usageGranted = remember { DeviceUse.granted(context) }
@@ -59,6 +60,9 @@ fun SettingsScreen(
     var draft by remember(saved) { mutableStateOf(saved) }
     var calendarName by remember { mutableStateOf(vm.systemCalendarName()) }
     var leadSheet by remember { mutableStateOf(false) }
+    var zoneSheet by remember { mutableStateOf(false) }
+    var zoneTyping by remember { mutableStateOf(false) }
+    var zoneError by remember { mutableStateOf(false) }
     var homeSheet by remember { mutableStateOf(false) }
     var homeError by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
@@ -143,6 +147,27 @@ fun SettingsScreen(
             )
             LightText(
                 text = status ?: "Imported calendars refresh themselves about once an hour.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+            )
+            // An imported event is an instant, so reading it needs a zone; anything typed here
+            // needs none. That asymmetry is why a phone reporting the wrong zone shifts every
+            // meeting by hours and leaves everything you wrote alone — and why this row shows
+            // what the app actually resolved rather than assuming it is right.
+            LightWideButton(
+                label = "TIME ZONE · ${(zone ?: vm.deviceZone).uppercase()}",
+                filled = zone != null,
+                modifier = Modifier.padding(top = 0.7f.verticalGridUnitsAsDp()),
+                onClick = { zoneSheet = true },
+            )
+            LightText(
+                text = if (zone == null) {
+                    "From the phone. Imported times are read in this zone — if they land " +
+                        "hours out, this is the thing that is wrong."
+                } else {
+                    "Set here, overriding the phone (${vm.deviceZone})."
+                },
                 variant = LightTextVariant.Detail,
                 lighten = true,
                 modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
@@ -381,6 +406,51 @@ fun SettingsScreen(
             onDismiss = {
                 homeSheet = false
                 homeError = false
+            },
+        )
+    }
+
+    if (zoneSheet) {
+        LightActionSheet(heading = "IMPORTED TIMES", onDismiss = { zoneSheet = false }) {
+            LightSheetAction(
+                label = "Use the phone's",
+                sub = vm.deviceZone,
+            ) {
+                vm.setCalendarZone(null)
+                zoneSheet = false
+            }
+            vm.zoneChoices.forEach { id ->
+                LightSheetAction(label = id) {
+                    vm.setCalendarZone(id)
+                    zoneSheet = false
+                }
+            }
+            // Seven zones is a list; six hundred is a scroll nobody finishes on this screen.
+            LightSheetAction(label = "Type a zone", sub = "Area/City") {
+                zoneSheet = false
+                zoneTyping = true
+            }
+        }
+    }
+
+    if (zoneTyping) {
+        LightNameSheet(
+            title = if (zoneError) "NOT A ZONE · AREA/CITY" else "TIME ZONE · AREA/CITY",
+            initial = zone ?: vm.deviceZone,
+            confirmLabel = "SET",
+            onConfirm = { typed ->
+                if (vm.setCalendarZone(typed.trim())) {
+                    zoneTyping = false
+                    zoneError = false
+                } else {
+                    // Same reasoning as the coordinates above: a sheet that closes having
+                    // stored nothing looks exactly like one that worked.
+                    zoneError = true
+                }
+            },
+            onDismiss = {
+                zoneTyping = false
+                zoneError = false
             },
         )
     }

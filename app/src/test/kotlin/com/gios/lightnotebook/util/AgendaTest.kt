@@ -234,4 +234,42 @@ class AgendaTest {
         )
         assertEquals("Day 2 of 3 · Work · 10 min before", row.subtitle)
     }
+
+    @Test
+    fun `holidays arrive as all-day rows carrying their id`() {
+        val fourth = java.time.LocalDate.of(2026, 7, 4).toEpochDay()
+        val rows = Agenda.holidayRows(fourth, fourth)
+        val real = rows.single { !it.title.contains("observed") }
+        assertEquals(Holidays.INDEPENDENCE, real.holidayId)
+        assertEquals("Independence Day", real.title)
+        assertNull(real.minutes)
+    }
+
+    @Test
+    fun `a holiday row is keyed on its own day so an observed date cannot collide`() {
+        // Both rows exist for a Saturday holiday, one on each date, and a LazyColumn throws on
+        // a repeated key — which is what an id built from the holiday alone would produce.
+        val week = Agenda.holidayRows(
+            java.time.LocalDate.of(2026, 7, 1).toEpochDay(),
+            java.time.LocalDate.of(2026, 7, 7).toEpochDay(),
+        )
+        assertEquals(2, week.size)
+        assertEquals(2, week.map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun `merged with entries, a holiday sorts above the day's timed rows`() {
+        val christmas = java.time.LocalDate.of(2026, 12, 25).toEpochDay()
+        val merged = Agenda.merge(
+            listOf(AgendaRow(id = "e", epochDay = christmas, minutes = 9 * 60, title = "Call Mum")),
+            Agenda.holidayRows(christmas, christmas),
+        )
+        assertEquals(Holidays.CHRISTMAS, merged.first().holidayId)
+        assertEquals("Call Mum", merged.last().title)
+    }
+
+    @Test
+    fun `an ordinary row carries no holiday id`() {
+        assertNull(AgendaRow(id = "e", epochDay = 1, minutes = null, title = "x").holidayId)
+    }
 }
