@@ -42,7 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.gios.lightnotebook.hw.WheelScroll
+import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightTextVariant
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.lightDayGestures

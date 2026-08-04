@@ -29,7 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.PhotoLibrary
-import com.gios.lightnotebook.hw.WheelScroll
+import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons

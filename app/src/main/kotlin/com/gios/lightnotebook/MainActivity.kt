@@ -40,10 +40,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gios.lightnotebook.ai.ReadMode
 import com.gios.lightnotebook.camera.RollCapture
-import com.gios.lightnotebook.hw.LightKey
-import com.gios.lightnotebook.hw.LightKeys
-import com.gios.lightnotebook.hw.LocalWheelBus
-import com.gios.lightnotebook.hw.WheelBus
+import com.gios.light.common.hw.LightKey
+import com.gios.light.common.hw.LightKeys
+import com.gios.light.common.hw.LocalWheelBus
+import com.gios.light.common.hw.WheelBus
 import com.gios.lightnotebook.notify.Notifier
 import com.gios.lightnotebook.notify.WeatherArchiveWorker
 import com.gios.lightnotebook.report.CrashLog
