@@ -373,7 +373,7 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.40.0 | this commit | One arrival per zone per minute, so the day screen stops closing itself |
+| v1.40.0 | `070b5a8` | One arrival per zone per minute, so the day screen stops closing itself |
 | v1.39.0 | `6a63041` | Calls, charging and where the screen time went — and one fewer hourly wakeup |
 | v1.38.0 | `079fd1c` | Entries and instants share one axis, so a day is in order |
 | v1.37.0 | `b2a2fe5` | US federal holidays with a glyph each, and a time zone you can see |
