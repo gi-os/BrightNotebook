@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  # light-common is resolved from GitHub Packages, which has no anonymous read.
+  packages: read
 
 jobs:
   build:
@@ -35,6 +37,10 @@ jobs:
 
       # The markdown and date logic is pure Kotlin precisely so it can be tested here.
       - name: Unit tests
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       # The key shake-to-report files issues with. Scoped to issues:write on the private
@@ -44,6 +50,9 @@ jobs:
       - name: Build APKs
         env:
           REPORT_TOKEN: ${{ secrets.REPORT_TOKEN }}
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
 
       - name: Collect APK

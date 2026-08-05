@@ -23,7 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.CallHistory
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
-import com.gios.lightnotebook.hw.WheelScroll
+import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.report.Reports
 import com.gios.lightnotebook.report.ShakeMonitor

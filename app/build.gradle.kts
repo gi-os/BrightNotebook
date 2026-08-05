@@ -35,7 +35,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.40.0"
+        versionName = "1.41.0"
 
         // The LPIII is arm64 only; shipping four ABIs tripled the APK for nothing.
         ndk { abiFilters += "arm64-v8a" }
@@ -55,7 +55,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Same committed key as debug, so either APK upgrades over the other.
             signingConfig = signingConfigs.getByName("debug")
@@ -73,6 +74,13 @@ android {
 }
 
 dependencies {
+    // The wheel, the report plumbing and the LightSync provider, shared with every other
+    // Light* app instead of pasted into each of them.
+    implementation("com.gios:light-common:1.2.0")
+    // What actually applies the baseline profile the AAR ships. Below API 31 nothing on the
+    // device reads a profile on its own, so without this the profile is inert bytes in the APK.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.core:core-ktx:1.15.0")

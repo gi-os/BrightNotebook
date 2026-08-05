@@ -27,7 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.ai.ParsedEvent
 import com.gios.lightnotebook.data.SystemCalendar
-import com.gios.lightnotebook.hw.WheelScroll
+import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightBottomBar
 import com.gios.lightnotebook.ui.theme.LightIcons
