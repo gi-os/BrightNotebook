@@ -277,10 +277,17 @@ object DayTimeline {
         }
         val clustered = cluster(photos)
 
+        // One arrival per zone per minute. The recorder dedupes its own arrivals by millisecond,
+        // which is not the granularity anything downstream uses: the timeline places an arrival by
+        // journal minute and the list keys it by journal minute, so two fixes seconds apart inside
+        // the same named zone — a GPS flap on the edge of it — are two items claiming one key, and
+        // a LazyColumn given the same key twice throws rather than drawing the day.
+        val arrived = arrivals.distinctBy { it.minutes to it.zone }
+
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrivals + calls + charges)
+            arrived + calls + charges)
             .sortedWith(
             compareBy(
                 { it.minutes ?: -1 },

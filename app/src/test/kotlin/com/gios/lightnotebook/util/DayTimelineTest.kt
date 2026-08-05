@@ -520,6 +520,40 @@ class DayTimelineTest {
         assertEquals(19 * 60 + 40, DayTimeline.bookends(items)!!.lastMinutes)
     }
 
+    @Test
+    fun `two fixes in one zone in one minute are one arrival`() {
+        // The crash this pins: light-reports#10 and #11, "Key arrived-work778 was already used".
+        // The recorder had filed two arrivals at work seconds apart, both landing on minute 778.
+        val items = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            arrivals = listOf(
+                DayTimeline.Item.Arrived(778, "work"),
+                DayTimeline.Item.Arrived(778, "work"),
+            ),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertEquals(1, items.count { it is DayTimeline.Item.Arrived })
+    }
+
+    @Test
+    fun `two different zones in the same minute both survive`() {
+        val items = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            arrivals = listOf(
+                DayTimeline.Item.Arrived(778, "work"),
+                DayTimeline.Item.Arrived(778, "home"),
+            ),
+            epochDay = today - 1,
+            today = today,
+            nowMinutes = noon,
+        )
+        assertEquals(2, items.count { it is DayTimeline.Item.Arrived })
+    }
+
     /* ---- entries and instants share one axis ---- */
 
     @Test
