@@ -1,4 +1,4 @@
-# LightNotebook
+# BrightNotebook
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
@@ -10,19 +10,19 @@ anywhere it ends up. The calendar is a single zoomable wall planner — weeks ru
 downward, epoch-day entries, pinch to zoom between Month/Week/Day — rather than a page
 of months. A camera button feeds a photographed page or planner to Claude Haiku, which
 either transcribes it into a note or extracts it into calendar events. If
-[LightPass](https://github.com/gi-os/LightPass) is installed, its ticket stubs show up
+[BrightPasses](https://github.com/gi-os/BrightPasses) is installed, its ticket stubs show up
 on the day they screen.
 
 This is a **plain sideloaded APK, not a Light SDK tool** — the SDK's dependency
 allowlist has no CameraX, so nothing that photographs a page can be built against it.
-See [gi-os/LightPass](https://github.com/gi-os/LightPass) for the shared skeleton this
+See [gi-os/BrightPasses](https://github.com/gi-os/BrightPasses) for the shared skeleton this
 repo (and every other camera-carrying Light* app) is built from.
 
 ## Quick start
 
 ```sh
-git clone https://github.com/gi-os/LightNotebook.git
-cd LightNotebook
+git clone https://github.com/gi-os/BrightNotebook.git
+cd BrightNotebook
 ./gradlew :app:assembleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
@@ -40,7 +40,7 @@ importing other calendars — works with none.
 ## Configuration
 
 - **Anthropic API key.** Settings → paste it, or **SCAN QR**: put your key into
-  <https://gi-os.github.io/LightNotebook/> (client-side, generated in the browser, the
+  <https://gi-os.github.io/BrightNotebook/> (client-side, generated in the browser, the
   key never leaves the page) and point the camera at the resulting code. The scanner is
   [gi-os/LightQR](https://github.com/gi-os/LightQR)'s CameraX analyzer, wrapped in a
   Light-styled screen. Typing and the calendar work with no key at all; only the camera
@@ -68,13 +68,13 @@ importing other calendars — works with none.
   wrong address says so immediately, then re-fetched by the same hourly refresh as every
   other import. Scan the address rather than typing it — a feed URL carries a long random
   secret, and the QR field on
-  [gi-os.github.io/LightNotebook](https://gi-os.github.io/LightNotebook/) makes one in the
+  [gi-os.github.io/BrightNotebook](https://gi-os.github.io/BrightNotebook/) makes one in the
   browser. The calendar names itself from `X-WR-CALNAME` if the feed says so, otherwise from
   its host.
 
   This is how a **work calendar** gets here. Microsoft 365 and Google both need an OAuth
   client the LPIII cannot run, so something else holds the account and publishes one file:
-  [LightSync's](https://github.com/gi-os/LightSync) `calendar_bridge.py` does exactly this
+  [BrightSync's](https://github.com/gi-os/BrightSync) `calendar_bridge.py` does exactly this
   against Microsoft Graph, and — because it reads `calendarView` rather than an export —
   recurring meetings arrive as individual instances, which is the one thing importing a raw
   `.ics` cannot give you.
@@ -97,9 +97,9 @@ importing other calendars — works with none.
   `CalendarContract` calendar when one exists; the notebook stays the source of truth,
   so deleting an entry removes both copies. The LPIII has no Play Services, so this is
   silently a no-op if there is nothing to write to.
-- **LightControl** (optional, separate app) rebinds the wheel click and camera button
+- **BrightControl** (optional, separate app) rebinds the wheel click and camera button
   phone-wide — brightness, flashlight, camera — and passes bare wheel turns straight
-  through to `com.gios.*` so LightNotebook keeps handling its own scrolling and planner
+  through to `com.gios.*` so BrightNotebook keeps handling its own scrolling and planner
   panning:
 
   ```sh
@@ -240,7 +240,7 @@ importing other calendars — works with none.
   the note filed under `<key>`, and makes it if this is the first ask. The key is opaque
   to this app — it only has to find the same row again — and is held in a unique
   column, so two taps at once cannot produce two notes.
-  [LightChat](https://github.com/gi-os/LightChat)'s contact page is the caller today: it
+  [BrightChat](https://github.com/gi-os/BrightChat)'s contact page is the caller today: it
   keeps one note per iMessage conversation and asks by the conversation's normalised
   handles, never by a chat guid, so restoring a Mac backup does not strand every note. The
   filter is `DEFAULT` and deliberately not `BROWSABLE`: it creates a database row from an
@@ -416,13 +416,13 @@ and not only what changed:
 | v1.27.44 | `5a010f8` | The shake lands between too stiff and too eager |
 | v1.26.43 | `2a849d6` | Weather on the planner, pull a day to refresh, and the fetch says what it did |
 | v1.25.0 | (on main) | A flick reports a glitch, the app reports itself, releases carry notes |
-| v1.24.41 | `9321442` | Who you talked to, from LightChat |
+| v1.24.41 | `9321442` | Who you talked to, from BrightChat |
 | v1.23.40 | `7d30795` | Fill in the weather now, as far back as there is data |
 | v1.22.0 | (on main) | Shake the phone to report a glitch |
 | v1.21.38 | `87626e3` | Weather, archived overnight; artists named; a place gets a pin |
 | v1.20.37 | `4dbffea` | Music runs alongside the day, and the planner knows where you were |
 | v1.19.36 | `d7fa722` | Pickups are part of the day, and nothing is anchored to the screen |
-| v1.18.0 | (folded in) | Where you were and what you had on, from LightFog and LightPhono |
+| v1.18.0 | (folded in) | Where you were and what you had on, from FogLight and LightPhono |
 | v1.17.34 | `87204bf` | Multi-day events: a trip is one thing, on every day it covers |
 | v1.16.0 | (folded in) | A starred photograph is the one a day shows |
 | v1.15.32 | `802b85b` | Hours down the gaps, pages actually centred, and the day's first line scrolls |
@@ -440,7 +440,7 @@ and not only what changed:
 | v1.2.21 | `069462c` | Photographs on the calendar, and pages photographed by Roll |
 | v1.1.20 | `23aff15` | One note per thing another app owns: `lightnotebook://note/<key>` |
 | v1.0.17 – v1.0.19 | | Keep the photograph and let a transcription be corrected; LightCamera's capture engine |
-| v1.0.16 | `dd4a3c2` | Separate what the notebook does with the wheel from what LightControl does |
+| v1.0.16 | `dd4a3c2` | Separate what the notebook does with the wheel from what BrightControl does |
 | v1.0.15 | `74028be` | Weekday letters live on the surface, and detail arrives earlier |
 | v1.0.14 | `398578f` | Drop the NEXT UP footer, and fix the bars vanishing after a pinch out |
 | v1.0.13 | `e601d6d` | Dim the neighbouring months by half |
@@ -452,7 +452,7 @@ and not only what changed:
 | v1.0.7  | `b8641bd` | The calendar is a zoomable wall planner |
 | v1.0.6  | `022c641` | Fix the agenda crash, fold tickets into their calendar entries, sync hourly |
 | v1.0.5  | `db438ae` | Times with reminders, labelled calendars you can import into, agenda screen |
-| v1.0.4  | `d4f52d6` | Show LightPass films on the calendar, open the stub when tapped |
+| v1.0.4  | `d4f52d6` | Show BrightPasses films on the calendar, open the stub when tapped |
 | v1.0.3  | `6a1ca4d` | Icons on the bottom bar, and highlight the day you are looking at |
 | v1.0.2  | `253b8f7` | Scan the API key in-app, with LightQR's scanner |
 | v1.0.1  | `6106690` | Initial release: notes, folders and a calendar for the Light Phone III |

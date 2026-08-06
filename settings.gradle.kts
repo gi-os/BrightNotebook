@@ -27,5 +27,5 @@ dependencyResolutionManagement {
         }
     }
 }
-rootProject.name = "LightNotebook"
+rootProject.name = "BrightNotebook"
 include(":app")
