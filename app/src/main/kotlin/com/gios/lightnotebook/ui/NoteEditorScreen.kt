@@ -24,6 +24,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -205,7 +206,13 @@ fun NoteEditorScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(top = 0.8f.verticalGridUnitsAsDp())
-                    .onGloballyPositioned { bodyTopPx = it.positionInParent().y },
+                    // Where the body sits inside the scrolling column, asked of the parent
+                    // rather than of the node itself: `positionInParent` moved between Compose
+                    // versions, and `localPositionOf` has meant the same thing since 1.0.
+                    .onGloballyPositioned { coords ->
+                        bodyTopPx = coords.parentLayoutCoordinates
+                            ?.localPositionOf(coords, Offset.Zero)?.y ?: 0f
+                    },
             ) {
             BasicTextField(
                 value = body,
