@@ -67,4 +67,40 @@ class ReminderTimingTest {
         assertEquals(0, Reminders.LEAD_CHOICES.first())
         assertEquals(true, Reminders.DEFAULT_LEAD_MINUTES in Reminders.LEAD_CHOICES)
     }
+
+    @Test
+    fun aRepeatingEntryIsArmedForItsNextOccurrenceNotItsFirst() {
+        // The series began on 3 August; it is now the 5th, before nine.
+        val entry = entry(9 * 60, 10).copy(rrule = "FREQ=DAILY")
+        val nowOnTheFifth = day.plusDays(2).atStartOfDay(zone).plusHours(7).toInstant().toEpochMilli()
+        val expected = day.plusDays(2).atStartOfDay(zone).plusHours(9).minusMinutes(10)
+            .toInstant().toEpochMilli()
+        assertEquals(expected, Reminders.triggerAtMillis(entry, zone, now = nowOnTheFifth))
+    }
+
+    @Test
+    fun anOccurrenceAlreadyGoneByArmsTheNextOne() {
+        val entry = entry(9 * 60, 10).copy(rrule = "FREQ=DAILY")
+        val afternoon = day.plusDays(2).atStartOfDay(zone).plusHours(15).toInstant().toEpochMilli()
+        val expected = day.plusDays(3).atStartOfDay(zone).plusHours(9).minusMinutes(10)
+            .toInstant().toEpochMilli()
+        assertEquals(expected, Reminders.triggerAtMillis(entry, zone, now = afternoon))
+    }
+
+    @Test
+    fun anExcludedOccurrenceIsNotRemindedAbout() {
+        val skipped = day.plusDays(2).toEpochDay()
+        val entry = entry(9 * 60, 10).copy(rrule = "FREQ=DAILY", exDays = skipped.toString())
+        val nowOnTheFifth = day.plusDays(2).atStartOfDay(zone).plusHours(7).toInstant().toEpochMilli()
+        val expected = day.plusDays(3).atStartOfDay(zone).plusHours(9).minusMinutes(10)
+            .toInstant().toEpochMilli()
+        assertEquals(expected, Reminders.triggerAtMillis(entry, zone, now = nowOnTheFifth))
+    }
+
+    @Test
+    fun aFinishedSeriesHasNothingLeftToFire() {
+        val entry = entry(9 * 60, 10).copy(rrule = "FREQ=DAILY;COUNT=2")
+        val later = day.plusDays(9).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertNull(Reminders.triggerAtMillis(entry, zone, now = later))
+    }
 }

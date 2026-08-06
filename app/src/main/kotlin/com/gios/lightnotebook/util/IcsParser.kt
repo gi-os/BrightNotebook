@@ -13,17 +13,30 @@ data class ImportedEvent(
     val epochDay: Long,
     val startMinutes: Int? = null,
     val endMinutes: Int? = null,
+    /** The feed's own `RRULE`, kept as written. Null for an event that happens once. */
+    val rrule: String? = null,
+    /** Days the series does not happen on: the feed's `EXDATE`s, plus any overridden instance. */
+    val exDays: Set<Long> = emptySet(),
 )
 
 /**
  * Reads events out of an iCalendar (.ics) file — the format every calendar exports and
  * every invite arrives as.
  *
- * Deliberately partial. It reads `VEVENT` blocks and takes `UID`, `SUMMARY`, `DTSTART`
- * and `DTEND`, and nothing else. Recurrence in particular is skipped rather than half
- * done: expanding `RRULE` correctly needs exception dates, count/until arithmetic and a
- * timezone database, and a weekly meeting silently appearing once would be worse than not
- * appearing at all.
+ * Deliberately partial. It reads `VEVENT` blocks and takes `UID`, `SUMMARY`, `DTSTART`,
+ * `DTEND`, `RRULE`, `EXDATE` and `RECURRENCE-ID`, and nothing else.
+ *
+ * **Recurrence is carried, not expanded.** An `RRULE` is stored on the event as written and
+ * turned into days later, by [Recurrence], for whatever window the calendar is drawing. That is
+ * the only way a feed with a ten-year daily meeting in it can be imported at all: expanding at
+ * parse time would put three and a half thousand rows in the database for one line of text.
+ * Rules outside [Recurrence]'s subset are still kept — expansion falls back to the start date
+ * for those, so the event appears once, on the day it really starts, exactly as it did before
+ * this parser knew what an RRULE was.
+ *
+ * A `VEVENT` carrying `RECURRENCE-ID` is an override of one instance of a series: it comes out
+ * as an event of its own, and the day it replaces is added to its series' exceptions so the two
+ * do not both appear.
  *
  * Android-free, so all of it is tested off-device.
  */
@@ -35,29 +48,42 @@ object IcsParser {
 
     fun parse(text: String, zone: ZoneId = ZoneId.systemDefault()): List<ImportedEvent> {
         val events = mutableListOf<ImportedEvent>()
+        // Which days each series has had overridden by a RECURRENCE-ID event, by UID. Applied
+        // after the whole file is read, because the override may be written before its master.
+        val overridden = mutableMapOf<String, MutableSet<Long>>()
         var inEvent = false
         var uid: String? = null
         var summary: String? = null
         var start: Moment? = null
         var end: Moment? = null
+        var rrule: String? = null
+        var recurrenceId: Moment? = null
+        var exDays = mutableSetOf<Long>()
 
         for (line in unfold(text)) {
             when {
                 line.equals("BEGIN:VEVENT", ignoreCase = true) -> {
                     inEvent = true
                     uid = null; summary = null; start = null; end = null
+                    rrule = null; recurrenceId = null; exDays = mutableSetOf()
                 }
 
                 line.equals("END:VEVENT", ignoreCase = true) -> {
                     inEvent = false
                     val begin = start
-                    // A recurring event is imported as its first occurrence only, which is
-                    // at least true, and never as a series this parser cannot expand.
                     if (begin != null && events.size < MAX_EVENTS) {
+                        val realUid = uid?.takeIf { it.isNotBlank() } ?: syntheticUid(summary, begin)
+                        val replaces = recurrenceId
+                        if (replaces != null) {
+                            // An overridden instance: its own event, and a hole in the series.
+                            overridden.getOrPut(realUid) { mutableSetOf() }.add(replaces.epochDay)
+                        }
                         events.add(
                             ImportedEvent(
-                                uid = uid?.takeIf { it.isNotBlank() }
-                                    ?: syntheticUid(summary, begin),
+                                // A moved instance must not collide with its own series: both
+                                // rows carry the same UID in the file, and `sourceUid` is what a
+                                // re-import matches on.
+                                uid = if (replaces != null) "$realUid#${replaces.epochDay}" else realUid,
                                 title = summary?.takeIf { it.isNotBlank() } ?: "Event",
                                 epochDay = begin.epochDay,
                                 startMinutes = begin.minutes,
@@ -65,6 +91,9 @@ object IcsParser {
                                     ?.takeIf { it.epochDay == begin.epochDay }
                                     ?.minutes
                                     ?.takeIf { begin.minutes != null && it > begin.minutes },
+                                // An override happens once, whatever the master says.
+                                rrule = if (replaces == null) rrule else null,
+                                exDays = if (replaces == null) exDays.toSet() else emptySet(),
                             ),
                         )
                     }
@@ -79,11 +108,23 @@ object IcsParser {
                         "SUMMARY" -> summary = unescape(value).trim().take(200)
                         "DTSTART" -> start = moment(params, value, zone)
                         "DTEND" -> end = moment(params, value, zone)
+                        "RRULE" -> rrule = value.trim().takeIf { it.isNotBlank() }
+                        // EXDATE may appear several times and may list several dates at once.
+                        "EXDATE" -> value.split(',').forEach { one ->
+                            moment(params, one, zone)?.let { exDays.add(it.epochDay) }
+                        }
+                        "RECURRENCE-ID" -> recurrenceId = moment(params, value, zone)
                     }
                 }
             }
         }
-        return events.sortedWith(compareBy({ it.epochDay }, { it.startMinutes ?: -1 }))
+
+        return events
+            .map { event ->
+                val holes = overridden[event.uid]
+                if (holes == null) event else event.copy(exDays = event.exDays + holes)
+            }
+            .sortedWith(compareBy({ it.epochDay }, { it.startMinutes ?: -1 }))
     }
 
     /** A point in time reduced to the grid: which square, and how far into it. */

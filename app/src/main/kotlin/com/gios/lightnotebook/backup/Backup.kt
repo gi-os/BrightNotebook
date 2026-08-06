@@ -24,6 +24,11 @@ import com.gios.light.common.sync.LightSyncBackup
  *    the events behind it do not: an ICS feed's contents are re-fetchable from its URL, but the
  *    fact that you subscribed to that URL, called it "Work" and left it visible exists nowhere
  *    but this table. Losing it means going and finding every feed address again.
+ *
+ *    Recurrence needs nothing new here, and that was checked rather than assumed: a repeat rule
+ *    and its exceptions are two columns on `day_entries` — the whole series is one row — so they
+ *    are inside this same file. A repeating event survives a restore because the rule does, and
+ *    the days it lands on are worked out again on the phone it lands on.
  *  - `settings` — the `lightnotebook` preferences: the Anthropic key, the location the day
  *    screen uses, the calendar timezone override, the system-calendar mirror toggle and the
  *    default reminder lead. Small, typed in by hand, and irritating to reconstruct.

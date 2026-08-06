@@ -48,6 +48,7 @@ import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.Charging
 import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.NoteDates
+import com.gios.lightnotebook.util.Recurrence
 import kotlinx.coroutines.delay
 import java.time.ZoneId
 import androidx.compose.animation.AnimatedVisibility
@@ -125,6 +126,12 @@ fun DayPane(
     var draft by remember(epochDay) { mutableStateOf("") }
     var editing by remember { mutableStateOf<DayEntryEntity?>(null) }
     var actionsFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    // Which occurrence of a series the open sheet is about. A series is one row in the database
+    // and many on screen, so the entry alone cannot say which Tuesday was tapped.
+    var actionsOn by remember { mutableStateOf<Long?>(null) }
+    var repeatingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    // A scope question waiting for an answer: this one occurrence, or the whole series?
+    var scopeFor by remember { mutableStateOf<Pair<DayEntryEntity, SeriesAction>?>(null) }
     var remindingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var timingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
     var movingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
@@ -296,7 +303,12 @@ fun DayPane(
 
         AllDayRow(
             entries = allDay,
-            onOpen = { entry -> vm.entryById(entry.entryId)?.let { actionsFor = it } },
+            onOpen = { row ->
+                vm.entryById(row.entryId)?.let {
+                    actionsFor = it
+                    actionsOn = row.occurrenceDay ?: row.epochDay
+                }
+            },
         )
         LightRule()
 
@@ -538,10 +550,18 @@ fun DayPane(
                                     if (pass != null) {
                                         vm.openPass(pass)
                                     } else {
-                                        entry?.let { actionsFor = it }
+                                        entry?.let {
+                                            actionsFor = it
+                                            actionsOn = row.occurrenceDay ?: row.epochDay
+                                        }
                                     }
                                 },
-                                onLongClick = entry?.let { { actionsFor = it } },
+                                onLongClick = entry?.let {
+                                    {
+                                        actionsFor = it
+                                        actionsOn = row.occurrenceDay ?: row.epochDay
+                                    }
+                                },
                             )
                             LightRule()
                         }
@@ -630,7 +650,16 @@ fun DayPane(
             // Not offered on something that has already happened: a reminder counts back from
             // a time, and there is nothing left to count back to. Times stay, because "we ate
             // at eight" is a real thing to write down about a day that has gone.
-            if (!DayTimeline.behind(entry.epochDay, entry.startMinutes, today, nowMinutes)) {
+            // Tested against the occurrence, not against the entry: a series' stored day is
+            // where it began, which for a weekly standup is always in the past, and testing that
+            // would hide the reminder row on every repeating event there is.
+            if (!DayTimeline.behind(
+                    actionsOn ?: entry.epochDay,
+                    entry.startMinutes,
+                    today,
+                    nowMinutes,
+                )
+            ) {
                 LightSheetAction(
                     label = "Reminder",
                     sub = entry.reminderMinutes?.let {
@@ -659,6 +688,25 @@ fun DayPane(
                 spanningFor = entry
                 actionsFor = null
             }
+            // Not offered on an imported entry: the feed owns the rule, and setting one here
+            // would be overwritten by the next refresh without ever saying so.
+            if (!entry.isImported) {
+                LightSheetAction(
+                    label = "Repeats",
+                    sub = Recurrence.describe(entry.rrule, entry.epochDay) ?: "Never",
+                ) {
+                    repeatingFor = entry
+                    actionsFor = null
+                }
+            } else if (entry.repeats) {
+                LightSheetAction(
+                    label = "Repeats",
+                    sub = (Recurrence.describe(entry.rrule, entry.epochDay) ?: "Never") +
+                        " · from the calendar it was imported from",
+                ) {
+                    actionsFor = null
+                }
+            }
             if (entry.imagePath != null) {
                 LightSheetAction("See the photo", sub = "The page this was read off") {
                     photoFor = entry.imagePath
@@ -666,20 +714,29 @@ fun DayPane(
                 }
             }
             if (!entry.isImported) {
-                LightSheetAction("Edit text") {
-                    editing = entry
+                LightSheetAction("Edit text", sub = if (entry.repeats) "This one, or all of them" else null) {
+                    if (entry.repeats) {
+                        scopeFor = entry to SeriesAction.EDIT
+                    } else {
+                        editing = entry
+                    }
                     actionsFor = null
                 }
             }
             LightSheetAction(
                 label = "Delete",
                 sub = when {
+                    entry.repeats -> "This one, or all of them"
                     entry.systemEventId != null -> "Also removes it from the phone's calendar"
                     entry.isImported -> "Comes back if you import again"
                     else -> null
                 },
             ) {
-                vm.deleteDayEntry(entry)
+                if (entry.repeats) {
+                    scopeFor = entry to SeriesAction.DELETE
+                } else {
+                    vm.deleteDayEntry(entry)
+                }
                 actionsFor = null
             }
         }
@@ -786,6 +843,52 @@ fun DayPane(
         )
     }
 
+    repeatingFor?.let { entry ->
+        RepeatSheet(
+            startEpochDay = entry.epochDay,
+            current = entry.rrule,
+            onDismiss = { repeatingFor = null },
+            onSet = { rrule ->
+                vm.setEntryRepeat(entry, rrule)
+                repeatingFor = null
+            },
+        )
+    }
+
+    // One occurrence, or the whole series? Asked rather than assumed, in both directions: a
+    // silent "all of them" deletes a year of standups, and a silent "just this one" leaves the
+    // other fifty-one saying the wrong thing.
+    scopeFor?.let { (entry, action) ->
+        val occurrence = actionsOn ?: entry.epochDay
+        LightActionSheet(
+            heading = if (action == SeriesAction.DELETE) "DELETE" else "EDIT",
+            onDismiss = { scopeFor = null },
+        ) {
+            LightSheetAction(
+                label = "Just this one",
+                sub = NoteDates.dayTitle(occurrence),
+            ) {
+                when (action) {
+                    SeriesAction.DELETE -> vm.skipOccurrence(entry, occurrence)
+                    // The occurrence leaves the series first, and the editor opens on the copy,
+                    // so what gets typed lands on that day only.
+                    SeriesAction.EDIT -> vm.detachOccurrence(entry, occurrence) { editing = it }
+                }
+                scopeFor = null
+            }
+            LightSheetAction(
+                label = "All of them",
+                sub = Recurrence.describe(entry.rrule, entry.epochDay),
+            ) {
+                when (action) {
+                    SeriesAction.DELETE -> vm.deleteDayEntry(entry)
+                    SeriesAction.EDIT -> editing = entry
+                }
+                scopeFor = null
+            }
+        }
+    }
+
     if (photoFor != null) {
         PhotoSheet(path = photoFor, onDismiss = { photoFor = null })
     }
@@ -803,3 +906,6 @@ fun DayPane(
         )
     }
 }
+
+/** What a series is about to be asked to do to itself. */
+private enum class SeriesAction { EDIT, DELETE }

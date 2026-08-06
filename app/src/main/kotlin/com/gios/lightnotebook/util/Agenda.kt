@@ -26,6 +26,14 @@ data class AgendaRow(
     val dayOfSpan: Int = 1,
     val spanDays: Int = 1,
     /**
+     * The day the occurrence behind this row *starts*, when the entry repeats.
+     *
+     * A series is one database row and many rows on screen, so "which one did you tap" cannot be
+     * answered by the entry alone — the sheet needs it to know which Tuesday you meant when you
+     * chose "just this one". Null for anything that happens once, which is nearly everything.
+     */
+    val occurrenceDay: Long? = null,
+    /**
      * Set when this row is a US federal holiday, to [Holidays.Holiday.id].
      *
      * A holiday rides in as an ordinary all-day row rather than as a type of its own, which is

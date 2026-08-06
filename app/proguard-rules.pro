@@ -71,3 +71,21 @@
 # the queued report files — is read key by key through org.json, never mapped onto a class by
 # field name. So there is nothing to keep, and no reflective binder to defeat. Written down
 # because "we parse JSON" is the usual reason to reach for a keep rule, and it does not apply.
+
+# ---------------------------------------------------------------- persisted enum names
+
+# A repeat frequency is written into an `RRULE` string by name — `FREQ=WEEKLY` is
+# `RepeatFreq.WEEKLY.name` — and read back with a `when` over the same spellings, in
+# `util/Recurrence.kt`. Both the string in the database and the string in an imported `.ics`
+# outlive the build that wrote them, so the names have to survive obfuscation; in full mode R8
+# renames enum constants like anything else, and the failure is silent — every repeating event
+# quietly stops repeating on the next update, with no crash to point at it.
+#
+# `values()` and `valueOf()` are kept as well as the fields, because R8's own enum-unboxing
+# optimisation removes them otherwise and a future `RepeatFreq.valueOf(...)` here would
+# disappear with them.
+-keepclassmembers enum com.gios.lightnotebook.util.RepeatFreq {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+    *;
+}

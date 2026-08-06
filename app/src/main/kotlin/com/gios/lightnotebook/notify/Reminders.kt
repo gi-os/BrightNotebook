@@ -7,6 +7,7 @@ import android.content.Intent
 import android.util.Log
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.util.NoteDates
+import com.gios.lightnotebook.util.Recurrence
 import java.time.ZoneId
 
 /**
@@ -36,8 +37,13 @@ object Reminders {
     const val DEFAULT_LEAD_MINUTES = 10
 
     /**
-     * When the reminder should fire, or null when it cannot: an entry with no time, or one
-     * whose moment has already passed. Pure arithmetic, so the awkward part is testable.
+     * When the reminder should fire, or null when it cannot: an entry with no time, one whose
+     * moment has already passed, or a series that has run out. Pure arithmetic, so the awkward
+     * part is testable.
+     *
+     * A repeating entry is armed for its **next** occurrence rather than its first, which is
+     * usually in the past — the stored day is where the series began. Only one alarm is held at
+     * a time, and the receiver arms the one after it as each fires.
      */
     fun triggerAtMillis(
         entry: DayEntryEntity,
@@ -46,14 +52,42 @@ object Reminders {
     ): Long? {
         val startMinutes = entry.startMinutes ?: return null
         val lead = entry.reminderMinutes ?: return null
-        val start = NoteDates.of(entry.epochDay)
-            .atStartOfDay(zone)
-            .plusMinutes(startMinutes.toLong())
-            .toInstant()
-            .toEpochMilli()
-        val at = start - lead * 60_000L
-        return at.takeIf { it > now }
+        return candidateDays(entry, zone, now)
+            .asSequence()
+            .map { day ->
+                NoteDates.of(day)
+                    .atStartOfDay(zone)
+                    .plusMinutes(startMinutes.toLong())
+                    .toInstant()
+                    .toEpochMilli() - lead * 60_000L
+            }
+            .firstOrNull { it > now }
     }
+
+    /**
+     * The days worth considering: the one day a plain entry happens on, or the next few
+     * occurrences of a series.
+     *
+     * More than one, because today's occurrence may already have gone by — a daily standup
+     * looked at in the afternoon should arm tomorrow's, not report that there is nothing left.
+     * The window is a year and change, so a rule whose next occurrence is further away than that
+     * simply has no alarm until the app is next opened, which is when everything is re-armed.
+     */
+    private fun candidateDays(entry: DayEntryEntity, zone: ZoneId, now: Long): List<Long> {
+        if (!entry.repeats) return listOf(entry.epochDay)
+        val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
+        return Recurrence.expand(
+            rrule = entry.rrule,
+            startDay = entry.epochDay,
+            from = maxOf(today, entry.epochDay),
+            to = today + REPEAT_LOOKAHEAD_DAYS,
+            exDays = Recurrence.parseExDays(entry.exDays),
+            cap = 4,
+        )
+    }
+
+    /** How far ahead a repeating reminder will look for its next occurrence. */
+    private const val REPEAT_LOOKAHEAD_DAYS = 400L
 
     fun schedule(context: Context, entry: DayEntryEntity) {
         val app = context.applicationContext

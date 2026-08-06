@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.40.0**.
+`com.gios.lightnotebook`. Current release: **v1.42.0**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -59,9 +59,8 @@ importing other calendars — works with none.
 
   Without it the notification and the buzz still arrive; only the panel stays dark.
 - **Importing calendars.** Settings → CALENDARS. Import a `.ics` file (parsed directly,
-  recurrence deliberately not expanded — a weekly meeting arrives as its first
-  occurrence) or import from the phone's own calendar provider via
-  `CalendarContract.Instances` (recurrence expansion comes from the provider itself).
+  `RRULE` and all — a weekly meeting arrives as a weekly meeting) or import from the phone's
+  own calendar provider via `CalendarContract.Instances` (already expanded at the source).
   Each import is a labelled, hideable, removable source; re-importing the same source
   **replaces** its events rather than duplicating them.
 - **Subscribing to a calendar URL.** Settings → CALENDARS → *Subscribe to a URL*. Any
@@ -113,6 +112,33 @@ importing other calendars — works with none.
   ```
 
 ## Usage notes worth knowing
+
+- **Things that repeat.** Open an entry → *Repeats*: daily, weekly, monthly or yearly, an
+  interval, which weekdays for a weekly one, and an end — never, after a number of times, or on
+  a date. A series is **one row in the database**, not one row per occurrence: the rule is
+  stored as an RFC 5545 `RRULE` and the days it lands on are worked out for whatever window is
+  on screen. That is what makes importing a ten-year daily meeting from a feed cost one row
+  instead of three and a half thousand, and it is why `.ics` recurrence — which this app used to
+  skip on purpose, showing a weekly standup exactly once — works now: both halves are the same
+  engine, `util/Recurrence.kt`.
+
+  It reads `FREQ`, `INTERVAL`, `BYDAY` (including `1MO` and `-1FR`), `BYMONTHDAY`, `COUNT`,
+  `UNTIL` and `EXDATE`, and **refuses the rest** — `BYSETPOS`, `BYWEEKNO`, `BYYEARDAY`, a
+  non-Monday `WKST`, sub-daily frequencies — rather than expanding them wrongly. A refused rule
+  is not dropped: the event appears once, on the day it really starts, and the *Repeats* row
+  says the app cannot read it. Monthly on the 31st **skips** a month that has no 31st, which is
+  what the standard says; "the last day of every month" is the *LAST* option in the picker.
+
+  Editing or deleting one occurrence always asks: **just this one**, or **all of them**. "Just
+  this one" writes an exception date for that day; editing detaches that occurrence into an
+  entry of its own first, so what you type lands on that day only.
+
+- **Checkboxes in a note.** A line typed as `- [ ] milk` draws a real checkbox, and tapping it
+  rewrites that line to `- [x] milk`. **The text is still the note** — there is no separate
+  checkbox model, nothing to migrate, and a checklist exported or read anywhere else is still
+  the same five characters. The rewrite is addressed by line number, never by matching the text,
+  so two identical `- [ ] milk` lines tick independently; the glyph is its own tap target, so
+  ticking something off does not put the caret in the note or raise the keyboard.
 
 - **A day reads as a diary once it has happened, and as a calendar until then.** There is no
   diary mode and no calendar mode: there is a *now line*, and everything follows from which
@@ -373,6 +399,7 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
+| v1.42.0 | (on main) | Things that repeat, and checkboxes you can tick |
 | v1.40.0 | `070b5a8` | One arrival per zone per minute, so the day screen stops closing itself |
 | v1.39.0 | `6a63041` | Calls, charging and where the screen time went — and one fewer hourly wakeup |
 | v1.38.0 | `079fd1c` | Entries and instants share one axis, so a day is in order |

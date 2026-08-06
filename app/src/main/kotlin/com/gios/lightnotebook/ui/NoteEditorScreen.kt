@@ -1,37 +1,58 @@
 package com.gios.lightnotebook.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.IntOffset
+import com.gios.light.common.hw.WheelScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightBottomBar
+import com.gios.lightnotebook.ui.theme.LightIcon
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightText
 import com.gios.lightnotebook.ui.theme.LightTextVariant
 import com.gios.lightnotebook.ui.theme.LightThemeTokens
 import com.gios.lightnotebook.ui.theme.LightTopBar
+import com.gios.lightnotebook.ui.theme.gridUnitsAsDp
+import com.gios.lightnotebook.ui.theme.lightClickable
 import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.lightTextStyle
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.Edit
+import com.gios.lightnotebook.util.NoteChecklist
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.NoteMarkdown
+import kotlin.math.roundToInt
 
 /**
  * The editor. There is no read mode and no edit mode — opening a note puts the cursor in
@@ -99,6 +120,21 @@ fun NoteEditorScreen(
         persist(flush = false)
     }
 
+    /**
+     * Ticks or unticks one line, addressed by its index in the note and never by its text.
+     *
+     * The rewrite is the same length as the line it replaces, so the selection carries over
+     * untouched — and because the glyph is its own hit target, tapping it never puts the caret
+     * anywhere or opens the keyboard. Two identical `- [ ] milk` lines are two separate things
+     * to buy and toggle independently; see [NoteChecklist].
+     */
+    fun toggleCheckbox(lineIndex: Int) {
+        val next = NoteChecklist.toggle(body.text, lineIndex)
+        if (next == body.text) return
+        body = TextFieldValue(next, body.selection)
+        persist(flush = false)
+    }
+
     Column(Modifier.fillMaxSize().imePadding()) {
         LightTopBar(
             left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f) {
@@ -112,10 +148,48 @@ fun NoteEditorScreen(
         )
         LightRule()
 
+        // **The note scrolls, not the field inside it.**
+        //
+        // A multi-line `BasicTextField` scrolls itself, which was right until there was
+        // something to draw on top of the text: the layout it reports is in text coordinates and
+        // knows nothing about how far it has scrolled itself, so every checkbox glyph would
+        // drift off its line the moment a long note moved. Owning the scroll puts the glyphs and
+        // the words in one coordinate space — and it is what lets the wheel scroll a note at
+        // all, which it could not do before. The reason the field used to scroll itself was that
+        // the cursor stays on screen when it does; that is now done by hand, below.
+        val scroll = rememberScrollState()
+        WheelScroll(scroll)
+        val density = LocalDensity.current
+        var layout by remember(noteId) { mutableStateOf<TextLayoutResult?>(null) }
+        var viewportPx by remember { mutableIntStateOf(0) }
+        var bodyTopPx by remember { mutableFloatStateOf(0f) }
+
+        // Keeping the caret on screen, which the field used to do for itself. Measured out here
+        // because grid units are a composable lookup and an effect is not a composition.
+        val margin = with(density) { 1f.verticalGridUnitsAsDp().toPx() }
+
+        LaunchedEffect(body.selection, layout, viewportPx) {
+            val measured = layout ?: return@LaunchedEffect
+            if (viewportPx == 0) return@LaunchedEffect
+            val caret = body.selection.start.coerceIn(0, body.text.length)
+            val rect = runCatching { measured.getCursorRect(caret) }.getOrNull()
+                ?: return@LaunchedEffect
+            val top = bodyTopPx + rect.top
+            val bottom = bodyTopPx + rect.bottom
+            when {
+                bottom > scroll.value + viewportPx - margin ->
+                    scroll.scrollTo((bottom - viewportPx + margin).roundToInt().coerceIn(0, scroll.maxValue))
+                top < scroll.value + margin ->
+                    scroll.scrollTo((top - margin).roundToInt().coerceIn(0, scroll.maxValue))
+            }
+        }
+
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .onSizeChanged { viewportPx = it.height }
+                .verticalScroll(scroll)
                 .padding(horizontal = lightInset()),
         ) {
             LightInlineField(
@@ -127,6 +201,12 @@ fun NoteEditorScreen(
                 modifier = Modifier.padding(top = 0.8f.verticalGridUnitsAsDp()),
             )
 
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 0.8f.verticalGridUnitsAsDp())
+                    .onGloballyPositioned { bodyTopPx = it.positionInParent().y },
+            ) {
             BasicTextField(
                 value = body,
                 onValueChange = { next ->
@@ -146,8 +226,9 @@ fun NoteEditorScreen(
                 },
                 textStyle = lightTextStyle(LightTextVariant.Paragraph).copy(color = colors.content),
                 cursorBrush = SolidColor(colors.content),
+                onTextLayout = { layout = it },
                 visualTransformation = remember(colors) {
-                    NoteTransformation(colors.contentFaint, colors.content)
+                    NoteTransformation(colors.contentFaint, colors.content, colors.background)
                 },
                 decorationBox = { inner ->
                     if (body.text.isEmpty()) {
@@ -155,14 +236,50 @@ fun NoteEditorScreen(
                     }
                     inner()
                 },
-                // No outer verticalScroll: a multi-line BasicTextField scrolls itself and
-                // keeps the cursor on screen, and wrapping it in a scrollable parent is
-                // what stops that happening — press return near the bottom and the new
-                // line is written somewhere you cannot see.
+                // Unbounded height inside the scrolling column, so the whole note is laid out
+                // and every line has a position the glyphs below can be pinned to. The minimum
+                // keeps the tap-anywhere-to-write area the size of the screen on a short note.
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 0.8f.verticalGridUnitsAsDp()),
+                    .fillMaxWidth()
+                    .heightIn(min = 18f.verticalGridUnitsAsDp()),
             )
+
+            // The checkboxes. Drawn over the five characters the transformation painted out, in
+            // the SDK's own selected/unselected glyphs rather than a Material icon or a unicode
+            // box that the Light typeface may not even have.
+            //
+            // Only these small boxes take a touch — Compose hit-tests the nodes that ask for
+            // pointer input, so the rest of this overlay is invisible to a finger and a tap
+            // between them goes straight through to the text field, as it should.
+            val boxes = remember(body.text) { NoteChecklist.items(body.text) }
+            val measured = layout
+            if (measured != null) {
+                val target = 2.2f.gridUnitsAsDp()
+                val targetPx = with(density) { target.roundToPx() }
+                boxes.forEach { item ->
+                    if (item.markerOffset >= body.text.length) return@forEach
+                    val rect = runCatching { measured.getBoundingBox(item.markerOffset) }
+                        .getOrNull() ?: return@forEach
+                    Box(
+                        Modifier
+                            .offset {
+                                IntOffset(
+                                    rect.left.roundToInt(),
+                                    (rect.center.y - targetPx / 2f).roundToInt(),
+                                )
+                            }
+                            .size(target)
+                            .lightClickable { toggleCheckbox(item.lineIndex) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        LightIcon(
+                            if (item.checked) LightIcons.SelectOn else LightIcons.SelectOff,
+                            size = 1.4f,
+                        )
+                    }
+                }
+            }
+            }
         }
 
         // Formatting appears only when there is something selected to format. It used to

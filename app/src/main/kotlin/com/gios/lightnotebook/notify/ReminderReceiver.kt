@@ -56,6 +56,10 @@ class ReminderReceiver : BroadcastReceiver() {
                 }
                 Notifier.post(app, entry.id, entry.text, subtitle, entry.epochDay)
                 showBox(app, entry.text, subtitle, entry.epochDay)
+                // A series holds one alarm at a time, so the next one is armed as this one
+                // fires. Without this a weekly meeting would be reminded about exactly once,
+                // until something else — a launch, a reboot — re-armed everything.
+                if (entry.repeats) Reminders.schedule(app, entry)
             } catch (t: Throwable) {
                 Log.w(TAG, "reminder failed: $t")
             } finally {

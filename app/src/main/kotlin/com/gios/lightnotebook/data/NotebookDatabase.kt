@@ -130,6 +130,26 @@ data class DayEntryEntity(
     val reminderMinutes: Int? = null,
     /** The source's own identifier (ICS `UID`, or a device event id), for re-imports. */
     val sourceUid: String? = null,
+    /**
+     * The RFC 5545 `RRULE` this entry repeats on, or null for a thing that happens once.
+     *
+     * Stored as the rule's own text rather than as parsed columns, and **not** expanded into
+     * rows. One row is one series: a daily meeting imported from a decade-long feed is a single
+     * entry here, and the days it lands on are worked out by
+     * [com.gios.lightnotebook.util.Recurrence] for whatever window is being drawn. Materialising
+     * instances would mean thousands of rows, a re-import that has to reconcile them, and a
+     * reminder table to match.
+     *
+     * [epochDay] and [startMinutes] stay what they always were: the *first* occurrence. Every
+     * query in this file still finds the row on that day, so nothing that predates recurrence
+     * had to change.
+     */
+    val rrule: String? = null,
+    /**
+     * Occurrences that were taken out of the series — an `EXDATE`, as epoch days separated by
+     * commas. Written by "delete just this one", and by a feed's own EXDATE lines.
+     */
+    val exDays: String? = null,
     /** The photograph this was read off, so a transcription can be checked against it. */
     val imagePath: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
@@ -143,6 +163,9 @@ data class DayEntryEntity(
 
     /** The last day covered, which is the first when it is not a span. */
     val lastDay: Long get() = endEpochDay ?: epochDay
+
+    /** Whether this row is a series rather than a single occurrence. */
+    val repeats: Boolean get() = !rrule.isNullOrBlank()
 }
 
 /** How many entries a day holds — enough to mark the month grid without loading it all. */
@@ -307,12 +330,35 @@ interface NotebookDao {
     )
     fun observeRange(from: Long, to: Long): Flow<List<DayEntryEntity>>
 
-    /** Everything still to come that asked to be reminded — used to re-arm alarms. */
+    /**
+     * Everything still to come that asked to be reminded — used to re-arm alarms.
+     *
+     * A repeating entry is kept whatever its start day, because its *first* occurrence is
+     * usually in the past and its next one is not. Which day that is comes from the rule, in
+     * [com.gios.lightnotebook.notify.Reminders].
+     */
     @Query(
-        "SELECT * FROM day_entries WHERE reminderMinutes IS NOT NULL AND epochDay >= :from AND " +
+        "SELECT * FROM day_entries WHERE reminderMinutes IS NOT NULL AND " +
+            "(epochDay >= :from OR (rrule IS NOT NULL AND rrule != '')) AND " +
             "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1))",
     )
     suspend fun entriesWithReminders(from: Long): List<DayEntryEntity>
+
+    /**
+     * Every repeating entry, whenever it started.
+     *
+     * Unwindowed on purpose, and safely so: a series is one row, so this is a handful of rows on
+     * any real phone, and the alternative — asking the database which days a rule lands on —
+     * would mean teaching SQLite to read an RRULE. The days come from
+     * [com.gios.lightnotebook.util.Recurrence] once these rows are in hand, bounded by whatever
+     * window the screen is drawing.
+     */
+    @Query(
+        "SELECT * FROM day_entries WHERE rrule IS NOT NULL AND rrule != '' AND " +
+            "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1)) " +
+            "ORDER BY startMinutes IS NULL DESC, startMinutes ASC, createdAt ASC",
+    )
+    fun observeRecurring(): Flow<List<DayEntryEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putDayEntry(entry: DayEntryEntity)
@@ -331,7 +377,8 @@ interface NotebookDao {
     fun getDayEntryBlocking(id: String): DayEntryEntity?
 
     @Query(
-        "SELECT * FROM day_entries WHERE reminderMinutes IS NOT NULL AND epochDay >= :from AND " +
+        "SELECT * FROM day_entries WHERE reminderMinutes IS NOT NULL AND " +
+            "(epochDay >= :from OR (rrule IS NOT NULL AND rrule != '')) AND " +
             "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1))",
     )
     fun entriesWithRemindersBlocking(from: Long): List<DayEntryEntity>
@@ -410,6 +457,24 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+/**
+ * Version 6: an entry can repeat.
+ *
+ * A real migration and not `fallbackToDestructiveMigration`, which this database has never used
+ * for an upgrade and should not start using now: destroying somebody's notes to add a repeat
+ * field is not an upgrade, it is a data loss with a changelog entry. Two nullable TEXT columns,
+ * declared exactly as Room declares them, because Room validates the schema when it opens the
+ * file and a mismatch is a crash on the phone rather than a build failure.
+ *
+ * Nothing needs backfilling: null means "happens once", which is what every existing row is.
+ */
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `day_entries` ADD COLUMN `rrule` TEXT")
+        db.execSQL("ALTER TABLE `day_entries` ADD COLUMN `exDays` TEXT")
+    }
+}
+
 @Database(
     entities = [
         NoteEntity::class,
@@ -417,7 +482,7 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
         DayEntryEntity::class,
         CalendarEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class NotebookDatabase : RoomDatabase() {
@@ -433,7 +498,13 @@ abstract class NotebookDatabase : RoomDatabase() {
                 NotebookDatabase::class.java,
                 "lightnotebook.db",
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 // Upgrades migrate; only a downgrade — installing an older APK over a
                 // newer database — starts over, and that is a choice the user made.
                 .fallbackToDestructiveMigrationOnDowngrade()

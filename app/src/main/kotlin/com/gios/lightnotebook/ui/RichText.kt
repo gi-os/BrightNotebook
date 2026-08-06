@@ -7,6 +7,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import com.gios.lightnotebook.util.NoteChecklist
 
 private val BOLD = Regex("""\*\*([^\n]+?)\*\*""")
 private val BULLET_LINE = Regex("""^([ \t]*)- """)
@@ -24,12 +25,25 @@ private val NUMBER_LINE = Regex("""^([ \t]*)(\d+\. )""")
 class NoteTransformation(
     private val markerColor: Color,
     private val boldColor: Color,
+    /**
+     * What a checkbox marker is painted in — the background, so `- [ ]` leaves a gap for the
+     * glyph the editor draws on top of it. Still five real characters underneath, still
+     * one-for-one, so the cursor keeps agreeing with the screen.
+     */
+    private val hiddenColor: Color = markerColor,
 ) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText =
-        TransformedText(styledNote(text.text, markerColor, boldColor), OffsetMapping.Identity)
+    override fun filter(text: AnnotatedString): TransformedText = TransformedText(
+        styledNote(text.text, markerColor, boldColor, hiddenColor),
+        OffsetMapping.Identity,
+    )
 }
 
-fun styledNote(raw: String, markerColor: Color, boldColor: Color): AnnotatedString {
+fun styledNote(
+    raw: String,
+    markerColor: Color,
+    boldColor: Color,
+    hiddenColor: Color = markerColor,
+): AnnotatedString {
     val glyphs = StringBuilder(raw)
     val spans = mutableListOf<Triple<SpanStyle, Int, Int>>()
 
@@ -41,7 +55,17 @@ fun styledNote(raw: String, markerColor: Color, boldColor: Color): AnnotatedStri
         val lineEnd = if (newline == -1) raw.length else newline
         val line = raw.substring(lineStart, lineEnd)
 
-        BULLET_LINE.find(line)?.let { m ->
+        // A checkbox line keeps its five marker characters and paints them out, because the
+        // editor puts a real glyph over that gap. No bullet substitution on those lines: a
+        // bullet *and* a checkbox is two markers saying the same thing.
+        val isCheckbox = NoteChecklist.isCheckbox(line)
+        if (isCheckbox) {
+            val marker = lineStart + line.indexOfFirst { it == '-' || it == '*' }
+            spans.add(
+                Triple(SpanStyle(color = hiddenColor), marker, marker + NoteChecklist.MARKER_LENGTH),
+            )
+        }
+        if (!isCheckbox) BULLET_LINE.find(line)?.let { m ->
             val hyphen = lineStart + m.groupValues[1].length
             glyphs[hyphen] = '•'
             spans.add(Triple(SpanStyle(color = markerColor), hyphen, hyphen + 2))

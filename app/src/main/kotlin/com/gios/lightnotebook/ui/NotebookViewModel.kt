@@ -43,6 +43,7 @@ import com.gios.lightnotebook.util.AppUse
 import com.gios.lightnotebook.util.Charging
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.AgendaRow
+import com.gios.lightnotebook.util.Recurrence
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.Daylight
@@ -247,6 +248,16 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest { repo.observeDay(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Every repeating entry, whatever day it started on.
+     *
+     * Held whole rather than queried per screen because the day queries cannot find a series:
+     * they match on the stored `epochDay`, which is only ever the *first* occurrence. These rows
+     * are expanded into days as each screen asks, bounded by that screen's own window.
+     */
+    private val recurringEntries: StateFlow<List<DayEntryEntity>> = repo.observeRecurring()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Films on the open day, earliest first. */
     val dayShowings: StateFlow<List<PassShowing>> =
         combine(_selectedDay, _showings) { day, showings ->
@@ -261,15 +272,19 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     val dayRows: StateFlow<List<AgendaRow>> =
         combine(
             dayEntries,
+            recurringEntries,
             dayShowings,
             repo.observeCalendars(),
             _selectedDay,
-        ) { entries, showings, calendars, day ->
+        ) { entries, repeats, showings, calendars, day ->
             Agenda.merge(
                 Agenda.collapse(
                     // Clipped to the one day, so a span becomes exactly one row saying which day of
-                    // it this is rather than one row per day of the trip.
-                    entries = entries.acrossDays(day, day, calendars),
+                    // it this is rather than one row per day of the trip. A series is dropped from
+                    // the plain list and put back by expansion, which is what produces its first
+                    // occurrence too — otherwise the day it starts on would show it twice.
+                    entries = entries.filterNot { it.repeats }.acrossDays(day, day, calendars) +
+                        repeats.occurrencesIn(day, day, calendars),
                     films = showings.map { it.toAgendaRow() },
                 ),
                 Agenda.holidayRows(day, day),
@@ -285,13 +300,18 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     val agendaRows: StateFlow<List<AgendaRow>> =
         combine(
             repo.observeUpcoming(NoteDates.today(), UPCOMING_LIMIT),
+            recurringEntries,
             _showings,
             repo.observeCalendars(),
-        ) { entries, showings, calendars ->
+        ) { entries, repeats, showings, calendars ->
             val today = NoteDates.today()
             Agenda.merge(
                 Agenda.collapse(
-                    entries = entries.map { it.toAgendaRow(calendars) },
+                    entries = entries.filterNot { it.repeats }.map { it.toAgendaRow(calendars) } +
+                        // A horizon in days, not in rows: `observeUpcoming` cannot see a series at
+                        // all, since its stored day is usually behind us, and expanding "sixty
+                        // rows" out of a rule is not a question the rule can answer.
+                        repeats.occurrencesIn(today, today + REPEAT_HORIZON_DAYS, calendars),
                     films = showings.filter { it.epochDay >= today }.map { it.toAgendaRow() },
                 ),
                 // The same horizon the agenda already shows, so a holiday appears exactly when
@@ -316,16 +336,19 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest { window ->
             combine(
                 repo.observeRange(window.first, window.last),
+                recurringEntries,
                 _showings,
                 repo.observeCalendars(),
-            ) { entries, showings, calendars ->
+            ) { entries, repeats, showings, calendars ->
                 val films = showings.filter { it.epochDay in window }
                 // Holidays are merged after the collapse rather than inside it: collapse folds
                 // a ticket onto the entry describing the same plan, and a holiday is never a
                 // duplicate of anything.
                 Agenda.merge(
                     Agenda.collapse(
-                        entries = entries.acrossDays(window.first, window.last, calendars),
+                        entries = entries.filterNot { it.repeats }
+                            .acrossDays(window.first, window.last, calendars) +
+                            repeats.occurrencesIn(window.first, window.last, calendars),
                         films = films.map { it.toAgendaRow() },
                     ),
                     Agenda.holidayRows(window.first, window.last),
@@ -884,9 +907,17 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** Looks an entry back up for its own sheet, since a row only carries the id. */
-    fun entryById(id: String?): DayEntryEntity? =
-        id?.let { wanted -> dayEntries.value.firstOrNull { it.id == wanted } }
+    /**
+     * Looks an entry back up for its own sheet, since a row only carries the id.
+     *
+     * The repeating rows are searched too: a series' fourth Tuesday is drawn on a day the day
+     * query knows nothing about, and without this every occurrence but the first would be a row
+     * that could not be tapped.
+     */
+    fun entryById(id: String?): DayEntryEntity? = id?.let { wanted ->
+        dayEntries.value.firstOrNull { it.id == wanted }
+            ?: recurringEntries.value.firstOrNull { it.id == wanted }
+    }
 
     /** Moves the open day by a day at a time, for swiping. */
     fun stepDay(delta: Long) {
@@ -1009,6 +1040,38 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             Reminders.schedule(getApplication(), updated)
         }
+    }
+
+    /**
+     * Sets or clears an entry's repeat rule, and re-arms its reminder against the new schedule.
+     */
+    fun setEntryRepeat(entry: DayEntryEntity, rrule: String?) = viewModelScope.launch {
+        val updated = repo.setRepeat(entry, rrule)
+        Reminders.schedule(getApplication(), updated)
+    }
+
+    /**
+     * "Delete just this one": one occurrence is taken out and the series carries on.
+     *
+     * The copy in the phone's own calendar is left alone. This app mirrors a single event, never
+     * a rule, so there is nothing over there that knows what an occurrence is; deleting the
+     * mirrored event would remove the whole series from the other calendar to hide one Tuesday
+     * here.
+     */
+    fun skipOccurrence(entry: DayEntryEntity, epochDay: Long) = viewModelScope.launch {
+        val updated = repo.skipOccurrence(entry, epochDay)
+        Reminders.schedule(getApplication(), updated)
+    }
+
+    /** "Edit just this one": the occurrence leaves the series, and [onDetached] gets the copy. */
+    fun detachOccurrence(
+        entry: DayEntryEntity,
+        epochDay: Long,
+        onDetached: (DayEntryEntity) -> Unit,
+    ) = viewModelScope.launch {
+        val detached = repo.detachOccurrence(entry, epochDay)
+        Reminders.schedule(getApplication(), detached)
+        onDetached(detached)
     }
 
     /** Removing an entry removes the copy in the phone's calendar too, if there is one. */
@@ -1411,6 +1474,64 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         if (last < first) emptyList() else (first..last).map { entry.toAgendaRow(calendars, it) }
     }
 
+    /**
+     * A window's repeating entries, as one row per occurrence per day covered.
+     *
+     * The window is widened backwards by the length of each series' span before the rule is
+     * expanded, or a fortnight's repeating trip would be invisible on every day but its first —
+     * the same reasoning `observeRange` uses overlap rather than containment for.
+     */
+    private fun List<DayEntryEntity>.occurrencesIn(
+        from: Long,
+        to: Long,
+        calendars: List<CalendarEntity>,
+    ): List<AgendaRow> = flatMap { master ->
+        val spanLength = master.lastDay - master.epochDay
+        Recurrence.expand(
+            rrule = master.rrule,
+            startDay = master.epochDay,
+            from = from - spanLength,
+            to = to,
+            exDays = Recurrence.parseExDays(master.exDays),
+        ).flatMap { occurrence ->
+            val first = maxOf(occurrence, from)
+            val last = minOf(occurrence + spanLength, to)
+            if (last < first) {
+                emptyList()
+            } else {
+                (first..last).map { day ->
+                    master.toOccurrenceRow(calendars, occurrence, day, spanLength)
+                }
+            }
+        }
+    }
+
+    /**
+     * One occurrence of a series, on one of the days it covers.
+     *
+     * Keyed by the occurrence and not by the entry: a `LazyColumn` throws on a repeated key, and
+     * a weekly meeting drawn across six weeks of planner is six rows with one entry id behind
+     * them. The occurrence day travels on the row so the action sheet knows which Tuesday it is
+     * being asked about.
+     */
+    private fun DayEntryEntity.toOccurrenceRow(
+        calendars: List<CalendarEntity>,
+        occurrence: Long,
+        onDay: Long,
+        spanLength: Long,
+    ) = AgendaRow(
+        id = "entry:$id@$occurrence" + if (onDay == occurrence) "" else "+$onDay",
+        epochDay = onDay,
+        minutes = if (onDay == occurrence) startMinutes else null,
+        title = text,
+        label = calendars.firstOrNull { it.id == calendarId }?.label,
+        reminderMinutes = if (onDay == occurrence) reminderMinutes else null,
+        entryId = id,
+        dayOfSpan = (onDay - occurrence).toInt() + 1,
+        spanDays = spanLength.toInt() + 1,
+        occurrenceDay = occurrence,
+    )
+
     private fun PassShowing.toAgendaRow() = AgendaRow(
         id = "pass:$passId",
         epochDay = epochDay,
@@ -1444,5 +1565,15 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
          * about the next Christmas without ever computing more than eleven dates.
          */
         const val AGENDA_HORIZON_DAYS = 365L
+
+        /**
+         * How far ahead the agenda expands a repeating entry.
+         *
+         * Shorter than the holiday horizon deliberately: a daily rule over a year is 365 rows
+         * built to show perhaps ten, and the agenda is a list of what is next rather than a
+         * printout of the year. Four months is far enough that a monthly series always has its
+         * next few occurrences in it.
+         */
+        const val REPEAT_HORIZON_DAYS = 120L
     }
 }

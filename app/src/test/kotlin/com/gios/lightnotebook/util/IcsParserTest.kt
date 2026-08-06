@@ -239,4 +239,118 @@ class IcsParserTest {
         val text = "BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR"
         assertNull(IcsParser.calendarName(text))
     }
+
+    /* ---------------- recurrence ---------------- */
+
+    @Test
+    fun carriesTheRuleRatherThanExpandingIt() {
+        val events = IcsParser.parse(
+            ics(
+                """
+                BEGIN:VEVENT
+                UID:standup
+                SUMMARY:Standup
+                DTSTART;TZID=America/New_York:20260803T093000
+                RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR
+                END:VEVENT
+                """.trimIndent(),
+            ),
+            newYork,
+        )
+        // One row, not one per Monday for the rest of time.
+        assertEquals(1, events.size)
+        assertEquals("FREQ=WEEKLY;BYDAY=MO,WE,FR", events.first().rrule)
+        // And the row knows which days it means when something asks.
+        val days = Recurrence.expand(
+            events.first().rrule,
+            events.first().epochDay,
+            LocalDate.of(2026, 8, 3).toEpochDay(),
+            LocalDate.of(2026, 8, 9).toEpochDay(),
+        )
+        assertEquals(3, days.size)
+    }
+
+    @Test
+    fun readsExdatesOffTheFeed() {
+        val events = IcsParser.parse(
+            ics(
+                """
+                BEGIN:VEVENT
+                UID:standup
+                SUMMARY:Standup
+                DTSTART;TZID=America/New_York:20260803T093000
+                RRULE:FREQ=DAILY
+                EXDATE;TZID=America/New_York:20260804T093000,20260805T093000
+                EXDATE;TZID=America/New_York:20260807T093000
+                END:VEVENT
+                """.trimIndent(),
+            ),
+            newYork,
+        )
+        val event = events.single()
+        assertEquals(
+            setOf(
+                LocalDate.of(2026, 8, 4).toEpochDay(),
+                LocalDate.of(2026, 8, 5).toEpochDay(),
+                LocalDate.of(2026, 8, 7).toEpochDay(),
+            ),
+            event.exDays,
+        )
+        val days = Recurrence.expand(
+            event.rrule,
+            event.epochDay,
+            LocalDate.of(2026, 8, 3).toEpochDay(),
+            LocalDate.of(2026, 8, 7).toEpochDay(),
+            event.exDays,
+        )
+        assertEquals(listOf(LocalDate.of(2026, 8, 3).toEpochDay(), LocalDate.of(2026, 8, 6).toEpochDay()), days)
+    }
+
+    @Test
+    fun anOverriddenInstanceBecomesItsOwnEventAndAHoleInTheSeries() {
+        val events = IcsParser.parse(
+            ics(
+                """
+                BEGIN:VEVENT
+                UID:standup
+                SUMMARY:Standup
+                DTSTART;TZID=America/New_York:20260803T093000
+                RRULE:FREQ=DAILY
+                END:VEVENT
+                BEGIN:VEVENT
+                UID:standup
+                RECURRENCE-ID;TZID=America/New_York:20260805T093000
+                SUMMARY:Standup (moved)
+                DTSTART;TZID=America/New_York:20260805T150000
+                END:VEVENT
+                """.trimIndent(),
+            ),
+            newYork,
+        )
+        assertEquals(2, events.size)
+        val series = events.first { it.rrule != null }
+        val moved = events.first { it.rrule == null }
+        // Two rows that would otherwise fight over one sourceUid.
+        assertTrue(moved.uid.startsWith("standup#"))
+        assertEquals(15 * 60, moved.startMinutes)
+        assertTrue(LocalDate.of(2026, 8, 5).toEpochDay() in series.exDays)
+    }
+
+    @Test
+    fun anEventWithNoRuleStillHasNone() {
+        val events = IcsParser.parse(
+            ics(
+                """
+                BEGIN:VEVENT
+                UID:once
+                SUMMARY:Dentist
+                DTSTART;VALUE=DATE:20260729
+                END:VEVENT
+                """.trimIndent(),
+            ),
+            newYork,
+        )
+        assertNull(events.single().rrule)
+        assertTrue(events.single().exDays.isEmpty())
+    }
 }

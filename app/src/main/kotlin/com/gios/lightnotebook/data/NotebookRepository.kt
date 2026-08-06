@@ -8,6 +8,7 @@ import com.gios.lightnotebook.util.Daylight
 import java.time.ZoneId
 import com.gios.lightnotebook.util.PhotoDays
 import com.gios.lightnotebook.util.ImportedEvent
+import com.gios.lightnotebook.util.Recurrence
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 import java.util.UUID
@@ -320,6 +321,61 @@ class NotebookRepository(private val context: Context) {
     fun observeRange(from: Long, to: Long): Flow<List<DayEntryEntity>> =
         dao.observeRange(from, to)
 
+    /** Every repeating entry. See [NotebookDao.observeRecurring] for why this is unwindowed. */
+    fun observeRecurring(): Flow<List<DayEntryEntity>> = dao.observeRecurring()
+
+    /**
+     * Sets, changes or removes an entry's repeat rule.
+     *
+     * Changing the rule clears the exceptions with it. An `EXDATE` is a hole in a *particular*
+     * series — "not that Tuesday" — and once the series is a different one, the day it used to
+     * describe means nothing. Keeping them would silently punch holes in the new schedule.
+     */
+    suspend fun setRepeat(entry: DayEntryEntity, rrule: String?): DayEntryEntity =
+        updateDayEntry(
+            entry.copy(rrule = rrule?.takeIf { it.isNotBlank() }, exDays = null),
+        )
+
+    /** "Delete just this one": the occurrence on [epochDay] is excluded, the series survives. */
+    suspend fun skipOccurrence(entry: DayEntryEntity, epochDay: Long): DayEntryEntity {
+        if (!entry.repeats) return entry
+        val days = Recurrence.parseExDays(entry.exDays) + epochDay
+        return updateDayEntry(entry.copy(exDays = Recurrence.formatExDays(days)))
+    }
+
+    /**
+     * "Edit just this one": one occurrence leaves the series and becomes an entry of its own.
+     *
+     * The series gets an `EXDATE` for that day and a detached copy is written on it, which is
+     * exactly how a calendar server models an overridden instance. The copy deliberately drops
+     * three things: the rule (it happens once now), the source uid and the calendar id — a
+     * detached occurrence of an *imported* series belongs to you, and leaving the calendar id on
+     * it would mean the next re-import deleted the edit along with the feed's own rows.
+     */
+    suspend fun detachOccurrence(entry: DayEntryEntity, epochDay: Long): DayEntryEntity {
+        if (!entry.repeats) return entry
+        skipOccurrence(entry, epochDay)
+        val now = System.currentTimeMillis()
+        val detached = entry.copy(
+            id = UUID.randomUUID().toString(),
+            epochDay = epochDay,
+            // A span keeps its length: a three-day occurrence detached onto another day is
+            // still three days long.
+            endEpochDay = entry.endEpochDay?.let { epochDay + (it - entry.epochDay) },
+            rrule = null,
+            exDays = null,
+            sourceUid = null,
+            calendarId = null,
+            // Its own event in the phone's calendar, or none: the mirror row belongs to the
+            // series, and two entries pointing at one system event delete each other's copy.
+            systemEventId = null,
+            createdAt = now,
+            updatedAt = now,
+        )
+        dao.putDayEntry(detached)
+        return detached
+    }
+
     /**
      * How many days an entry covers.
      *
@@ -433,6 +489,9 @@ class NotebookRepository(private val context: Context) {
                 calendarId = calendar.id,
                 reminderMinutes = reminderMinutes?.takeIf { event.startMinutes != null },
                 sourceUid = event.uid,
+                // One row per series, not per instance. See [DayEntryEntity.rrule].
+                rrule = event.rrule,
+                exDays = Recurrence.formatExDays(event.exDays),
                 createdAt = now,
                 updatedAt = now,
             )
