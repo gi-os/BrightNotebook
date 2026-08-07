@@ -7,13 +7,13 @@ tokens rather than an approximation of them. Launcher label **Notebook**, packag
 ## Install via BrightMarket
 
 <p align="center">
-  <img src="https://gi-os.github.io/brightmarket-index/assets/brightmarket-qr.png" alt="Scan to open BrightMarket" width="180" />
+  <img src="https://gi-os.github.io/brightmarket-index/assets/qr/BrightNotebook.png" alt="Scan to open BrightNotebook in BrightMarket" width="180" />
 </p>
 
-Scan the code above, or visit
-**[gi-os.github.io/brightmarket-index/browse.html](https://gi-os.github.io/brightmarket-index/browse.html)**, to install
-and keep this app updated through **BrightMarket** — no Play Store, no PC
-required.
+Scan the code above with **BrightMarket** installed to open BrightNotebook there and
+install or update it directly. Don't have BrightMarket yet? Get it, and browse
+every Bright app, at
+**[gi-os.github.io/brightmarket-index/browse.html](https://gi-os.github.io/brightmarket-index/browse.html)**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
