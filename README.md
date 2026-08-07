@@ -4,6 +4,17 @@ Notes and a calendar for the Light Phone III, built against the real LightOS des
 tokens rather than an approximation of them. Launcher label **Notebook**, package
 `com.gios.lightnotebook`. Current release: **v1.42.0**.
 
+## Install via BrightMarket
+
+<p align="center">
+  <img src="https://gi-os.github.io/brightmarket-index/assets/brightmarket-qr.png" alt="Scan to open BrightMarket" width="180" />
+</p>
+
+Scan the code above, or visit
+**[gi-os.github.io/brightmarket-index/browse.html](https://gi-os.github.io/brightmarket-index/browse.html)**, to install
+and keep this app updated through **BrightMarket** — no Play Store, no PC
+required.
+
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
 anywhere it ends up. The calendar is a single zoomable wall planner — weeks running
