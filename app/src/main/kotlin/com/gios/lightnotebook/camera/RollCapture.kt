@@ -1,9 +1,12 @@
 package com.gios.lightnotebook.camera
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.MediaStore
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 
@@ -56,6 +59,18 @@ object RollCapture {
      */
     fun intentFor(context: Context, file: File, allowFilter: Boolean = false): Intent? {
         if (!installed(context)) return null
+
+        // An app that *declares* CAMERA in its manifest may not fire IMAGE_CAPTURE at anyone
+        // without also *holding* it — the system checks the caller, not just the camera app
+        // (ActivityTaskSupervisor.checkStartAnyActivityPermission). This app declares it for the
+        // in-app fallback camera below, so the very first scan on a fresh install arrived here
+        // with the permission never yet asked for, and launching Roll was a SecurityException
+        // that took the whole app down (light-reports#15). Returning null routes that first scan
+        // to the in-app camera, which asks for CAMERA itself; once granted, every later scan
+        // reaches Roll as before.
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) return null
         val uri = runCatching { uriFor(context, file) }.getOrNull() ?: return null
 
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {

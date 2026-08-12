@@ -2,7 +2,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.42.0**.
+`com.gios.lightnotebook`. Current release: **v1.43.0**.
 
 ## Install via BrightMarket
 
@@ -410,7 +410,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
-| v1.42.0 | (on main) | Things that repeat, and checkboxes you can tick |
+| v1.43.0 | (on main) | The first page scan asks for the camera instead of crashing |
+| v1.42.0 | `b61f88e` | Things that repeat, and checkboxes you can tick |
 | v1.40.0 | `070b5a8` | One arrival per zone per minute, so the day screen stops closing itself |
 | v1.39.0 | `6a63041` | Calls, charging and where the screen time went — and one fewer hourly wakeup |
 | v1.38.0 | `079fd1c` | Entries and instants share one axis, so a day is in order |
