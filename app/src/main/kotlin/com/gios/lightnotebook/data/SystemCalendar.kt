@@ -44,6 +44,7 @@ object SystemCalendar {
         epochDay: Long,
         startMinutes: Int?,
         endMinutes: Int?,
+        location: String? = null,
     ): Long? {
         if (!hasPermission(context)) return null
         val calendarId = pickCalendar(context)?.first ?: return null
@@ -51,6 +52,11 @@ object SystemCalendar {
         val values = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, calendarId)
             put(CalendarContract.Events.TITLE, title.take(200))
+            // So a location typed here survives leaving: an entry mirrored into the phone's
+            // calendar and then read on a laptop should say where it is, like any other event.
+            location?.trim()?.takeIf { it.isNotBlank() }?.let {
+                put(CalendarContract.Events.EVENT_LOCATION, it.take(200))
+            }
             if (startMinutes == null) {
                 // All-day events are stored as midnight UTC by contract, not local time.
                 val startUtc = epochDay * 86_400_000L

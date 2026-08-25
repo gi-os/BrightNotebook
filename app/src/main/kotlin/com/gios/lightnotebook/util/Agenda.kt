@@ -41,6 +41,14 @@ data class AgendaRow(
      * `when` over it. The id is here only so the grid can pick a glyph.
      */
     val holidayId: String? = null,
+    /**
+     * Where it is, as the calendar wrote it. Null for nearly everything.
+     *
+     * On the row it is the first thing in the subtitle, ahead of the calendar's name: "where" is
+     * what you look at an entry for on the way out of the door, and which calendar it came from is
+     * a detail you already know.
+     */
+    val location: String? = null,
 ) {
     val isSpan: Boolean get() = spanDays > 1
 
@@ -63,7 +71,7 @@ data class AgendaRow(
             val remind = reminderMinutes?.let {
                 if (it <= 0) "at the time" else "$it min before"
             }
-            return listOfNotNull(spanLabel, label, remind).joinToString(" · ")
+            return listOfNotNull(spanLabel, location, label, remind).joinToString(" · ")
                 .takeIf { it.isNotBlank() }
         }
 }

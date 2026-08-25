@@ -17,6 +17,14 @@ data class ImportedEvent(
     val rrule: String? = null,
     /** Days the series does not happen on: the feed's `EXDATE`s, plus any overridden instance. */
     val exDays: Set<Long> = emptySet(),
+    /**
+     * The event's `LOCATION`, as written. Null when the invite carried none.
+     *
+     * Not parsed and not validated. What arrives here is a room name, a postal address, a Teams
+     * link or the word "gym", and every one of those is the correct answer to "where is this" for
+     * somebody. The only thing downstream of it is a maps search, which wants the string.
+     */
+    val location: String? = null,
 )
 
 /**
@@ -57,6 +65,7 @@ object IcsParser {
         var start: Moment? = null
         var end: Moment? = null
         var rrule: String? = null
+        var location: String? = null
         var recurrenceId: Moment? = null
         var exDays = mutableSetOf<Long>()
 
@@ -65,7 +74,7 @@ object IcsParser {
                 line.equals("BEGIN:VEVENT", ignoreCase = true) -> {
                     inEvent = true
                     uid = null; summary = null; start = null; end = null
-                    rrule = null; recurrenceId = null; exDays = mutableSetOf()
+                    rrule = null; recurrenceId = null; exDays = mutableSetOf(); location = null
                 }
 
                 line.equals("END:VEVENT", ignoreCase = true) -> {
@@ -93,6 +102,7 @@ object IcsParser {
                                     ?.takeIf { begin.minutes != null && it > begin.minutes },
                                 // An override happens once, whatever the master says.
                                 rrule = if (replaces == null) rrule else null,
+                                location = location?.takeIf { it.isNotBlank() },
                                 exDays = if (replaces == null) exDays.toSet() else emptySet(),
                             ),
                         )
@@ -109,6 +119,9 @@ object IcsParser {
                         "DTSTART" -> start = moment(params, value, zone)
                         "DTEND" -> end = moment(params, value, zone)
                         "RRULE" -> rrule = value.trim().takeIf { it.isNotBlank() }
+                        // `unescape` earns its keep here: an address is the one field in a
+                        // VEVENT that routinely contains the commas ICS escapes.
+                        "LOCATION" -> location = unescape(value).trim().take(200)
                         // EXDATE may appear several times and may list several dates at once.
                         "EXDATE" -> value.split(',').forEach { one ->
                             moment(params, one, zone)?.let { exDays.add(it.epochDay) }

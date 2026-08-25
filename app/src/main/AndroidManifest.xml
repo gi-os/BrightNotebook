@@ -95,6 +95,26 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="lightpass" />
         </intent>
+        <!--
+          Where an entry is, opened in whatever navigates on this phone. Without these the
+          resolver answers "nothing is installed" on Android 11+ however many maps apps are
+          sitting on the home screen — and a location that silently cannot be tapped looks
+          exactly like one this app forgot to read. See data/Directions.kt.
+        -->
+        <package android:name="com.gios.brightway" />
+        <package android:name="com.waze" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="brightway" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="waze" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
     </queries>
 
     <application

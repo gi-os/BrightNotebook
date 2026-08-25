@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gios.lightnotebook.data.DayEntryEntity
+import com.gios.lightnotebook.data.Directions
 import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.PhotoLibrary
 import com.gios.light.common.hw.WheelScroll
@@ -152,6 +153,13 @@ fun DayPane(
     val calls by vm.dayCalls.collectAsStateWithLifecycle()
     val charges by vm.dayCharges.collectAsStateWithLifecycle()
     val recordings by vm.dayRecordings.collectAsStateWithLifecycle()
+
+    // Where an entry is, and where to send it. The sheet appears when more than one thing on the
+    // phone can navigate; with exactly one, the tap goes straight there — a chooser with a single
+    // row is a question with one answer.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var locatingFor by remember { mutableStateOf<DayEntryEntity?>(null) }
+    var navigatingTo by remember { mutableStateOf<String?>(null) }
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -689,6 +697,25 @@ fun DayPane(
                     actionsFor = null
                 }
             }
+            // Directions first when there is somewhere to go: on the way out of the door it is
+            // the only row anybody is reaching for.
+            entry.location?.takeIf { it.isNotBlank() }?.let { where ->
+                LightSheetAction(label = "Directions", sub = where) {
+                    navigatingTo = where
+                    actionsFor = null
+                }
+            }
+            // An imported entry's own words belong to the calendar it came from, and a location
+            // typed here would be overwritten by the next sync without saying so.
+            if (!entry.isImported) {
+                LightSheetAction(
+                    label = "Location",
+                    sub = entry.location?.takeIf { it.isNotBlank() } ?: "None",
+                ) {
+                    locatingFor = entry
+                    actionsFor = null
+                }
+            }
             LightSheetAction(
                 label = "Time",
                 sub = NoteDates.clock(entry.startMinutes) ?: "All day",
@@ -833,6 +860,46 @@ fun DayPane(
             },
             onDismiss = { spanningFor = null },
         )
+    }
+
+    locatingFor?.let { entry ->
+        LightNameSheet(
+            title = "LOCATION · AN ADDRESS, A PLACE, OR BLANK",
+            initial = entry.location.orEmpty(),
+            confirmLabel = "SET",
+            allowBlank = true,
+            onConfirm = { typed ->
+                vm.setEntryLocation(entry, typed)
+                locatingFor = null
+            },
+            onDismiss = { locatingFor = null },
+        )
+    }
+
+    navigatingTo?.let { where ->
+        val targets = remember(where) { Directions.targetsFor(context, where) }
+        LaunchedEffect(where, targets) {
+            // Nothing installed that can navigate, or exactly one thing: no sheet either way. A
+            // list of one is a question with one answer, and a list of none is a sheet that can
+            // only say no.
+            if (targets.size <= 1) {
+                targets.firstOrNull()?.let { Directions.go(context, it) }
+                navigatingTo = null
+            }
+        }
+        if (targets.size > 1) {
+            LightActionSheet(
+                heading = where.take(34).uppercase(),
+                onDismiss = { navigatingTo = null },
+            ) {
+                targets.forEach { target ->
+                    LightSheetAction(label = target.label) {
+                        Directions.go(context, target)
+                        navigatingTo = null
+                    }
+                }
+            }
+        }
     }
 
     movingFor?.let { entry ->

@@ -492,6 +492,7 @@ class NotebookRepository(private val context: Context) {
                 // One row per series, not per instance. See [DayEntryEntity.rrule].
                 rrule = event.rrule,
                 exDays = Recurrence.formatExDays(event.exDays),
+                location = event.location,
                 createdAt = now,
                 updatedAt = now,
             )

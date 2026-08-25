@@ -1008,6 +1008,18 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         repo.setEntrySpan(entry, endEpochDay)
     }
 
+    /**
+     * Where an entry is, as words.
+     *
+     * Blank clears it, the same as every other optional field here. Nothing is parsed or checked:
+     * "moms" is a location, and the only thing downstream of this is a maps search which is built
+     * for whatever somebody types.
+     */
+    fun setEntryLocation(entry: DayEntryEntity, location: String?) = viewModelScope.launch {
+        val trimmed = location?.trim()?.takeIf { it.isNotBlank() }
+        repo.updateDayEntry(entry.copy(location = trimmed))
+    }
+
     fun updateDayEntry(entry: DayEntryEntity, text: String) = viewModelScope.launch {
         val updated = repo.updateDayEntry(entry.copy(text = text.trim()))
         Reminders.schedule(getApplication(), updated)
@@ -1482,6 +1494,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             minutes = if (onDay == epochDay) startMinutes else null,
             title = text,
             label = calendars.firstOrNull { it.id == calendarId }?.label,
+            location = location,
             reminderMinutes = if (onDay == epochDay) reminderMinutes else null,
             entryId = id,
             dayOfSpan = (onDay - epochDay).toInt() + 1,
@@ -1556,6 +1569,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         minutes = if (onDay == occurrence) startMinutes else null,
         title = text,
         label = calendars.firstOrNull { it.id == calendarId }?.label,
+        location = location,
         reminderMinutes = if (onDay == occurrence) reminderMinutes else null,
         entryId = id,
         dayOfSpan = (onDay - occurrence).toInt() + 1,
@@ -1569,6 +1583,9 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         minutes = startMinutes,
         title = title,
         label = where,
+        // A cinema is a location like any other, so a ticket gets directions for free — the venue
+        // LightPass already knows is exactly the string a maps search wants.
+        location = where,
         passId = passId,
     )
 

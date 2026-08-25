@@ -152,6 +152,15 @@ data class DayEntryEntity(
     val exDays: String? = null,
     /** The photograph this was read off, so a transcription can be checked against it. */
     val imagePath: String? = null,
+    /**
+     * Where it is, as words. Null for the overwhelming majority of entries.
+     *
+     * Whatever the calendar said, unparsed: `EVENT_LOCATION` and an ICS `LOCATION` are free text
+     * and arrive as anything from "Regal Union Square" to a full postal address to "moms". Storing
+     * it as it came is the only honest option — and it is enough, because the thing that has to
+     * understand it is a maps search, which is built for exactly that kind of string.
+     */
+    val location: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {
@@ -468,6 +477,13 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
  *
  * Nothing needs backfilling: null means "happens once", which is what every existing row is.
  */
+/** Where an entry is, as words. See [DayEntryEntity.location]. */
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `day_entries` ADD COLUMN `location` TEXT")
+    }
+}
+
 private val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `day_entries` ADD COLUMN `rrule` TEXT")
@@ -482,7 +498,7 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
         DayEntryEntity::class,
         CalendarEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class NotebookDatabase : RoomDatabase() {
@@ -504,6 +520,7 @@ abstract class NotebookDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 // Upgrades migrate; only a downgrade — installing an older APK over a
                 // newer database — starts over, and that is a choice the user made.

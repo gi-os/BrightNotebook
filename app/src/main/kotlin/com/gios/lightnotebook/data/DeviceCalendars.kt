@@ -80,6 +80,10 @@ object DeviceCalendars {
             CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END,
             CalendarContract.Instances.ALL_DAY,
+            // Free for the asking: Instances inherits the Events columns, and READ_CALENDAR is
+            // already held. Outlook and Google both fill this in, which is the whole point —
+            // "tap the address to start navigating" is a thing every other calendar app does.
+            CalendarContract.Events.EVENT_LOCATION,
         )
         context.contentResolver.query(
             builder.build(),
@@ -95,6 +99,7 @@ object DeviceCalendars {
                 val begin = cursor.getLong(2)
                 val end = cursor.getLong(3)
                 val allDay = cursor.getInt(4) == 1
+                val location = cursor.getString(5)?.trim()?.takeIf { it.isNotBlank() }?.take(200)
 
                 if (allDay) {
                     // All-day rows are stored as midnight UTC by contract; reading them in
@@ -105,6 +110,7 @@ object DeviceCalendars {
                             uid = "device:$eventId:$begin",
                             title = title,
                             epochDay = day,
+                            location = location,
                         ),
                     )
                 } else {
@@ -120,6 +126,7 @@ object DeviceCalendars {
                             epochDay = start.toLocalDate().toEpochDay(),
                             startMinutes = startMinutes,
                             endMinutes = endMinutes,
+                            location = location,
                         ),
                     )
                 }
