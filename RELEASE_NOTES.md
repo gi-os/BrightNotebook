@@ -1,3 +1,34 @@
+## BrightNotebook v1.52 — the bottom of a day stays at the bottom
+
+**Reaching the end of a day bounced it and brought the bars back.** The chrome gets out of the way
+as you read down a day, which makes the list taller — and a list already at its last pixel answers a
+taller viewport by clamping its own scroll. The offset went *down* with no finger involved, the rule
+read that as scrolling up, the bars came back, the list got shorter again, and the day you had just
+reached the bottom of jumped. Every time.
+
+The rule now says an up-scroll only counts while the list still has somewhere forward to go. At the
+end of the list a drop in offset is the layout moving, not you, so nothing happens and the bottom of
+a day stays where you put it. Scroll up a single notch and the bars come straight back, because at
+that point the list has room below it again. The whole rule moved out of the screen and into
+`ChromeScroll`, where it is nine tests instead of an argument — including the clamp, which is not
+reproducible by reading the code and is obvious as a case.
+
+**Tapping a recording opens it in BrightRecorder.** A clip row said you recorded something at 14:32
+and how long it ran, and did nothing when pressed — the recording itself lives in the recorder, in
+storage nothing else can read. It opens there now, on the right tape, with the head parked at that
+clip and the moments list scrolled to it. Nothing plays on arrival; press play there.
+
+**Needs BrightRecorder v1.18.** Older builds have no filter for the link, so the tap opens the
+recorder on whatever tape it was last on rather than appearing to do nothing. A phone with no
+recorder installed could not have drawn the row in the first place.
+
+**Colour is BrightControl's job now, and it finally works without the adb grant.** This app already holds
+the whole panel in colour while it is in front, but only on a phone where *it* was granted
+`WRITE_SECURE_SETTINGS`. BrightControl v3.35 ships a colour preset for it, so the notebook
+comes up in colour on a phone that has BrightControl set up and nothing granted here. Both writers
+want the same thing while it is in front, so nothing flickers, and leaving the app puts the phone
+back to grey exactly as before.
+
 ## BrightNotebook v1.51 — where you went, and what you read
 
 **Trips from BrightWay.** "Walked to Union Square · 18 min", placed at the minute you set off. Three

@@ -20,11 +20,16 @@ import androidx.core.content.ContextCompat
  * LightOS does the same thing itself: photos and video play in colour on a phone that is
  * otherwise grey.
  *
- * A journal is a good case for it, but a narrow one: **only the photographs**. Everything this app
- * draws is white on black by design and should stay that way, so colour is held exactly while a
- * picture is open full screen and dropped the moment it closes. A day of grey thumbnails that opens
- * into the real photograph is the right shape — the notebook keeps matching LightOS's chrome, and
- * the one thing with hues in it is the thing you took.
+ * **Held for the whole app while it is in front**, not only for the photographs. It started as
+ * picture-only, on the reasoning that everything this app draws is white on black anyway — which is
+ * still true, and is exactly why holding it app-wide costs nothing visible: the chrome looks
+ * identical either way, and a photograph opens into real colour without a mode change at the moment
+ * you tap it. Dropped on the way out, so the rest of the phone is grey again the moment you leave.
+ *
+ * BrightControl ships a `Color` preset for this package (v3.35 on), which is the same request from
+ * the other direction and matters on a phone where the grant below was never given here. Two
+ * writers asking for the same thing is not a fight; what *would* be one is a per-screen opinion,
+ * which is why this one is deliberately not that.
  *
  * Writing the setting needs `WRITE_SECURE_SETTINGS`, which is
  * `signature|privileged|**development**` and so grantable over adb exactly once:

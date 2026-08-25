@@ -49,6 +49,7 @@ import com.gios.lightnotebook.util.DayLayout
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.Charging
 import com.gios.lightnotebook.util.JournalDay
+import com.gios.lightnotebook.util.ChromeScroll
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Recurrence
 import kotlinx.coroutines.delay
@@ -98,9 +99,6 @@ fun DayScreen(
 }
 
 private const val STANDALONE_STEP_DP = 72
-
-/** Ignore a few pixels of jitter, or the bars flicker while a finger rests on the screen. */
-private const val SCROLL_SLOP = 12
 
 /**
  * The day itself, as a pane rather than a screen.
@@ -177,28 +175,22 @@ fun DayPane(
     WheelScroll(listState)
 
     // The bars get out of the way as you read down the day and come back the moment you reach for
-    // them by scrolling up. Driven by the *direction* of travel rather than by position, so a long
-    // day does not permanently hide its own header once you are past the top.
-    var lastIndex by remember { mutableIntStateOf(0) }
-    var lastOffset by remember { mutableIntStateOf(0) }
+    // them by scrolling up. The rule, including why the last pixel of the list is an exception to
+    // it, lives in ChromeScroll where it can be tested.
+    var last by remember {
+        mutableStateOf(ChromeScroll.Position(index = 0, offset = 0, canScrollForward = true))
+    }
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .collect { (index, offset) ->
-                val movedDown = index > lastIndex || (index == lastIndex && offset > lastOffset + SCROLL_SLOP)
-                val movedUp = index < lastIndex || (index == lastIndex && offset < lastOffset - SCROLL_SLOP)
-                // The top of the day always shows its chrome: there is nothing above it to read,
-                // and arriving at a day with no header would look like a broken screen.
-                val atTop = index == 0 && offset < SCROLL_SLOP
-                when {
-                    atTop -> vm.setChromeHidden(false)
-                    movedDown -> vm.setChromeHidden(true)
-                    movedUp -> vm.setChromeHidden(false)
-                }
-                if (index != lastIndex || kotlin.math.abs(offset - lastOffset) > SCROLL_SLOP) {
-                    lastIndex = index
-                    lastOffset = offset
-                }
-            }
+        snapshotFlow {
+            ChromeScroll.Position(
+                index = listState.firstVisibleItemIndex,
+                offset = listState.firstVisibleItemScrollOffset,
+                canScrollForward = listState.canScrollForward,
+            )
+        }.collect { now ->
+            ChromeScroll.hidden(last, now)?.let { vm.setChromeHidden(it) }
+            if (ChromeScroll.advanced(last, now)) last = now
+        }
     }
     // Leaving a day must not leave the shell without its bar.
     DisposableEffect(Unit) { onDispose { vm.setChromeHidden(false) } }
@@ -544,6 +536,10 @@ fun DayPane(
                                 // A cassette, drawn for this app: the SDK set has no tape and no
                                 // microphone, and the alarm glyph already means a reminder here.
                                 leading = LightIcons.Tape,
+                                // The recorder, with this clip on the machine. A row that says you
+                                // recorded something and cannot play it is the one thing a
+                                // recording row should not be.
+                                onClick = { vm.openRecording(context, item) },
                             )
                             LightRule()
                         }

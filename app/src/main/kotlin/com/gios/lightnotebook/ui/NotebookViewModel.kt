@@ -11,6 +11,7 @@ import com.gios.lightnotebook.ai.ReadMode
 import com.gios.lightnotebook.ai.Vision
 import com.gios.lightnotebook.ai.VisionParser
 import com.gios.lightnotebook.data.CalendarEntity
+import com.gios.lightnotebook.data.RecorderLink
 import com.gios.lightnotebook.data.CalendarFeed
 import com.gios.lightnotebook.data.DayEntryEntity
 import com.gios.lightnotebook.data.DeviceCalendar
@@ -795,6 +796,17 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 uri = uri,
             ),
         )
+    }
+
+    /**
+     * Back to the recording itself.
+     *
+     * A row on the day is a fact about half past two; the clip is a thing you can listen to, and it
+     * lives in the recorder. See [RecorderLink] for the link, and for what happens on a phone whose
+     * recorder is too old to answer it.
+     */
+    fun openRecording(context: android.content.Context, item: DayTimeline.Item.Recorded) {
+        RecorderLink.openClip(context, tapeDir = item.tapeDir, fileName = item.file)
     }
 
     /** Called with whatever the folder picker returned. */
