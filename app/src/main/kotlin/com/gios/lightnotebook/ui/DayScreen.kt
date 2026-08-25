@@ -161,6 +161,7 @@ fun DayPane(
     val calls by vm.dayCalls.collectAsStateWithLifecycle()
     val charges by vm.dayCharges.collectAsStateWithLifecycle()
     val recordings by vm.dayRecordings.collectAsStateWithLifecycle()
+    val lightNotes by vm.dayLightNotes.collectAsStateWithLifecycle()
 
     // Where an entry is, and where to send it. The sheet appears when more than one thing on the
     // phone can navigate; with exactly one, the tap goes straight there — a chooser with a single
@@ -235,7 +236,7 @@ fun DayPane(
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
         rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
-        recordings, epochDay, today, nowMinutes,
+        recordings, lightNotes, epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
             rows = rows,
@@ -249,6 +250,7 @@ fun DayPane(
             calls = calls,
             charges = charges,
             recordings = recordings,
+            lightNotes = lightNotes,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -319,16 +321,6 @@ fun DayPane(
 
         DayWeatherLine(weather = weather, unfinished = epochDay >= today)
 
-        AllDaySection(
-            entries = allDay,
-            onOpen = { row ->
-                vm.entryById(row.entryId)?.let {
-                    actionsFor = it
-                    actionsOn = row.occurrenceDay ?: row.epochDay
-                }
-            },
-        )
-        LightRule()
 
         // Picking the phone up counts as something happening: the first time you looked at it is
         // very often the real start of a day, earlier than anything you wrote down.
@@ -361,7 +353,11 @@ fun DayPane(
             onRefresh = { refreshing = true },
             modifier = body,
         ) {
-        if (moments.isEmpty()) {
+        // All-day things count as a day having something on it. Before, they lived above this
+        // branch and so were drawn either way; now that they scroll with the list, a day with a
+        // birthday on it and nothing else would have said "nothing on this day yet" over the top
+        // of the birthday.
+        if (moments.isEmpty() && allDay.isEmpty()) {
             Column(Modifier.fillMaxSize()) {
                 LightEmptyState(
                     // A day that has gone and a day still to come are empty in different ways.
@@ -382,6 +378,23 @@ fun DayPane(
             ) {
                 // Inside the list, not pinned above it: it is the day's first line, and a line that
                 // stays put while the day scrolls under it stops being the beginning of anything.
+                // First in the list, and *in* the list: an all-day thing frames the day, but a
+                // frame nailed above the scroll costs a row of screen on every day that has none
+                // and cannot be read past on a day that has four. It scrolls with everything else.
+                if (allDay.isNotEmpty()) {
+                    item(key = "all-day") {
+                        AllDaySection(
+                            entries = allDay,
+                            onOpen = { row ->
+                                vm.entryById(row.entryId)?.let {
+                                    actionsFor = it
+                                    actionsOn = row.occurrenceDay ?: row.epochDay
+                                }
+                            },
+                        )
+                    }
+                }
+
                 item(key = "day-opened") {
                     DayOpening(minutes = bookends?.firstMinutes)
                 }
@@ -404,6 +417,7 @@ fun DayPane(
                             is DayTimeline.Item.Called -> "call-" + item.minutes + item.call.who
                             is DayTimeline.Item.Charged -> "charge-" + item.minutes
                             is DayTimeline.Item.Recorded -> "clip-" + item.tapeDir + item.file
+                            is DayTimeline.Item.LightNote -> "lightdoc-" + item.uri
                         }
                     },
                 ) { index, item ->
@@ -475,6 +489,20 @@ fun DayPane(
                                 // LightChat — nothing here can see one — so this is the person
                                 // itself, and a group is drawn as more than one.
                                 leading = if (item.isGroup) LightIcons.Group else LightIcons.Person,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.LightNote -> {
+                            LightListRow(
+                                title = item.name,
+                                sub = if (item.voice) "Voice note" else "Light note",
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                // A tape for a voice note, the pencil for a written one: the same
+                                // two glyphs a recording and a note already use here, because from
+                                // the day's point of view that is the same pair of facts.
+                                leading = if (item.voice) LightIcons.Tape else LightIcons.Compose,
+                                onClick = { vm.openLightDoc(context, item) },
                             )
                             LightRule()
                         }

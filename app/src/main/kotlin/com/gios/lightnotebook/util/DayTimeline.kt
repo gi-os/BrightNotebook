@@ -229,6 +229,24 @@ object DayTimeline {
         }
 
         /**
+         * A note or a voice note taken in Light's own app.
+         *
+         * Read out of `Documents/` rather than owned here — see [com.gios.lightnotebook.data
+         * .LightDocs]. A row each, like a recording, because each one is a thing somebody sat down
+         * and did. Nothing about its contents is known and none is shown: the row says a note
+         * happened at a time, and tapping it hands the file to whatever opens it.
+         */
+        data class LightNote(
+            override val minutes: Int,
+            val name: String,
+            val voice: Boolean,
+            /** The document URI, carried so the row can open it. */
+            val uri: String,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
+        /**
          * One moment, holding one photograph or a burst of them.
          *
          * A single photograph is drawn full width, the way a picture in a diary is. A burst is
@@ -294,6 +312,7 @@ object DayTimeline {
         calls: List<Item.Called> = emptyList(),
         charges: List<Item.Charged> = emptyList(),
         recordings: List<Item.Recorded> = emptyList(),
+        lightNotes: List<Item.LightNote> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -316,7 +335,7 @@ object DayTimeline {
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrived + calls + charges + recordings)
+            arrived + calls + charges + recordings + lightNotes)
             .sortedWith(
             compareBy(
                 { it.minutes ?: -1 },
@@ -340,6 +359,9 @@ object DayTimeline {
                         // A recording sorts with a photograph: both are something you deliberately
                         // captured at that minute, and on a day with one of each they belong
                         // next to each other rather than in separate bands.
+                        // With the recordings and the photographs: all three are something
+                        // captured at that minute rather than something the day did.
+                        is Item.LightNote -> 4
                         is Item.Recorded -> 4
                         is Item.Photos -> 4
                         is Item.Listening -> 5

@@ -33,6 +33,20 @@ class NotebookRepository(private val context: Context) {
 
     fun getApiKey(): String = prefs.getString(KEY_API, "").orEmpty()
 
+    /**
+     * The `Documents` folder Light writes its own notes into, once the user has pointed at it.
+     *
+     * A tree URI rather than a path: what makes that folder readable is a persisted grant, and the
+     * grant is attached to the URI. See [LightDocs].
+     */
+    fun lightDocsTree(): String? = prefs.getString(KEY_LIGHT_DOCS, null)?.takeIf { it.isNotBlank() }
+
+    fun setLightDocsTree(uri: String?) {
+        prefs.edit().apply {
+            if (uri.isNullOrBlank()) remove(KEY_LIGHT_DOCS) else putString(KEY_LIGHT_DOCS, uri)
+        }.apply()
+    }
+
     fun setApiKey(key: String) {
         prefs.edit().putString(KEY_API, key.trim()).apply()
     }
@@ -515,6 +529,7 @@ class NotebookRepository(private val context: Context) {
     private companion object {
         const val PREFS = "lightnotebook"
         const val KEY_API = "anthropic_key"
+        private const val KEY_LIGHT_DOCS = "light_docs_tree"
         const val KEY_MIRROR = "mirror_system_calendar"
         const val KEY_LEAD = "default_reminder_minutes"
         const val KEY_LAT = "home_lat"

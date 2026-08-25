@@ -17,6 +17,7 @@ import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
 import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.DayBridges
+import com.gios.lightnotebook.data.LightDocs
 import com.gios.lightnotebook.data.DayWeather
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.FolderEntity
@@ -743,6 +744,73 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Light's own notes and voice notes, if this app has been pointed at `Documents/`.
+     *
+     * Read on arrival, like every other source that lives outside this app. Empty and silent
+     * without the folder grant — a feature nobody has switched on should look like a feature
+     * nobody has switched on, not like a broken one.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayLightNotes: StateFlow<List<DayTimeline.Item.LightNote>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    val tree = repo.lightDocsTree()?.let { android.net.Uri.parse(it) }
+                    LightDocs.docs(getApplication(), tree, day, zone)
+                        .filter { it.kind != LightDocs.Kind.Other }
+                        .map { doc ->
+                            DayTimeline.Item.LightNote(
+                                minutes = JournalDay.minutesInto(doc.atMs, day, zone),
+                                name = doc.name,
+                                voice = doc.kind == LightDocs.Kind.Voice,
+                                uri = doc.uri.toString(),
+                            )
+                        }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Where Light's own notes are, once somebody has pointed at the folder. */
+    private val _lightDocs = MutableStateFlow(repo.lightDocsTree())
+    val lightDocsTree: StateFlow<String?> = _lightDocs.asStateFlow()
+
+    /**
+     * Open one of Light's own files in whatever handles it.
+     *
+     * The URI is re-parsed rather than carried as one: the row survives a process death and a
+     * `Uri` does not, and a row that cannot be tapped after the app was backgrounded is a row that
+     * looks broken.
+     */
+    fun openLightDoc(context: android.content.Context, item: DayTimeline.Item.LightNote) {
+        val uri = runCatching { android.net.Uri.parse(item.uri) }.getOrNull() ?: return
+        LightDocs.open(
+            context,
+            LightDocs.Doc(
+                name = item.name,
+                atMs = 0L,
+                kind = if (item.voice) LightDocs.Kind.Voice else LightDocs.Kind.Note,
+                uri = uri,
+            ),
+        )
+    }
+
+    /** Called with whatever the folder picker returned. */
+    fun setLightDocsTree(uri: android.net.Uri?) {
+        if (uri == null) {
+            repo.setLightDocsTree(null)
+            _lightDocs.value = null
+            return
+        }
+        LightDocs.remember(getApplication(), uri)
+        repo.setLightDocsTree(uri.toString())
+        _lightDocs.value = uri.toString()
+        // The day is redrawn off the same nudge photographs use, so the notes appear without
+        // leaving the screen.
+        refreshPhotos()
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayCalls: StateFlow<List<DayTimeline.Item.Called>> =

@@ -1,3 +1,33 @@
+## BrightNotebook v1.48 — Light's own notes on the day, and all-day scrolls again
+
+**All-day events are back inside the list.** Pinning them above the scroll cost a row of screen on
+every day that has none and could not be read past on a day with four. They are still a labelled
+ALL DAY section of full rows, still the first thing on the day — just part of it. And a day with a
+birthday and nothing else no longer says "nothing on this day yet" over the top of the birthday.
+
+**Notes and voice notes taken in Light's own tools now appear on the day.** LightOS writes them into
+`Documents/` — `Notes`, `AudioNotes`, `MessageAudio`, and a `Temp` twin of each while something is
+still being written — and there is no provider, no database and no intent to ask for them. So a day
+with three voice notes on it looked, from here, like a day nothing happened on.
+
+Settings → **Light's own notes** → point at the Documents folder once. A row each on the day it was
+made, with the file's own name; tapping one hands it to whatever plays or opens it.
+
+**A folder grant, not a storage permission.** `Documents/` is not a media directory, so
+`READ_MEDIA_*` does not reach it and `MediaStore` has nothing to say about most of what is in there.
+The alternative is `MANAGE_EXTERNAL_STORAGE` — every file on the phone, granted from a Settings
+screen this phone does not have. The document tree is both the narrow option and the only one that
+works: one folder, a grant that survives a reboot, nothing else readable.
+
+**Nothing is copied and nothing is read.** The row says a note happened, at a time, under its own
+name. Light's text notes are deliberately not imported: copying them in would make this app a second
+owner of notes still being edited somewhere else, and two owners of one note is the bug every bridge
+in this collection is written to avoid.
+
+**Times come from the file, not from its name.** Light's filenames carry a stamp, but the format is
+Light's to change — and a filename this app misparses is a note filed under the wrong day with
+nothing to notice it by. `lastModified` cannot be misread.
+
 ## BrightNotebook v1.47 — three things about a day, and the recordings that never arrived
 
 **Recordings really do appear now.** v1.44 added the bridge and never got to use it: the manifest

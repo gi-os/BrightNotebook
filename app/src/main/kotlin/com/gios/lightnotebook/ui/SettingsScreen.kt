@@ -74,6 +74,14 @@ fun SettingsScreen(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { calendarName = vm.systemCalendarName() }
 
+    // Light's own notes live in `Documents/`, which is not a media folder — so there is no
+    // permission that reaches it and no MediaStore row to read. The document tree is the narrow
+    // way in: point at the folder once, and the grant survives a reboot. See data/LightDocs.kt.
+    val lightDocs by vm.lightDocsTree.collectAsStateWithLifecycle()
+    val pickDocs = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { tree -> vm.setLightDocsTree(tree) }
+
     Column(Modifier.fillMaxSize()) {
         LightTopBar(
             title = "SETTINGS",
@@ -122,6 +130,32 @@ fun SettingsScreen(
                 variant = LightTextVariant.Detail,
                 lighten = true,
                 modifier = Modifier.padding(top = 0.8f.verticalGridUnitsAsDp()),
+            )
+
+            LightText(
+                text = "LIGHT'S OWN NOTES",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.6f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = if (lightDocs == null) "FIND THE DOCUMENTS FOLDER" else "FOLDER CHOSEN",
+                filled = false,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = { pickDocs.launch(null) },
+            )
+            LightText(
+                text = if (lightDocs == null) {
+                    "Light's notes tool and its voice notes write into Documents. Point at that " +
+                        "folder and both show up on the day they were made. Nothing is copied " +
+                        "and nothing is changed — the files stay Light's."
+                } else {
+                    "Notes and voice notes from Light's own tools now appear on the day. Tap one " +
+                        "on a day to open it. Choose the folder again to move or clear it."
+                },
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
             )
 
             LightText(
