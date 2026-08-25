@@ -629,6 +629,11 @@ fun DayPane(
                         LightRule()
                         DayShape(stats = stats)
                     }
+                    if (stats.appTime.isNotEmpty()) {
+                        item(key = "app-time") {
+                            DayAppTime(apps = stats.appTime)
+                        }
+                    }
                 }
 
                 item(key = "day-closed") {

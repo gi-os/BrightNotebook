@@ -1,3 +1,20 @@
+## BrightNotebook v1.50 — where the time went, app by app
+
+**A screen-time section at the end of every day.** The day's own line of numbers already carried the
+three biggest — "38M CHAT" says more about an afternoon than "2h 14m on the phone" does — and three
+was all that fit there. This is the rest of the answer, in the place there is room for it: every app
+worth a minute, biggest first, with its longest single sitting beside it.
+
+**The longest run is the interesting number, when it is worth showing.** Thirty-four minutes of a
+camera app across a day is a walk with a camera; thirty-four minutes in one sitting is something
+else, and a total cannot tell those apart. It appears only when one sitting was at least half the
+total, because below that it says "you picked it up a few times" — which is what its absence already
+says.
+
+Same query as before, so nothing new is asked of the phone: one walk over the usage events already
+answered screen time, pickups and where the time went. It needs the usage appop, which the settings
+screen carries the adb line for.
+
 ## BrightNotebook v1.49 — the day cannot crash on a duplicate row again
 
 **"It closed itself" was two conversations with the same name.** The crash:

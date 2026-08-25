@@ -102,6 +102,40 @@ object AppUse {
      * Three, because a fourth entry pushes the row onto a second line on this panel, and
      * because the tail of a day's app list is all thirty-second glances at the same two things.
      */
+    /** One app's share of a day, named and in minutes. See [breakdown]. */
+    data class Slice(val label: String, val minutes: Int, val longestMinutes: Int)
+
+    /**
+     * Where the day's screen time went, app by app.
+     *
+     * [summary] answers a different question and still does: three of these squashed into the
+     * day's own line of numbers, because "38M CHAT" says more about an afternoon than a total does.
+     * This is the long form — every app you spent a minute in, biggest first — for the section at
+     * the end of a day, which is the one place there is room to be complete.
+     *
+     * Bounded anyway. A day with forty apps in it is a day this list would stop being read on, and
+     * the tail below a minute is rounding rather than time spent.
+     */
+    fun breakdown(
+        totals: List<Total>,
+        nameOf: (String) -> String,
+        limit: Int = BREAKDOWN_LIMIT,
+    ): List<Slice> = totals.asSequence()
+        .filter { it.minutes >= 1 }
+        .sortedByDescending { it.totalMs }
+        .take(limit)
+        .map {
+            Slice(
+                label = nameOf(it.packageName),
+                minutes = it.minutes,
+                longestMinutes = (it.longestRunMs / 60_000L).toInt(),
+            )
+        }
+        .toList()
+
+    /** How many apps the end-of-day section lists before it stops being read. */
+    const val BREAKDOWN_LIMIT = 12
+
     fun summary(totals: List<Total>, nameOf: (String) -> String, limit: Int = 3): List<String> =
         totals.asSequence()
             .filter { it.minutes >= 1 }

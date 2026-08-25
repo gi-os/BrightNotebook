@@ -931,6 +931,11 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
          * being drawn is exactly the sort of thing this screen is careful about elsewhere.
          */
         val apps: List<String> = emptyList(),
+        /**
+         * The same query in long form: every app worth a minute, for the section at the end of a
+         * day. [apps] is the three-word version that rides along with the day's own numbers.
+         */
+        val appTime: List<AppUse.Slice> = emptyList(),
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -950,6 +955,10 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                         pickupMinutes = use.pickupsMs.map { JournalDay.minutesInto(it, day, zone) },
                         usageGranted = DeviceUse.granted(getApplication()),
                         apps = AppUse.summary(
+                            totals = use.apps,
+                            nameOf = { DeviceUse.labelFor(getApplication(), it) },
+                        ),
+                        appTime = AppUse.breakdown(
                             totals = use.apps,
                             nameOf = { DeviceUse.labelFor(getApplication(), it) },
                         ),

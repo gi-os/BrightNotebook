@@ -42,6 +42,7 @@ import com.gios.lightnotebook.ui.theme.lightInset
 import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.OnThisDay
+import com.gios.lightnotebook.util.AppUse
 import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.Dispatchers
@@ -822,6 +823,70 @@ fun DayShape(
         )
     }
 }
+
+/**
+ * Where the screen time went, one line per app.
+ *
+ * The day's own numbers already carry the three biggest — "38M CHAT" says more about an afternoon
+ * than two hours of screen time does — and three was all that fit there. This is the rest of the
+ * answer, at the end of the day where there is room for it: every app worth a minute, biggest
+ * first, with its longest single sitting beside it.
+ *
+ * **The longest run is the interesting number.** Thirty-four minutes of a camera app is a walk with
+ * a camera; thirty-four minutes in one sitting is something else, and the total alone cannot tell
+ * those apart. Shown only when it is most of the total, because otherwise it is noise.
+ *
+ * Quiet type, like everything else at this end of the day: this is what the phone noticed, not what
+ * you did.
+ */
+@Composable
+fun DayAppTime(
+    apps: List<AppUse.Slice>,
+    modifier: Modifier = Modifier,
+) {
+    if (apps.isEmpty()) return
+    Column(modifier.fillMaxWidth().padding(vertical = 0.4f.verticalGridUnitsAsDp())) {
+        LightSectionLabel("WHERE THE TIME WENT")
+        apps.forEach { app ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = lightInset(),
+                        vertical = 0.25f.verticalGridUnitsAsDp(),
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LightText(
+                    text = app.label,
+                    variant = LightTextVariant.Detail,
+                    lighten = true,
+                    modifier = Modifier.weight(1f),
+                )
+                LightText(
+                    text = buildString {
+                        append(minutesLabel(app.minutes))
+                        // Only when one sitting was most of it. Otherwise this says "you used it
+                        // several times", which is what the absence of it already says.
+                        if (app.longestMinutes >= 2 &&
+                            app.longestMinutes * 2 >= app.minutes &&
+                            app.longestMinutes < app.minutes
+                        ) {
+                            append(" · longest ")
+                            append(minutesLabel(app.longestMinutes))
+                        }
+                    },
+                    variant = LightTextVariant.Detail,
+                    lighten = true,
+                )
+            }
+        }
+    }
+}
+
+/** "34m", or "2h 14m". Hours matter above sixty minutes and not below it. */
+private fun minutesLabel(minutes: Int): String =
+    if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"
 
 /**
  * The day's steps, hour by hour.
