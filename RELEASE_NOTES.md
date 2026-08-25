@@ -1,3 +1,23 @@
+## BrightNotebook v1.51 — where you went, and what you read
+
+**Trips from BrightWay.** "Walked to Union Square · 18 min", placed at the minute you set off. Three
+different rows, because they are three different facts: **walked to**, **went to** for transit, and
+**set off for** when navigation ended before the last step — a trip you abandoned is not a place you
+got to, and pretending otherwise is the sort of thing that makes a diary untrustworthy.
+
+**Reading from LightBooks.** A row per sitting: the book, how far it moved, how long it took.
+Already coalesced at the other end — the reader writes progress several times a second at RSVP speed
+and none of that is a diary — so what arrives is "you read this, from here to here, for this long".
+Pages for a comic, words for a book, because a percentage means something different in every book.
+
+Both count as evidence on the planner's activity line, so a day you only went somewhere on stops
+looking like an empty square.
+
+**They need the other apps updated**: BrightWay v1.8 and LightBooks v1.16 are the releases that
+added the log and the provider. Neither app recorded any of this before — BrightWay knew every trip
+and forgot it within the hour, and the shelf knew where you stopped but never when. Older builds
+answer nothing, and a bridge with nothing behind it is silence rather than an error.
+
 ## BrightNotebook v1.50 — where the time went, app by app
 
 **A screen-time section at the end of every day.** The day's own line of numbers already carried the

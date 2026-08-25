@@ -162,6 +162,8 @@ fun DayPane(
     val charges by vm.dayCharges.collectAsStateWithLifecycle()
     val recordings by vm.dayRecordings.collectAsStateWithLifecycle()
     val lightNotes by vm.dayLightNotes.collectAsStateWithLifecycle()
+    val went by vm.dayWent.collectAsStateWithLifecycle()
+    val read by vm.dayRead.collectAsStateWithLifecycle()
 
     // Where an entry is, and where to send it. The sheet appears when more than one thing on the
     // phone can navigate; with exactly one, the tap goes straight there — a chooser with a single
@@ -236,7 +238,7 @@ fun DayPane(
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
         rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
-        recordings, lightNotes, epochDay, today, nowMinutes,
+        recordings, lightNotes, went, read, epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
             rows = rows,
@@ -251,6 +253,8 @@ fun DayPane(
             charges = charges,
             recordings = recordings,
             lightNotes = lightNotes,
+            went = went,
+            read = read,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -477,6 +481,39 @@ fun DayPane(
                                 // LightChat — nothing here can see one — so this is the person
                                 // itself, and a group is drawn as more than one.
                                 leading = if (item.isGroup) LightIcons.Group else LightIcons.Person,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Went -> {
+                            LightListRow(
+                                // "Walked to" and "Took transit to" are different facts, and
+                                // "Set off for" is a third one — a trip that ended before the last
+                                // step is not a place you got to.
+                                title = when {
+                                    !item.arrived -> "Set off for ${item.place}"
+                                    item.walking -> "Walked to ${item.place}"
+                                    else -> "Went to ${item.place}"
+                                },
+                                sub = if (item.tookMinutes > 0) "${item.tookMinutes} min" else null,
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                // The same glyph a stay and an arrival get: from the day's point of
+                                // view these are all the same kind of fact about a place.
+                                leading = LightIcons.Pin,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Read -> {
+                            LightListRow(
+                                title = item.title,
+                                sub = listOfNotNull(
+                                    item.progress,
+                                    item.tookMinutes.takeIf { it >= 1 }?.let { "$it min" },
+                                    item.author.takeIf { it.isNotBlank() },
+                                ).joinToString(" · ").takeIf { it.isNotBlank() },
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                leading = LightIcons.List,
                             )
                             LightRule()
                         }

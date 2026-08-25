@@ -812,6 +812,47 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         refreshPhotos()
     }
 
+    /** Where you went, from BrightWay. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayWent: StateFlow<List<DayTimeline.Item.Went>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.trips(getApplication(), day, zone).map { trip ->
+                        DayTimeline.Item.Went(
+                            minutes = JournalDay.minutesInto(trip.startedMs, day, zone),
+                            place = trip.name,
+                            walking = trip.walking,
+                            tookMinutes = trip.minutes,
+                            arrived = trip.arrived,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** What you read, from LightBooks. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayRead: StateFlow<List<DayTimeline.Item.Read>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.reading(getApplication(), day, zone).map { sitting ->
+                        DayTimeline.Item.Read(
+                            minutes = JournalDay.minutesInto(sitting.startedMs, day, zone),
+                            title = sitting.title,
+                            author = sitting.author,
+                            advanced = sitting.advanced,
+                            pages = sitting.pages,
+                            tookMinutes = sitting.minutes,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayCalls: StateFlow<List<DayTimeline.Item.Called>> =
         combine(_selectedDay, _photoNudge) { day, _ -> day }

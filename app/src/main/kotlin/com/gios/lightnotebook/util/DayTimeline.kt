@@ -229,6 +229,50 @@ object DayTimeline {
         }
 
         /**
+         * Somewhere you went, from BrightWay.
+         *
+         * A row rather than a span, even though it has two ends. A walk is a thing you did — the
+         * span treatment is for what was going on *while* you did things, and being on the way
+         * somewhere is not the background of an afternoon, it is most of one.
+         */
+        data class Went(
+            override val minutes: Int,
+            val place: String,
+            val walking: Boolean,
+            val tookMinutes: Int,
+            /** False when navigation ended before the last step: you set off, and that is all. */
+            val arrived: Boolean,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
+        /**
+         * A sitting with a book, from LightBooks.
+         *
+         * Already coalesced at the other end: the reader writes progress several times a second and
+         * none of that is a diary. What arrives here is "you read this, from here to here, for this
+         * long", which is the shape a day wants.
+         */
+        data class Read(
+            override val minutes: Int,
+            val title: String,
+            val author: String,
+            val advanced: Int,
+            val pages: Boolean,
+            val tookMinutes: Int,
+        ) : Item {
+            override val behind: Boolean get() = true
+
+            /** "32 pages", "1,400 words", or null when nothing moved. */
+            val progress: String?
+                get() = when {
+                    advanced <= 0 -> null
+                    pages -> if (advanced == 1) "1 page" else "$advanced pages"
+                    else -> "%,d words".format(advanced)
+                }
+        }
+
+        /**
          * A note or a voice note taken in Light's own app.
          *
          * Read out of `Documents/` rather than owned here — see [com.gios.lightnotebook.data
@@ -295,6 +339,8 @@ object DayTimeline {
         is Item.Charged -> "charge-" + item.minutes
         is Item.Recorded -> "clip-" + item.tapeDir + "-" + item.file
         is Item.LightNote -> "lightdoc-" + item.uri
+        is Item.Went -> "went-" + item.minutes + "-" + item.place
+        is Item.Read -> "read-" + item.minutes + "-" + item.title
     }
 
     /**
@@ -346,6 +392,8 @@ object DayTimeline {
         charges: List<Item.Charged> = emptyList(),
         recordings: List<Item.Recorded> = emptyList(),
         lightNotes: List<Item.LightNote> = emptyList(),
+        went: List<Item.Went> = emptyList(),
+        read: List<Item.Read> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -368,7 +416,7 @@ object DayTimeline {
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrived + calls + charges + recordings + lightNotes)
+            arrived + calls + charges + recordings + lightNotes + went + read)
             // One row per key, whatever the sources handed over. See [key]: this is the only place
             // that can enforce it, and a duplicate reaching the list is a crash rather than a
             // cosmetic fault.
@@ -398,6 +446,11 @@ object DayTimeline {
                         // next to each other rather than in separate bands.
                         // With the recordings and the photographs: all three are something
                         // captured at that minute rather than something the day did.
+                        // Going somewhere sorts with arriving and being somewhere: same kind of
+                        // fact, seen from a third side.
+                        is Item.Went -> 1
+                        // Reading sorts with the things you sat down and did on purpose.
+                        is Item.Read -> 4
                         is Item.LightNote -> 4
                         is Item.Recorded -> 4
                         is Item.Photos -> 4

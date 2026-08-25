@@ -96,6 +96,12 @@
         -->
         <package android:name="com.gios.brightrecorder" />
         <provider android:authorities="com.gios.brightrecorder.clips" />
+        <!-- Where you went, from BrightWay. -->
+        <package android:name="com.gios.brightway" />
+        <provider android:authorities="com.gios.brightway.trips" />
+        <!-- What you read, from LightBooks. -->
+        <package android:name="com.lightfastread" />
+        <provider android:authorities="com.lightfastread.reading" />
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>

@@ -36,6 +36,46 @@ data class Recorded(
 )
 
 /**
+ * Somewhere you went, from BrightWay.
+ *
+ * [arrived] is the difference between "walked to Union Square" and "set off towards Union Square",
+ * which are different days — BrightWay records it rather than inferring it here, because the only
+ * thing that knows is the screen that was counting the steps.
+ */
+data class Trip(
+    val startedMs: Long,
+    val endedMs: Long,
+    val mode: String,
+    val name: String,
+    val plannedS: Long,
+    val distanceM: Double,
+    val arrived: Boolean,
+) {
+    /** How long it took, or what it was predicted to take while it is still running. */
+    val minutes: Int
+        get() = if (endedMs > startedMs) {
+            ((endedMs - startedMs) / 60_000L).toInt()
+        } else {
+            (plannedS / 60L).toInt()
+        }
+
+    val walking: Boolean get() = !mode.equals("TRANSIT", ignoreCase = true)
+}
+
+/** A sitting with a book, from LightBooks. */
+data class Reading(
+    val startedMs: Long,
+    val lastMs: Long,
+    val title: String,
+    val author: String,
+    /** Words, or pages for a comic — see [pages]. */
+    val advanced: Int,
+    val pages: Boolean,
+) {
+    val minutes: Int get() = (((lastMs - startedMs) / 60_000L).toInt()).coerceAtLeast(0)
+}
+
+/**
  * Arriving somewhere you had named, from LightFog. Home and work.
  *
  * No coordinates, by construction at the other end: a zone's fixes never reach the track, so the
@@ -73,6 +113,8 @@ object DayBridges {
     private const val TALKED = "content://com.gios.lightchat.talked/talked/"
     private const val ZONES = "content://com.gios.lightfog.stays/zones/"
     private const val CLIPS = "content://com.gios.brightrecorder.clips/clips/"
+    private const val TRIPS = "content://com.gios.brightway.trips/trips/"
+    private const val READING = "content://com.lightfastread.reading/reading/"
 
     fun stays(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Stay> {
         val window = JournalDay.windowMs(epochDay, zone)
@@ -179,6 +221,65 @@ object DayBridges {
     }
 
     /**
+     * Where you went, from BrightWay.
+     *
+     * Placed by when the trip *started*, like everything else on the timeline: a walk that finished
+     * after four in the morning still belongs to the night it began on.
+     */
+    fun trips(
+        context: Context,
+        epochDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<Trip> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, TRIPS + date) { c ->
+                Trip(
+                    startedMs = c.getLong(c.getColumnIndexOrThrow("started_ms")),
+                    endedMs = c.getLong(c.getColumnIndexOrThrow("ended_ms")),
+                    mode = c.getString(c.getColumnIndexOrThrow("mode")).orEmpty(),
+                    name = c.getString(c.getColumnIndexOrThrow("name")).orEmpty(),
+                    plannedS = c.getLong(c.getColumnIndexOrThrow("planned_s")),
+                    distanceM = c.getDouble(c.getColumnIndexOrThrow("distance_m")),
+                    arrived = c.getLong(c.getColumnIndexOrThrow("arrived")) == 1L,
+                )
+            }
+        }
+            .filter { it.startedMs in window }
+            .sortedBy { it.startedMs }
+            .distinctBy { it.startedMs }
+    }
+
+    /**
+     * What you read, from LightBooks.
+     *
+     * One row per sitting, already coalesced at the other end — this app never sees the page turns,
+     * which happen several times a second and are nobody's diary.
+     */
+    fun reading(
+        context: Context,
+        epochDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<Reading> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, READING + date) { c ->
+                Reading(
+                    startedMs = c.getLong(c.getColumnIndexOrThrow("started_ms")),
+                    lastMs = c.getLong(c.getColumnIndexOrThrow("last_ms")),
+                    title = c.getString(c.getColumnIndexOrThrow("title")).orEmpty(),
+                    author = c.getString(c.getColumnIndexOrThrow("author")).orEmpty(),
+                    advanced = c.getLong(c.getColumnIndexOrThrow("advanced")).toInt(),
+                    pages = c.getLong(c.getColumnIndexOrThrow("pages")) == 1L,
+                )
+            }
+        }
+            .filter { it.startedMs in window }
+            .sortedBy { it.startedMs }
+            .distinctBy { it.startedMs to it.title }
+    }
+
+    /**
      * The calendar dates a journal day touches.
      *
      * Two of them, always: a day beginning at four in the morning on the 30th ends at four on the
@@ -232,6 +333,13 @@ object DayBridges {
             // is the one place that shows it before you open the day.
             recordings(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.startedAt, day, zone))
+            }
+            trips(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.startedMs, day, zone))
+            }
+            reading(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.startedMs, day, zone))
+                minutes.add(JournalDay.minutesInto(it.lastMs, day, zone))
             }
             val span = if (minutes.size < 2) null else minutes.min()..minutes.max()
             spanCache[day] = Cached(span)
