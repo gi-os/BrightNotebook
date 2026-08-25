@@ -337,6 +337,10 @@ object DayTimeline {
                         // together rather than in two separate bands.
                         is Item.Called -> 2
                         is Item.Note -> 3
+                        // A recording sorts with a photograph: both are something you deliberately
+                        // captured at that minute, and on a day with one of each they belong
+                        // next to each other rather than in separate bands.
+                        is Item.Recorded -> 4
                         is Item.Photos -> 4
                         is Item.Listening -> 5
                         is Item.Pickups -> 6
