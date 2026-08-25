@@ -13,7 +13,7 @@ tokens rather than an approximation of them. Launcher label **Notebook**, packag
 Scan the code above with **BrightMarket** installed to open BrightNotebook there and
 install or update it directly. Don't have BrightMarket yet? Get it, and browse
 every Bright app, at
-**[gi-os.github.io/brightmarket-index/browse.html](https://gi-os.github.io/brightmarket-index/browse.html)**.
+**[brightmarket.gzl.dev](https://brightmarket.gzl.dev)**.
 
 Three buttons at the bottom and nothing else: a list, a plus, a calendar. Notes are
 plain text carrying their own markers (`**bold**`, `- `, `1. `) so a note stays readable
@@ -219,7 +219,7 @@ importing other calendars — works with none.
   *photographed* — a frame, which is what a picture is, and the two stay legible on a cell three
   millimetres wide in a way that two dots would not.
 
-  There is **no bridge to Roll** doing this, and that is the point. [Roll](https://github.com/gi-os/LightCamera)
+  There is **no bridge to Roll** doing this, and that is the point. [Roll](https://github.com/gi-os/Roll)
   writes every exposure to MediaStore because that is what a camera does, so asking the
   system what was photographed on a day answers with Roll's pictures, the stock camera's, a
   screenshot, and anything else — with no content provider, no `<queries>` entry, and no
@@ -474,3 +474,21 @@ and not only what changed:
 MIT. Vector drawables and design tokens in `ui/theme/` are ported from
 [lightphone/light-sdk](https://github.com/lightphone/light-sdk) (MIT); see
 `LICENSE-light-sdk`.
+
+<!-- bright-footer:begin -->
+---
+
+## Bright\*
+
+*Notes and a calendar that gather your day on the device itself, on a phone with no Google account attached to it.*
+
+26 open-source apps for the **Light Phone III** — camera, music, maps, messages,
+reading, transit, games. The phone has no app store, so they install by sideload: scan one
+code from **[brightmarket.gzl.dev](https://brightmarket.gzl.dev)** and BrightMarket keeps them updated.
+
+[Roll](https://github.com/gi-os/Roll) · [BrightMusic](https://github.com/gi-os/BrightMusic) · [BrightWay](https://github.com/gi-os/BrightWay) · [BrightChat](https://github.com/gi-os/BrightChat) · [BrightControl](https://github.com/gi-os/BrightControl) · [BrightRemote](https://github.com/gi-os/BrightRemote) · [browse all 26 →](https://brightmarket.gzl.dev)
+
+The Light Phone does not sponsor or endorse any of these. Built by
+[Giovanni Lupo](https://github.com/gi-os) — if this one is useful to you, a ⭐ helps the next
+person find it.
+<!-- bright-footer:end -->
