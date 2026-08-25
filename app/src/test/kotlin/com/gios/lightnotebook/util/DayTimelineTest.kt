@@ -632,4 +632,54 @@ class DayTimelineTest {
         )
         assertNull(items.single().minutes)
     }
+
+    /* ---- one row per key ---- */
+
+    @Test
+    fun `two conversations with the same name in the same minute are one row`() {
+        // The crash this exists for: the bridge dedupes talked-abouts by millisecond, the list keys
+        // them by journal minute, and a LazyColumn handed the same key twice throws rather than
+        // drawing the day. Reported as "It closed itself" on a day with two threads named the same.
+        val talked = listOf(
+            DayTimeline.Item.Talked(
+                minutes = noon,
+                untilMinutes = noon,
+                name = "Giovanni Lupo",
+                isGroup = false,
+                messages = 2,
+                theyReplied = true,
+            ),
+            DayTimeline.Item.Talked(
+                minutes = noon,
+                untilMinutes = noon,
+                name = "Giovanni Lupo",
+                isGroup = true,
+                messages = 1,
+                theyReplied = false,
+            ),
+        )
+        val built = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            talked = talked,
+            epochDay = today,
+            today = today,
+            nowMinutes = 23 * 60,
+        )
+        assertEquals(1, built.count { it is DayTimeline.Item.Talked })
+    }
+
+    @Test
+    fun `every key on a built day is unique`() {
+        val built = DayTimeline.build(
+            rows = listOf(row("a", noon), row("b", noon)),
+            photos = listOf(photo(1L, noon), photo(2L, noon + 90)),
+            calls = listOf(),
+            epochDay = today,
+            today = today,
+            nowMinutes = 23 * 60,
+        )
+        val keys = built.map { DayTimeline.key(it) }
+        assertEquals(keys.size, keys.distinct().size)
+    }
 }

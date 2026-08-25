@@ -265,6 +265,39 @@ object DayTimeline {
     }
 
     /**
+     * The identity of one row, as a string.
+     *
+     * **A `LazyColumn` given the same key twice throws**, and the day is built out of eight
+     * independent sources that each know only about themselves — so "unique" cannot be checked at
+     * any one of them. It is checked here, in the one place that can see the whole list: the key is
+     * defined once, and [build] drops anything whose key it has already emitted.
+     *
+     * That is the general form of a bug this file has now had twice. Arrivals were the first —
+     * a GPS flap inside a named zone produced two of them a second apart, which is one journal
+     * minute — and conversations were the second: two threads with the same name starting in the
+     * same minute, which the bridge's own dedupe by *millisecond* did not catch. Both crashed the
+     * day rather than drawing it, which is the worst shape a duplicate can take.
+     *
+     * Keyed on what the row *is*, never on where it sits: the list reorders as the clock passes an
+     * entry, and a positional key would recycle a photograph's loaded bitmap into whatever row took
+     * its place.
+     */
+    fun key(item: Item): String = when (item) {
+        is Item.Entry -> "row-" + item.row.id
+        is Item.Photos -> "photos-" + item.photos.first().id
+        is Item.Note -> "note-" + item.noteId
+        is Item.Place -> "place-" + item.startMinutes
+        is Item.Listening -> "heard-" + item.minutes
+        is Item.Pickups -> "picked-" + item.minutes
+        is Item.Talked -> "talked-" + item.name + "-" + item.minutes
+        is Item.Arrived -> "arrived-" + item.zone + "-" + item.minutes
+        is Item.Called -> "call-" + item.minutes + "-" + item.call.who
+        is Item.Charged -> "charge-" + item.minutes
+        is Item.Recorded -> "clip-" + item.tapeDir + "-" + item.file
+        is Item.LightNote -> "lightdoc-" + item.uri
+    }
+
+    /**
      * The line between what has happened and what has not, in minutes from midnight, or null
      * when the whole day is on one side of it.
      *
@@ -336,6 +369,10 @@ object DayTimeline {
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
             arrived + calls + charges + recordings + lightNotes)
+            // One row per key, whatever the sources handed over. See [key]: this is the only place
+            // that can enforce it, and a duplicate reaching the list is a crash rather than a
+            // cosmetic fault.
+            .distinctBy { key(it) }
             .sortedWith(
             compareBy(
                 { it.minutes ?: -1 },

@@ -1,3 +1,27 @@
+## BrightNotebook v1.49 — the day cannot crash on a duplicate row again
+
+**"It closed itself" was two conversations with the same name.** The crash:
+
+```
+java.lang.IllegalArgumentException: Key "talked-Giovanni Lupo721" was already used.
+```
+
+Two threads named the same, starting in the same journal minute. The bridge dedupes conversations by
+*millisecond*, the list keys them by *minute*, and a `LazyColumn` handed the same key twice throws
+rather than drawing anything — so the day did not look wrong, it took the app down.
+
+**Fixed where it can actually be fixed: in one place.** The day is assembled from a dozen
+independent sources and none of them can see the others, so "keys are unique" is not a property any
+one of them can guarantee. The key is now defined once, and the builder drops anything whose key it
+has already emitted. The list asks for the same function.
+
+This is the second time this file has had this bug — arrivals were the first, where a GPS flap
+inside a named zone produced two fixes a second apart, which is one journal minute. That one was
+patched at the source. This one is patched at the shape, which covers the next source too: a
+photograph and a stay and a call landing on the same minute all go through the same door now.
+
+Two tests, one for the reported case and one that asserts every key on a built day is distinct.
+
 ## BrightNotebook v1.48 — Light's own notes on the day, and all-day scrolls again
 
 **All-day events are back inside the list.** Pinning them above the scroll cost a row of screen on

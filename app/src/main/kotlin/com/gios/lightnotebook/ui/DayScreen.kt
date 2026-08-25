@@ -404,22 +404,10 @@ fun DayPane(
                     // Keyed on what the item *is*, never on its position: the list reorders as
                     // the clock passes an entry, and a positional key would recycle a
                     // photograph's loaded bitmap into whatever row took its place.
-                    key = { _, item ->
-                        when (item) {
-                            is DayTimeline.Item.Entry -> "row-" + item.row.id
-                            is DayTimeline.Item.Photos -> "photos-" + item.photos.first().id
-                            is DayTimeline.Item.Note -> "note-" + item.noteId
-                            is DayTimeline.Item.Place -> "place-" + item.startMinutes
-                            is DayTimeline.Item.Listening -> "heard-" + item.minutes
-                            is DayTimeline.Item.Pickups -> "picked-" + item.minutes
-                            is DayTimeline.Item.Talked -> "talked-" + item.name + item.minutes
-                            is DayTimeline.Item.Arrived -> "arrived-" + item.zone + item.minutes
-                            is DayTimeline.Item.Called -> "call-" + item.minutes + item.call.who
-                            is DayTimeline.Item.Charged -> "charge-" + item.minutes
-                            is DayTimeline.Item.Recorded -> "clip-" + item.tapeDir + item.file
-                            is DayTimeline.Item.LightNote -> "lightdoc-" + item.uri
-                        }
-                    },
+                    // Defined in one place, because uniqueness cannot be checked from any single
+                    // source: the day is built from eight of them and each knows only itself. See
+                    // DayTimeline.key, which build() also dedupes on.
+                    key = { _, item -> DayTimeline.key(item) },
                 ) { index, item ->
                     if (index > 0) {
                         val previous = moments[index - 1].minutes
