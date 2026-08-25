@@ -1,3 +1,28 @@
+## BrightNotebook v1.47 — three things about a day, and the recordings that never arrived
+
+**Recordings really do appear now.** v1.44 added the bridge and never got to use it: the manifest
+had no `<queries>` entry for BrightRecorder, so on Android 11+ `contentResolver.query` answered null
+however installed the recorder was — and a bridge that is not allowed to see its provider looks
+exactly like a day you happened not to record on. The reader was right the whole time; the resolver
+was never let near it.
+
+**"Picked up 14 times" is a mention, not an event.** It was a full row with a glyph and a time,
+which put it at the same weight as a doctor's appointment — and a day whose loudest line is how
+often you looked at your phone is a day this app has misread. It is drawn like the music span now: a
+short rule and one quiet line in the margin, no rule under it. Background, which is what it is.
+
+**All-day events are a section at the top, and it stays put.** They were a wrapped strip of small
+words under the date. That is the right *place* — a whole-day fact frames the day rather than
+happening at a point in it — and the wrong weight: "Alex's birthday" and "Flying to Chicago" are
+events, and at superfine size in a flow row they read as tags on the date. Now: a labelled ALL DAY
+section, one full row each, above the scroll and outside it. Outside, because a frame that slides
+away with the page is not a frame. Holidays keep their glyph, the same one the grid draws in the
+corner of the cell.
+
+**And the last row of a list is reachable.** The agenda and the day both ended flush against the
+chrome, so the final entry sat behind the bar and the list read as one that would not finish
+scrolling. A bar's worth of air under both.
+
 ## BrightNotebook v1.46 — the whole event, on a page of its own
 
 **A full event editor, four tabs: WHEN · WHERE · REPEAT · ALERT.** The day's one-line field is

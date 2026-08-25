@@ -3,6 +3,7 @@ package com.gios.lightnotebook.ui
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
+import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 import com.gios.lightnotebook.ui.theme.LightTopBar
 import com.gios.lightnotebook.util.Agenda
 import com.gios.lightnotebook.util.NoteDates
@@ -48,7 +50,14 @@ fun AgendaScreen(
         if (rows.isEmpty()) {
             LightEmptyState("Nothing ahead.\nTap a day to write on it.", Modifier.weight(1f))
         } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState) {
+            LazyColumn(
+                Modifier.weight(1f).fillMaxWidth(),
+                state = listState,
+                // A bar's worth of air under the last row. Without it the final entry sits flush
+                // against the chrome and reads as a list that will not finish scrolling — which
+                // is exactly how it was reported.
+                contentPadding = PaddingValues(bottom = 4f.verticalGridUnitsAsDp()),
+            ) {
                 // One heading per day, so the eye gets the date once instead of on every row.
                 var lastDay: Long? = null
                 rows.forEach { row ->

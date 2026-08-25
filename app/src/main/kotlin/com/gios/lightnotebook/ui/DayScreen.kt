@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -318,7 +319,7 @@ fun DayPane(
 
         DayWeatherLine(weather = weather, unfinished = epochDay >= today)
 
-        AllDayRow(
+        AllDaySection(
             entries = allDay,
             onOpen = { row ->
                 vm.entryById(row.entryId)?.let {
@@ -372,7 +373,13 @@ fun DayPane(
                 OnThisDayRow(past = past, onOpen = { viewing = it })
             }
         } else {
-            LazyColumn(Modifier.fillMaxSize(), state = listState) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = listState,
+                // Air under the last moment of the day, so it clears the composer and the bar
+                // instead of hiding behind them.
+                contentPadding = PaddingValues(bottom = 4f.verticalGridUnitsAsDp()),
+            ) {
                 // Inside the list, not pinned above it: it is the day's first line, and a line that
                 // stays put while the day scrolls under it stops being the beginning of anything.
                 item(key = "day-opened") {
@@ -521,25 +528,10 @@ fun DayPane(
                             LightRule()
                         }
 
-                        is DayTimeline.Item.Pickups -> {
-                            LightListRow(
-                                title = if (item.times == 1) {
-                                    "Picked up the phone"
-                                } else {
-                                    "Picked up ${item.times} times"
-                                },
-                                sub = if (item.untilMinutes > item.minutes) {
-                                    "until " + NoteDates.clock(
-                                        JournalDay.clockMinutes(item.untilMinutes),
-                                    )
-                                } else {
-                                    null
-                                },
-                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
-                                leading = LightIcons.Alarm,
-                            )
-                            LightRule()
-                        }
+                        // A mention, not a row: see [PickupsMention]. No rule under it either —
+                        // it is the background of the day rather than an entry in it.
+                        is DayTimeline.Item.Pickups -> PickupsMention(item)
+
 
                         is DayTimeline.Item.Note -> {
                             LightListRow(

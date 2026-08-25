@@ -568,6 +568,47 @@ fun TimeGap(
 }
 
 /**
+ * How often the phone was picked up, as a mention in the margin.
+ *
+ * It was a full row with a glyph and a time, which put "Picked up 14 times" at the same weight as a
+ * doctor's appointment — and a day whose loudest line is how often you looked at your phone is a
+ * day this app has misread. It is the same shape as the music span now: a short rule and one quiet
+ * line, in the margin, because that is what it is. Background, not an event.
+ */
+@Composable
+fun PickupsMention(item: DayTimeline.Item.Pickups, modifier: Modifier = Modifier) {
+    val colors = LightThemeTokens.colors
+    val until = if (item.untilMinutes > item.minutes) {
+        " until " + NoteDates.clock(JournalDay.clockMinutes(item.untilMinutes))
+    } else {
+        ""
+    }
+    val phrase = (
+        if (item.times == 1) "Picked the phone up" else "Picked the phone up ${item.times} times"
+        ) + until
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.4f.verticalGridUnitsAsDp()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(2.dp)
+                .height(1.6f.verticalGridUnitsAsDp())
+                .background(colors.rule),
+        )
+        LightText(
+            text = phrase,
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+            modifier = Modifier.padding(start = 0.6f.gridUnitsAsDp()),
+        )
+    }
+}
+
+/**
  * Music, drawn as something that was going on rather than something that happened.
  *
  * **This is the one thing on a day that runs alongside everything else.** A photograph is a moment
@@ -636,50 +677,37 @@ private fun phraseFor(item: DayTimeline.Item.Listening, minutes: Int): String {
 }
 
 /**
- * The things that are true of the whole day, next to its date.
+ * The all-day things, as a section at the top of the day.
  *
- * A birthday, a holiday, a trip — these have no time, so a timeline has nowhere honest to put them.
- * Placed first among the moments they read as the first thing that happened, which is exactly what
- * they are not. They belong with the date instead: both describe the day rather than a point in it.
+ * They were a wrapped strip of small words under the date, which is where all-day entries *belong*
+ * — they describe the whole day rather than a point in it — but not what they are worth. "Alex's
+ * birthday" and "Flying to Chicago" are events, and drawn at superfine size in a flow row they read
+ * as tags on the date rather than as things that are happening.
  *
- * Wrapped rather than truncated, because three all-day things on one day is normal and a "+2" for
- * something that is the day's whole character is the wrong thing to hide.
+ * So: a labelled section, one full row each, above the scroll and outside it. Above, because a
+ * day's whole-day facts are the frame you read the rest of it inside; outside the scroll, because
+ * they are the frame and a frame that slides away with the page is not one. A holiday keeps its
+ * glyph — the same one the grid draws in the corner of the cell, so the tree on the 25th and the
+ * words "Christmas Day" are visibly the same fact.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AllDayRow(
+fun AllDaySection(
     entries: List<DayTimeline.Item.Entry>,
     onOpen: (AgendaRow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (entries.isEmpty()) return
-    FlowRow(
-        modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = lightInset(),
-                vertical = 0.35f.verticalGridUnitsAsDp(),
-            ),
-    ) {
+    Column(modifier.fillMaxWidth()) {
+        LightSectionLabel(if (entries.size == 1) "ALL DAY" else "ALL DAY · ${entries.size}")
         entries.forEach { entry ->
             val holiday = entry.row.holidayId?.let { LightIcons.holiday(it) }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .padding(end = 0.7f.gridUnitsAsDp())
-                    .lightClickable { onOpen(entry.row) },
-            ) {
-                // The same glyph the grid draws in the corner of the cell, so the tree on the
-                // 25th and the word "Christmas Day" are visibly the same fact.
-                if (holiday != null) {
-                    LightIcon(
-                        icon = holiday,
-                        size = 1.1f,
-                        modifier = Modifier.padding(end = 0.25f.gridUnitsAsDp()),
-                    )
-                }
-                LightText(text = entry.row.title, variant = LightTextVariant.Superfine)
-            }
+            LightListRow(
+                title = entry.row.title,
+                sub = entry.row.subtitle,
+                leading = holiday ?: LightIcons.Calendar,
+                onClick = { onOpen(entry.row) },
+            )
+            LightRule()
         }
     }
 }
