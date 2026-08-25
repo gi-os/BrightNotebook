@@ -50,6 +50,13 @@ object LightIcons {
     val Spacer = LightIconSpec("", R.drawable.ic_spacer)
 
     /**
+     * A recording, from BrightRecorder. Drawn here, because the SDK set has no tape and no
+     * microphone — and borrowing a glyph that means something else in this app is worse than
+     * drawing one. See `ic_tape_white.xml` for why it is a cassette and not a mic.
+     */
+    val Tape = LightIconSpec("a recording", R.drawable.ic_tape_white)
+
+    /**
      * The glyph for a US federal holiday, by [com.gios.lightnotebook.util.Holidays] id.
      *
      * Drawn for this app rather than taken from the SDK set, which has no holidays in it, but to

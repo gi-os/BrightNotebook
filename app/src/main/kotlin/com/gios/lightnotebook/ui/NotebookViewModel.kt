@@ -713,6 +713,37 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
      * Queried per day rather than kept: the provider holds weeks, so nothing has to have been
      * running. Empty and silent without the grant, like every other bridge here.
      */
+    /**
+     * What you recorded, from BrightRecorder.
+     *
+     * Read on arrival like every other bridge: a recording is made while this app is closed, so
+     * there is no moment in this process worth watching for. The nudge that re-reads photographs
+     * re-reads these too, which is what makes a clip recorded a minute ago appear when you come
+     * back to the day.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayRecordings: StateFlow<List<DayTimeline.Item.Recorded>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.recordings(getApplication(), day, zone).map { clip ->
+                        DayTimeline.Item.Recorded(
+                            minutes = JournalDay.minutesInto(clip.startedAt, day, zone),
+                            title = clip.title,
+                            // The place is the name you typed on the tape, and the title already
+                            // contains it plus the date — so the row shows the place and lets the
+                            // timeline supply the time it is already sitting next to.
+                            place = clip.place,
+                            seconds = clip.seconds,
+                            tapeDir = clip.tapeDir,
+                            file = clip.file,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayCalls: StateFlow<List<DayTimeline.Item.Called>> =
         combine(_selectedDay, _photoNudge) { day, _ -> day }

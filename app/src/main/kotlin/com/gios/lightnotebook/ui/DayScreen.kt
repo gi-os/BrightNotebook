@@ -151,6 +151,7 @@ fun DayPane(
     val arrivals by vm.dayArrivals.collectAsStateWithLifecycle()
     val calls by vm.dayCalls.collectAsStateWithLifecycle()
     val charges by vm.dayCharges.collectAsStateWithLifecycle()
+    val recordings by vm.dayRecordings.collectAsStateWithLifecycle()
     val photosGranted by vm.photosGranted.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -218,7 +219,7 @@ fun DayPane(
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
         rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
-        epochDay, today, nowMinutes,
+        recordings, epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
             rows = rows,
@@ -231,6 +232,7 @@ fun DayPane(
             arrivals = arrivals,
             calls = calls,
             charges = charges,
+            recordings = recordings,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -379,6 +381,7 @@ fun DayPane(
                             is DayTimeline.Item.Arrived -> "arrived-" + item.zone + item.minutes
                             is DayTimeline.Item.Called -> "call-" + item.minutes + item.call.who
                             is DayTimeline.Item.Charged -> "charge-" + item.minutes
+                            is DayTimeline.Item.Recorded -> "clip-" + item.tapeDir + item.file
                         }
                     },
                 ) { index, item ->
@@ -450,6 +453,22 @@ fun DayPane(
                                 // LightChat — nothing here can see one — so this is the person
                                 // itself, and a group is drawn as more than one.
                                 leading = if (item.isGroup) LightIcons.Group else LightIcons.Person,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Recorded -> {
+                            LightListRow(
+                                // The place you typed on the tape, which is the whole of what a
+                                // recording is called here. The clip's own title carries the date
+                                // as well, and a row sitting next to the time it happened does not
+                                // need to repeat it.
+                                title = item.place.ifBlank { "Recording" },
+                                sub = item.length,
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                // A cassette, drawn for this app: the SDK set has no tape and no
+                                // microphone, and the alarm glyph already means a reminder here.
+                                leading = LightIcons.Tape,
                             )
                             LightRule()
                         }

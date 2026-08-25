@@ -201,6 +201,34 @@ object DayTimeline {
         }
 
         /**
+         * Something you recorded, from BrightRecorder.
+         *
+         * A row each, not a summary. Grouping is right for music — "an hour of Talk Talk" is what
+         * was true of an afternoon, and a day of individual tracks would drown everything else on
+         * it — and wrong for this: you made three recordings today, deliberately, and each one is
+         * a thing you did rather than a background the day had.
+         */
+        data class Recorded(
+            override val minutes: Int,
+            val title: String,
+            val place: String,
+            val seconds: Float,
+            /** Enough to play it: the recorder serves the audio itself. */
+            val tapeDir: String,
+            val file: String,
+        ) : Item {
+            // You cannot have recorded something in the future.
+            override val behind: Boolean get() = true
+
+            /** "1:42", or "0:08". Seconds matter here — most recordings are short. */
+            val length: String
+                get() {
+                    val whole = seconds.toInt().coerceAtLeast(0)
+                    return "${whole / 60}:" + (whole % 60).toString().padStart(2, '0')
+                }
+        }
+
+        /**
          * One moment, holding one photograph or a burst of them.
          *
          * A single photograph is drawn full width, the way a picture in a diary is. A burst is
@@ -265,6 +293,7 @@ object DayTimeline {
         arrivals: List<Item.Arrived> = emptyList(),
         calls: List<Item.Called> = emptyList(),
         charges: List<Item.Charged> = emptyList(),
+        recordings: List<Item.Recorded> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -287,7 +316,7 @@ object DayTimeline {
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrived + calls + charges)
+            arrived + calls + charges + recordings)
             .sortedWith(
             compareBy(
                 { it.minutes ?: -1 },

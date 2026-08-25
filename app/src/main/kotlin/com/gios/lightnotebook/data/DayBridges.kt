@@ -20,6 +20,22 @@ data class Stay(
 data class Play(val atMs: Long, val title: String, val artist: String)
 
 /**
+ * Something you recorded, from BrightRecorder.
+ *
+ * [tapeDir] and [file] are carried so the clip can be played without a copy of it — the recorder
+ * serves the audio itself at `content://com.gios.brightrecorder.clips/clip/<tapeDir>/<file>`.
+ */
+data class Recorded(
+    val startedAt: Long,
+    val seconds: Float,
+    val place: String,
+    val tape: String,
+    val title: String,
+    val tapeDir: String,
+    val file: String,
+)
+
+/**
  * Arriving somewhere you had named, from LightFog. Home and work.
  *
  * No coordinates, by construction at the other end: a zone's fixes never reach the track, so the
@@ -56,6 +72,7 @@ object DayBridges {
     private const val PLAYS = "content://com.lightphone.spotify.plays/plays/"
     private const val TALKED = "content://com.gios.lightchat.talked/talked/"
     private const val ZONES = "content://com.gios.lightfog.stays/zones/"
+    private const val CLIPS = "content://com.gios.brightrecorder.clips/clips/"
 
     fun stays(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Stay> {
         val window = JournalDay.windowMs(epochDay, zone)
@@ -129,6 +146,39 @@ object DayBridges {
     }
 
     /**
+     * What you recorded, from BrightRecorder.
+     *
+     * A clip is placed by when it *started*, like everything else on the timeline. One that ran
+     * past four in the morning still belongs to the day it began on — a recording is a thing you
+     * did at a time, and the time it began is the one you would look for it under.
+     */
+    fun recordings(
+        context: Context,
+        epochDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<Recorded> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, CLIPS + date) { c ->
+                Recorded(
+                    startedAt = c.getLong(c.getColumnIndexOrThrow("started_ms")),
+                    seconds = c.getFloat(c.getColumnIndexOrThrow("seconds")),
+                    place = c.getString(c.getColumnIndexOrThrow("place")).orEmpty(),
+                    tape = c.getString(c.getColumnIndexOrThrow("tape")).orEmpty(),
+                    title = c.getString(c.getColumnIndexOrThrow("title")).orEmpty(),
+                    tapeDir = c.getString(c.getColumnIndexOrThrow("tape_dir")).orEmpty(),
+                    file = c.getString(c.getColumnIndexOrThrow("file")).orEmpty(),
+                )
+            }
+        }
+            .filter { it.startedAt in window }
+            .sortedBy { it.startedAt }
+            // The provider walks every tape, and the same clip cannot appear twice — but both
+            // calendar dates are fetched, so a clip is offered twice whenever the window overlaps.
+            .distinctBy { it.tapeDir to it.file }
+    }
+
+    /**
      * The calendar dates a journal day touches.
      *
      * Two of them, always: a day beginning at four in the morning on the 30th ends at four on the
@@ -177,6 +227,11 @@ object DayBridges {
             talked(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.firstMs, day, zone))
                 minutes.add(JournalDay.minutesInto(it.lastMs, day, zone))
+            }
+            // A day you only recorded on is still a day something happened, and the activity line
+            // is the one place that shows it before you open the day.
+            recordings(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.startedAt, day, zone))
             }
             val span = if (minutes.size < 2) null else minutes.min()..minutes.max()
             spanCache[day] = Cached(span)
