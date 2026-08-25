@@ -1,3 +1,55 @@
+## BrightNotebook v1.46 — the whole event, on a page of its own
+
+**A full event editor, four tabs: WHEN · WHERE · REPEAT · ALERT.** The day's one-line field is
+still the fast path and always will be — "9:30 standup" and press go. MORE beside it opens the
+page, carrying whatever you had typed as the title, and every entry can be opened there from its
+own sheet.
+
+Four tabs rather than one long scroll because the four questions are independent, and eleven rows
+in a column means reading all of them to answer one. The strip borrows the bottom bar's treatment,
+a tracked label with a rule under the one you are on, because the SDK has no tab component and
+inventing a pill for one screen would be inventing a widget vocabulary.
+
+| tab | rows |
+|---|---|
+| **WHEN** | what it is, which day, starts, ends, runs until — plus send as invite, and delete |
+| **WHERE** | the location, and Directions to hand it to whatever navigates |
+| **REPEAT** | every day / every Tue / every other Tue / weekdays / monthly / yearly, and until when |
+| **ALERT** | none, at the time, 5 through 120 minutes, a day before |
+
+**There is no draft and no save button.** Every row writes through the same view model setter the
+day's own sheet uses, so there is one code path per field instead of two, and nothing to lose by
+pressing home. An event created for the editor and abandoned is deleted by the Delete row, which is
+where anybody would look for it.
+
+**Repeats are written as the calendar's own rule**, inside the subset this app can already expand —
+`FREQ`, `INTERVAL`, `BYDAY`, `UNTIL`. The two halves have to agree: a rule written here that cannot
+be expanded is a series that shows up once, and one a real calendar rejects is an export that
+arrives as a single event. `BYDAY` on the weekly presets is not decoration either — without it,
+"weekly" means the weekday `DTSTART` happens to fall on, and moving the event leaves the series
+repeating on the old day.
+
+**Changing how often does not silently drop until when.** They are separate rows, so the sheet for
+one carries the other's `UNTIL` or `COUNT` across.
+
+## Sending it out: iCal, Google, Outlook
+
+**Send as invite writes a real .ics and hands it to the share sheet.** Google Calendar, Outlook and
+Apple all offer to add one the moment they see it, which is how an event made on this phone reaches
+any of them — without this app holding an account, a token, or write access to a calendar it could
+corrupt. What it costs is that the copy stops being live, and that is the honest trade at this size.
+
+Written to the subset the importer reads back, so nothing round-trips lossily: `UID`, `SUMMARY`,
+`DTSTART`/`DTEND`, `LOCATION`, `RRULE`, `EXDATE`, and a `VALARM` for the alert. Two details that
+are the usual bugs in this format — `DTEND` on an all-day event is the day *after* the last one, and
+times are written floating with no zone, because an entry that says half past two means half past
+two after a flight.
+
+**And alerts now arrive from the other direction too.** An invite's own `VALARM` becomes the entry's
+reminder, and it wins over the calendar's default lead: "fifteen minutes before" on a meeting is a
+fact about that meeting. Absolute triggers, `RELATED=END` and positive offsets are refused rather
+than misread — each one would put the alarm somewhere nobody asked for.
+
 ## BrightNotebook v1.45 — tap where it is, and go
 
 **Entries carry a location now, and it opens directions.** Outlook and Google both put an address

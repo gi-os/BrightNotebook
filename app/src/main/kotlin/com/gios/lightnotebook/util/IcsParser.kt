@@ -25,6 +25,14 @@ data class ImportedEvent(
      * somebody. The only thing downstream of it is a maps search, which wants the string.
      */
     val location: String? = null,
+    /**
+     * The event's own alarm, in minutes before it starts. Null when the invite carried none.
+     *
+     * Read from the first `VALARM` in the block. Calendars write several — a pop-up and an email,
+     * say — and this app has one reminder per entry, so the first is taken and the rest are
+     * dropped rather than collapsed into something nobody asked for.
+     */
+    val reminderMinutes: Int? = null,
 )
 
 /**
@@ -66,6 +74,7 @@ object IcsParser {
         var end: Moment? = null
         var rrule: String? = null
         var location: String? = null
+        var alarm: Int? = null
         var recurrenceId: Moment? = null
         var exDays = mutableSetOf<Long>()
 
@@ -75,6 +84,7 @@ object IcsParser {
                     inEvent = true
                     uid = null; summary = null; start = null; end = null
                     rrule = null; recurrenceId = null; exDays = mutableSetOf(); location = null
+                    alarm = null
                 }
 
                 line.equals("END:VEVENT", ignoreCase = true) -> {
@@ -103,6 +113,7 @@ object IcsParser {
                                 // An override happens once, whatever the master says.
                                 rrule = if (replaces == null) rrule else null,
                                 location = location?.takeIf { it.isNotBlank() },
+                                reminderMinutes = alarm,
                                 exDays = if (replaces == null) exDays.toSet() else emptySet(),
                             ),
                         )
@@ -127,6 +138,11 @@ object IcsParser {
                             moment(params, one, zone)?.let { exDays.add(it.epochDay) }
                         }
                         "RECURRENCE-ID" -> recurrenceId = moment(params, value, zone)
+                        // Inside a VALARM, and only the first one. A relative TRIGGER is the only
+                        // form worth reading: an absolute one (`VALUE=DATE-TIME`) is an alarm for
+                        // a moment rather than for this event, and on a repeating event it would
+                        // fire once in 1998.
+                        "TRIGGER" -> if (alarm == null) alarm = triggerMinutes(params, value)
                     }
                 }
             }
@@ -257,4 +273,41 @@ object IcsParser {
             .toInstant()
             .toEpochMilli()
     }
+    /**
+     * A `TRIGGER` as minutes before the start, or null for one this app cannot honour.
+     *
+     * Only negative, relative durations: `-PT15M`, `-PT1H`, `-P1D`, and the combinations calendars
+     * actually write. Refused, on purpose:
+     *
+     *  - **`VALUE=DATE-TIME`** — an absolute alarm. It is a time, not an offset, so on a repeating
+     *    event it belongs to exactly one occurrence and this app would attach it to all of them.
+     *  - **`RELATED=END`** — counted back from the end of the event, which is not the field this
+     *    app has. Reading it as an offset from the start would move the alarm by the event's
+     *    length, silently.
+     *  - **A positive duration** — an alarm *after* the event starts. Legal, occasionally
+     *    deliberate, and not a reminder in the sense this app's one field means.
+     */
+    private fun triggerMinutes(params: String, value: String): Int? {
+        val upper = params.uppercase(Locale.US)
+        if (upper.contains("VALUE=DATE-TIME") || upper.contains("RELATED=END")) return null
+        val raw = value.trim().uppercase(Locale.US)
+        if (!raw.startsWith("-P")) return null
+        val body = raw.removePrefix("-P")
+        val (dayPart, timePart) = body.substringBefore('T') to body.substringAfter('T', "")
+        var minutes = 0
+        Regex("(\\d+)([WD])").findAll(dayPart).forEach { m ->
+            val n = m.groupValues[1].toIntOrNull() ?: return null
+            minutes += if (m.groupValues[2] == "W") n * 7 * 24 * 60 else n * 24 * 60
+        }
+        Regex("(\\d+)([HMS])").findAll(timePart).forEach { m ->
+            val n = m.groupValues[1].toIntOrNull() ?: return null
+            minutes += when (m.groupValues[2]) {
+                "H" -> n * 60
+                "M" -> n
+                else -> 0 // Seconds are not a reminder anybody set on purpose.
+            }
+        }
+        return minutes.takeIf { it >= 0 }
+    }
+
 }

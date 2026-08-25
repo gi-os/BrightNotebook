@@ -61,6 +61,7 @@ import com.gios.lightnotebook.ui.CalendarsScreen
 import com.gios.lightnotebook.ui.CameraScreen
 import com.gios.lightnotebook.ui.CaptureScreen
 import com.gios.lightnotebook.ui.DayScreen
+import com.gios.lightnotebook.ui.EventEditorScreen
 import com.gios.lightnotebook.ui.KeyScanScreen
 import com.gios.lightnotebook.ui.LightActionSheet
 import com.gios.lightnotebook.ui.LightSheetAction
@@ -443,6 +444,7 @@ class MainActivity : ComponentActivity() {
                                 HomeShell(
                                     vm = vm,
                                     onOpenNote = { id -> nav.navigate("note/$id") },
+                                    onOpenEvent = { id -> nav.navigate("event/$id") },
                                     onOpenDay = { day -> nav.navigate("day/$day") },
                                     onOpenAgenda = { nav.navigate("agenda") },
                                     onSettings = { nav.navigate("settings") },
@@ -492,6 +494,19 @@ class MainActivity : ComponentActivity() {
                                     vm = vm,
                                     onBack = { nav.popBackStack() },
                                     onOpenNote = { id -> nav.navigate("note/$id") },
+                                    onOpenEvent = { id -> nav.navigate("event/$id") },
+                                )
+                            }
+                            // One event, in full. A page rather than a sheet: four tabs of rows
+                            // is not something to swipe up over a day. See EventEditorScreen.
+                            composable(
+                                "event/{id}",
+                                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                            ) { backStack ->
+                                EventEditorScreen(
+                                    vm = vm,
+                                    entryId = backStack.arguments!!.getString("id")!!,
+                                    onBack = { nav.popBackStack() },
                                 )
                             }
                             composable("camera") {
@@ -612,6 +627,7 @@ class MainActivity : ComponentActivity() {
 private fun HomeShell(
     vm: NotebookViewModel,
     onOpenNote: (String) -> Unit,
+    onOpenEvent: (String) -> Unit,
     onOpenDay: (Long) -> Unit,
     onOpenAgenda: () -> Unit,
     onSettings: () -> Unit,
@@ -641,6 +657,7 @@ private fun HomeShell(
                     vm = vm,
                     onOpenAgenda = onOpenAgenda,
                     onOpenNote = onOpenNote,
+                    onOpenEvent = onOpenEvent,
                     onSwipePage = { direction -> if (direction < 0) tab = 0 },
                 )
             }

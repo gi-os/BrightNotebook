@@ -8,4 +8,10 @@
 -->
 <paths>
     <files-path name="captures" path="captures/" />
+    <!--
+      And one directory out: the .ics files an entry is shared as. Its own path rather than a
+      corner of `captures/`, so each hole in the sandbox is narrow and says what it is for.
+      See data/IcsShare.kt.
+    -->
+    <files-path name="shared" path="shared/" />
 </paths>

@@ -379,6 +379,13 @@ interface NotebookDao {
     suspend fun getDayEntry(id: String): DayEntryEntity?
 
     /**
+     * The same row, watched. For the event editor, which writes a field and has to redraw from
+     * what was actually stored rather than from what it hoped it stored.
+     */
+    @Query("SELECT * FROM day_entries WHERE id = :id LIMIT 1")
+    fun dayEntryFlow(id: String): Flow<DayEntryEntity?>
+
+    /**
      * Blocking pair of the two reads above, for [com.gios.lightnotebook.notify]: a
      * broadcast receiver runs on a plain thread with no coroutine scope to suspend in.
      */

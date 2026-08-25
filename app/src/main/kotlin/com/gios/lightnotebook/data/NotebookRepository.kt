@@ -399,6 +399,8 @@ class NotebookRepository(private val context: Context) {
         systemEventId: Long? = null,
         reminderMinutes: Int? = null,
         imagePath: String? = null,
+        location: String? = null,
+        rrule: String? = null,
     ): DayEntryEntity {
         val entry = DayEntryEntity(
             id = UUID.randomUUID().toString(),
@@ -415,10 +417,15 @@ class NotebookRepository(private val context: Context) {
             imagePath = imagePath,
             // A reminder on something with no time has nothing to count back from.
             reminderMinutes = reminderMinutes?.takeIf { startMinutes != null },
+            location = location?.trim()?.takeIf { it.isNotBlank() },
+            rrule = rrule?.takeIf { it.isNotBlank() },
         )
         dao.putDayEntry(entry)
         return entry
     }
+
+    /** One entry, watched. See [NotebookDao.dayEntryFlow]. */
+    fun dayEntryFlow(id: String): Flow<DayEntryEntity?> = dao.dayEntryFlow(id)
 
     suspend fun updateDayEntry(entry: DayEntryEntity): DayEntryEntity {
         val updated = entry.copy(updatedAt = System.currentTimeMillis())
@@ -487,7 +494,11 @@ class NotebookRepository(private val context: Context) {
                 startMinutes = event.startMinutes,
                 endMinutes = event.endMinutes,
                 calendarId = calendar.id,
-                reminderMinutes = reminderMinutes?.takeIf { event.startMinutes != null },
+                // The event's own alarm wins over the calendar's default: an invite that says
+                // "fifteen minutes before" is a fact about that meeting, and the per-calendar
+                // setting is what to do when the invite is silent.
+                reminderMinutes = (event.reminderMinutes ?: reminderMinutes)
+                    ?.takeIf { event.startMinutes != null },
                 sourceUid = event.uid,
                 // One row per series, not per instance. See [DayEntryEntity.rrule].
                 rrule = event.rrule,

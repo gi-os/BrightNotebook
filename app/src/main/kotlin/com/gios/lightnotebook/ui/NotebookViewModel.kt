@@ -1086,6 +1086,50 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * When it ends, on the same day.
+     *
+     * Refused when it is not after the start, rather than stored and left to every downstream
+     * reader to notice: an end before its own beginning makes a length negative, and the timeline
+     * draws lengths.
+     */
+    fun setEntryEnd(entry: DayEntryEntity, endMinutes: Int?) = viewModelScope.launch {
+        val start = entry.startMinutes ?: return@launch
+        repo.updateDayEntry(entry.copy(endMinutes = endMinutes?.takeIf { it > start }))
+    }
+
+    /**
+     * One entry, watched.
+     *
+     * The editor needs to redraw as each row writes through, and it holds an id rather than an
+     * entity for exactly that reason — an entity captured when the screen opened would be one edit
+     * stale from the first row anybody touched. Null once the entry is gone, which the screen reads
+     * as "leave".
+     */
+    fun entryFlow(id: String): StateFlow<DayEntryEntity?> =
+        entryFlows.getOrPut(id) {
+            repo.dayEntryFlow(id)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        }
+
+    private val entryFlows = HashMap<String, StateFlow<DayEntryEntity?>>()
+
+    /**
+     * A new event, made for the editor rather than for the day.
+     *
+     * Created and saved immediately, because the editor works on a real entry — see
+     * [com.gios.lightnotebook.ui.EventEditorScreen]. An untitled event abandoned in there is
+     * deleted by its own Delete row, which is where anybody would look for it.
+     */
+    fun startEvent(epochDay: Long, text: String, onReady: (String) -> Unit) =
+        viewModelScope.launch {
+            val entry = repo.addDayEntry(
+                epochDay = epochDay,
+                text = text.trim().ifBlank { "New event" },
+            )
+            onReady(entry.id)
+        }
+
+    /**
      * Sets or clears an entry's repeat rule, and re-arms its reminder against the new schedule.
      */
     fun setEntryRepeat(entry: DayEntryEntity, rrule: String?) = viewModelScope.launch {

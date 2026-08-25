@@ -68,6 +68,7 @@ fun DayScreen(
     vm: NotebookViewModel,
     onBack: () -> Unit,
     onOpenNote: (String) -> Unit,
+    onOpenEvent: (String) -> Unit,
 ) {
     // Opened from a reminder rather than from the planner, so there is no surface to slide:
     // a horizontal drag steps the day once it passes half the screen.
@@ -77,6 +78,7 @@ fun DayScreen(
         vm = vm,
         onClose = onBack,
         onOpenNote = onOpenNote,
+        onOpenEvent = onOpenEvent,
         gestures = Modifier.lightDayGestures(
             onSlide = { dx ->
                 slid += dx
@@ -114,6 +116,11 @@ fun DayPane(
     onClose: () -> Unit,
     /** A note written or returned to on this day opens it, the same as from the notes list. */
     onOpenNote: (String) -> Unit,
+    /**
+     * An entry opened in full: where, repeats, alert. A page, because four tabs of rows is not
+     * something to swipe up over a day. See [EventEditorScreen].
+     */
+    onOpenEvent: (String) -> Unit,
     /**
      * The gestures that move between days. Supplied by the planner when the pane is a cell on
      * it, so that sliding pans the actual surface; the standalone route passes its own.
@@ -662,6 +669,20 @@ fun DayPane(
                     .padding(start = 0.8f.gridUnitsAsDp(), bottom = 0.3f.verticalGridUnitsAsDp())
                     .lightClickable(enabled = draft.isNotBlank()) { commit() },
             )
+            // The long way round, for an event with a place and a rule and an alarm on it.
+            // Whatever is typed comes along as its title, so this is never a step backwards from
+            // the field — and with nothing typed it is a blank event to fill in.
+            LightText(
+                text = "MORE",
+                variant = LightTextVariant.Button,
+                modifier = Modifier
+                    .padding(start = 0.8f.gridUnitsAsDp(), bottom = 0.3f.verticalGridUnitsAsDp())
+                    .lightClickable {
+                        val typed = draft
+                        draft = ""
+                        vm.startEvent(epochDay, typed) { id -> onOpenEvent(id) }
+                    },
+            )
         }
         }
         }
@@ -696,6 +717,10 @@ fun DayPane(
                     remindingFor = entry
                     actionsFor = null
                 }
+            }
+            LightSheetAction(label = "Open event", sub = "Where, repeats, alert") {
+                onOpenEvent(entry.id)
+                actionsFor = null
             }
             // Directions first when there is somewhere to go: on the way out of the door it is
             // the only row anybody is reaching for.

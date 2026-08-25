@@ -43,6 +43,7 @@ fun CalendarScreen(
     vm: NotebookViewModel,
     onOpenAgenda: () -> Unit,
     onOpenNote: (String) -> Unit,
+    onOpenEvent: (String) -> Unit,
     onSwipePage: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -95,6 +96,7 @@ fun CalendarScreen(
                     vm = vm,
                     onClose = close,
                     onOpenNote = onOpenNote,
+                    onOpenEvent = onOpenEvent,
                     gestures = gestures,
                 )
             },
