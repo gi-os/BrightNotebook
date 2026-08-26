@@ -71,6 +71,13 @@
     <queries>
         <package android:name="com.gios.lightpass" />
         <!--
+          BrightControl, so `getPackageInfo` can answer whether it is still installed. It draws
+          the on-screen box for every app now and tells this one to stand down; a remembered
+          claim from an app that has since been removed would silence this app's box for good.
+          See notify/AlertOwner.kt.
+        -->
+        <package android:name="com.gios.lightcontrol" />
+        <!--
           Roll, which photographs pages for this app. Without the package entry
           `getPackageInfo` throws NameNotFoundException even when Roll is installed, and the
           reroute would silently always fall back to the in-app camera.
@@ -202,6 +209,23 @@
         <receiver
             android:name=".notify.ReminderReceiver"
             android:exported="false" />
+
+        <!--
+          BrightControl saying whether it is drawing the on-screen box for every app. Exported
+          because the sender is another app, and it must be: BrightControl addresses it with
+          setPackage, which still needs the receiver reachable across the UID boundary.
+
+          Nothing here is trusted with anything. The only thing this can do is stop this app
+          drawing its own box; the buzz and the notification are never gated on it, so a forged
+          broadcast costs a box and cannot silence a reminder. See notify/AlertOwner.kt.
+        -->
+        <receiver
+            android:name=".notify.AlertOwnerReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.gios.lightcontrol.action.ALERTS_OWNED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Hourly refresh of imported calendars. -->
         <receiver

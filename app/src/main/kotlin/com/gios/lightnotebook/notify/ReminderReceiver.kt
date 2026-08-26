@@ -17,7 +17,8 @@ import com.gios.lightnotebook.util.NoteDates
  *  1. **A notification**, always. It is the record — it stays in LightOS's list, and it is
  *     what LightGlance's dots read.
  *  2. **A buzz**, always.
- *  3. **A box that lights the panel** ([ReminderAlertActivity]), if the phone will allow a
+ *  3. **A box that lights the panel** — BrightControl's, if it has claimed the on-screen box
+ *     for every app (see [AlertOwner]); otherwise [ReminderAlertActivity], if the phone will allow a
  *     background activity start. On Android 14 that needs the `SYSTEM_ALERT_WINDOW`
  *     appop, which LightOS has no settings screen for, so it is adb-only and one-time:
  *
@@ -69,6 +70,13 @@ class ReminderReceiver : BroadcastReceiver() {
     }
 
     private fun showBox(app: Context, title: String, subtitle: String, epochDay: Long) {
+        // BrightControl draws this box for every app now, off the notification posted a moment
+        // ago — and its tap sends that notification's own intent, which is this app's open-the-day
+        // intent. Drawing ours as well is the same reminder twice, one box on top of the other.
+        if (AlertOwner.ownedElsewhere(app)) {
+            Log.d(TAG, "BrightControl owns the box; notification only")
+            return
+        }
         if (!Settings.canDrawOverlays(app)) {
             // Expected on a phone that was never plugged into a computer. The notification
             // and the buzz already went out, so this is not an error.

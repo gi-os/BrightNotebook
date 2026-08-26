@@ -24,6 +24,7 @@ import com.gios.lightnotebook.data.CallHistory
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.light.common.hw.WheelScroll
+import com.gios.lightnotebook.notify.AlertOwner
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.report.Reports
 import com.gios.lightnotebook.report.ShakeMonitor
@@ -230,6 +231,20 @@ fun SettingsScreen(
                 lighten = true,
                 modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
             )
+            // Only when it is true, and only because it would otherwise be a mystery: the box
+            // this app used to put on screen stops appearing and nothing anywhere says why. There
+            // is no toggle to go with it — who draws the box is BrightControl's setting, and a
+            // second switch here would be a way to end up with neither.
+            if (AlertOwner.ownedElsewhere(context)) {
+                LightText(
+                    text = "BrightControl puts the box on screen for every app now, so this one " +
+                        "stands aside. The buzz and the notification are unchanged. Turn banners " +
+                        "off in BrightControl to bring this app's own box back.",
+                    variant = LightTextVariant.Detail,
+                    lighten = true,
+                    modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                )
+            }
 
             LightText(
                 text = "PHONE CALENDAR",

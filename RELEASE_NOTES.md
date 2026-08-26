@@ -1,3 +1,31 @@
+## BrightNotebook v1.53 — one box for a reminder, not two
+
+BrightControl v3.65 grew a heads-up box of its own. It reads the shade and puts the same box over
+the screen for whatever posted — including the notification this app raises a moment before it
+draws its own. So a reminder coming due was one buzz and **two boxes**, one landing on top of the
+other.
+
+**This one now stands aside.** Nothing is lost by it. BrightControl's box shows the same two lines,
+and tapping it sends this app's own notification intent, so it opens the same day. The close button
+here becomes a swipe up there, which is the gesture the shape already suggested.
+
+It is arguably the better box for the job. This app's has to be an *activity*, because an ordinary
+overlay window sits below the keyguard and cannot wake a sleeping phone — and that is the case a
+reminder is for, something at nine while the phone is face-down on a desk. BrightControl is an
+accessibility service, so it draws above the keyguard and wakes the panel with a wake lock instead,
+with no activity marking the keyguard occluded.
+
+**The buzz and the notification never change.** Both happen before the gate, and both have to: the
+notification is the record BrightControl reads and LightGlance's dots count. If BrightControl's
+listener grant ever lapses, this app has still buzzed and still filled the shade.
+
+**And it checks BrightControl is really there.** A remembered claim from an app that has since been
+uninstalled would have silenced this box for good, with nothing on the phone to explain why. There
+is no new setting: who draws the box is BrightControl's switch, and a second one here would be a
+way to end up with neither. Settings says so under REMIND ME, but only while it is true.
+
+Needs BrightControl v3.73 or later — earlier versions do not know this app exists.
+
 ## BrightNotebook v1.52 — the bottom of a day stays at the bottom
 
 **Reaching the end of a day bounced it and brought the bars back.** The chrome gets out of the way
