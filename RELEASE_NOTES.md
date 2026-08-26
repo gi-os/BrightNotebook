@@ -1,3 +1,27 @@
+## BrightNotebook v1.53 — reporting moved into light-common
+
+Nothing about the notebook changed. The shake-to-report feature — the sensor, the corner chip, the
+crash-log offer, the screenshot, the queue and the sheet — was ninety lines of `MainActivity` plus
+seven files of its own, all of it a copy of what BrightChat, BrightTip and nine others were already
+getting from `com.gios:light-common`. It is one `ReportOverlay()` now, and 1,700 lines lighter.
+
+The copy stayed local for one reason: `Screenshot.kt`, which the library did not have, and migrating
+without it would have quietly dropped the picture from every issue this app files. light-common
+1.4.0 has it, taken at the moment the chip goes up rather than when the sheet opens, and refusable
+in one tap.
+
+What you get from the swap, none of which this app had before:
+
+- **BUG or IDEA.** A shake can now file a feature request, not only a complaint.
+- **An optional phone number**, so a report you file can be answered with a question instead of
+  guessed at. Remembered between reports.
+- **A report says which phone filed it**, as an eight-hex install id and a `mine`/`field` label.
+- **Send feedback in Settings raises the chip**, not the sheet — the same single confirmation step
+  the gesture uses.
+
+The chip is in the same corner, still lifted clear of the bottom bar. The g-force readout in
+Settings is unchanged; it reads the library's `ShakeMonitor` now.
+
 ## BrightNotebook v1.52 — the bottom of a day stays at the bottom
 
 **Reaching the end of a day bounced it and brought the bars back.** The chrome gets out of the way
