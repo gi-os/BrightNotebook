@@ -25,8 +25,8 @@ import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
-import com.gios.lightnotebook.report.Reports
-import com.gios.lightnotebook.report.ShakeMonitor
+import com.gios.light.common.report.Reports
+import com.gios.light.common.report.ShakeMonitor
 import com.gios.lightnotebook.ui.theme.LightBarItem
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule

@@ -35,7 +35,7 @@ android {
         targetSdk = 35
         // CI overwrites both from the workflow run number; see .github/workflows/build.yml
         versionCode = 1
-        versionName = "1.52.0"
+        versionName = "1.53.0"
 
         // The LPIII is arm64 only; shipping four ABIs tripled the APK for nothing.
         ndk { abiFilters += "arm64-v8a" }
@@ -76,7 +76,7 @@ android {
 dependencies {
     // The wheel, the report plumbing and the LightSync provider, shared with every other
     // Light* app instead of pasted into each of them.
-    implementation("com.gios:light-common:1.2.1")
+    implementation("com.gios:light-common:1.4.1")
     // What actually applies the baseline profile the AAR ships. Below API 31 nothing on the
     // device reads a profile on its own, so without this the profile is inert bytes in the APK.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")

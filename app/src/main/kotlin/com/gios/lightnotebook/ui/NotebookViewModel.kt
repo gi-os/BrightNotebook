@@ -35,7 +35,7 @@ import com.gios.lightnotebook.data.Sync
 import com.gios.lightnotebook.data.SystemCalendar
 import com.gios.lightnotebook.data.Weather
 import com.gios.lightnotebook.notify.Reminders
-import com.gios.lightnotebook.report.Trouble
+import com.gios.light.common.report.Trouble
 import com.gios.lightnotebook.notify.CalendarSyncWorker
 import com.gios.lightnotebook.notify.SyncAlarm
 import com.gios.lightnotebook.notify.WeatherArchiveWorker
