@@ -1,3 +1,5 @@
+<img src="docs/icon.png" alt="" width="72" align="left" />
+
 # BrightNotebook
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
