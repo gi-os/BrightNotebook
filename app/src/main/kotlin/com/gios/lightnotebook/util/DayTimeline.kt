@@ -29,6 +29,15 @@ object DayTimeline {
     /** A photograph, reduced to the two things this file needs to know about it. */
     data class PhotoAt(val id: Long, val minutes: Int)
 
+    /** One cutout on the day: enough to draw it without decoding it first. */
+    data class CaughtSticker(
+        val id: String,
+        val name: String,
+        val uri: String,
+        val width: Int,
+        val height: Int,
+    )
+
     sealed interface Item {
         /** Null means all day — no time was ever given to it. */
         val minutes: Int?
@@ -297,6 +306,24 @@ object DayTimeline {
          * drawn as a row of thumbnails, which is what keeps a heavy day bounded: the strip this
          * replaced was bounded by construction, and full-width pictures gave that up.
          */
+        /**
+         * The things you caught, from BrightCollect.
+         *
+         * All of a day's catches in one item rather than a row each, and that is a claim about
+         * what they are: a day's collecting is one activity with several results, the way a roll
+         * of film is. Two or three a day is the usual number, so a row each would spread one
+         * afternoon's rummaging down the whole page.
+         *
+         * Drawn as a little tray of cutouts — no card, no frame, no white plate behind them. A
+         * sticker in a box is a photograph of a sticker.
+         */
+        data class Caught(
+            override val minutes: Int,
+            val stickers: List<CaughtSticker>,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
         data class Photos(
             val photos: List<PhotoAt>,
             override val minutes: Int,
@@ -341,6 +368,7 @@ object DayTimeline {
         is Item.LightNote -> "lightdoc-" + item.uri
         is Item.Went -> "went-" + item.minutes + "-" + item.place
         is Item.Read -> "read-" + item.minutes + "-" + item.title
+        is Item.Caught -> "caught-" + item.minutes
     }
 
     /**
@@ -394,6 +422,7 @@ object DayTimeline {
         lightNotes: List<Item.LightNote> = emptyList(),
         went: List<Item.Went> = emptyList(),
         read: List<Item.Read> = emptyList(),
+        caught: List<Item.Caught> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -416,7 +445,7 @@ object DayTimeline {
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrived + calls + charges + recordings + lightNotes + went + read)
+            arrived + calls + charges + recordings + lightNotes + went + read + caught)
             // One row per key, whatever the sources handed over. See [key]: this is the only place
             // that can enforce it, and a duplicate reaching the list is a crash rather than a
             // cosmetic fault.
@@ -454,6 +483,9 @@ object DayTimeline {
                         is Item.LightNote -> 4
                         is Item.Recorded -> 4
                         is Item.Photos -> 4
+                        // With the photographs and the recordings: catching something is the same
+                        // kind of fact as photographing it, because it starts by photographing it.
+                        is Item.Caught -> 4
                         is Item.Listening -> 5
                         is Item.Pickups -> 6
                         // With the pickups: both are the phone in your hand rather than the day.

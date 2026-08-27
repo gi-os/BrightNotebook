@@ -91,6 +91,14 @@
         <!-- What you listened to, from LightPhono. -->
         <package android:name="com.lightphone.spotify" />
         <provider android:authorities="com.lightphone.spotify.plays" />
+        <!--
+          What you caught, from BrightCollect. Both lines are needed and they do different jobs:
+          the provider entry is what lets the day read the list and the cutouts themselves, and
+          the package entry is what lets `brightcollect://sticker/<id>` resolve when you tap one.
+          Without the second, tapping a sticker on the page does nothing and looks like a dead row.
+        -->
+        <package android:name="com.gios.brightcollect" />
+        <provider android:authorities="com.gios.brightcollect.caught" />
         <!-- Who you talked to, from LightChat. Names only; no message text crosses. -->
         <package android:name="com.gios.lightchat" />
         <provider android:authorities="com.gios.lightchat.talked" />

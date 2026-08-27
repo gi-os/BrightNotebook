@@ -747,6 +747,62 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
+     * What you caught, from BrightCollect.
+     *
+     * All of a day's catches become one [DayTimeline.Item.Caught] placed at the first of them, not
+     * a row each — see the item for why a day's collecting is one activity rather than three
+     * events.
+     *
+     * On the same nudge as the photographs and the recordings, and for the same reason: a sticker
+     * is made in another app while this one is closed, so there is no moment in this process worth
+     * watching for and arriving at the day is when to look.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayCaught: StateFlow<List<DayTimeline.Item.Caught>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    val caught = DayBridges.caught(getApplication(), day, zone)
+                    if (caught.isEmpty()) {
+                        emptyList()
+                    } else {
+                        listOf(
+                            DayTimeline.Item.Caught(
+                                minutes = JournalDay.minutesInto(caught.first().atMs, day, zone),
+                                stickers = caught.map {
+                                    DayTimeline.CaughtSticker(
+                                        id = it.id,
+                                        name = it.name,
+                                        uri = it.uri,
+                                        width = it.width,
+                                        height = it.height,
+                                    )
+                                },
+                            ),
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Opens one catch back in BrightCollect.
+     *
+     * The deep link BrightCollect registers, not the provider URI: the provider serves the bytes,
+     * and this is asking to be shown the thing.
+     */
+    fun openCaught(context: android.content.Context, sticker: DayTimeline.CaughtSticker) {
+        val intent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse("brightcollect://sticker/" + sticker.id),
+        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        // A row that cannot be opened is not an error worth a message — BrightCollect may simply
+        // not be installed any more, and the sticker on the page is still the record of the day.
+        runCatching { context.startActivity(intent) }
+    }
+
+    /**
      * Light's own notes and voice notes, if this app has been pointed at `Documents/`.
      *
      * Read on arrival, like every other source that lives outside this app. Empty and silent
