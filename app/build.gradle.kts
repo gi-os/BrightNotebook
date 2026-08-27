@@ -76,7 +76,7 @@ android {
 dependencies {
     // The wheel, the report plumbing and the LightSync provider, shared with every other
     // Light* app instead of pasted into each of them.
-    implementation("com.gios:light-common:1.2.1")
+    implementation("com.gios:light-common:1.6.0")
     // What actually applies the baseline profile the AAR ships. Below API 31 nothing on the
     // device reads a profile on its own, so without this the profile is inert bytes in the APK.
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
