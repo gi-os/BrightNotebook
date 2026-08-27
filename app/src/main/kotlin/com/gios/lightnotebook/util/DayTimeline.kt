@@ -465,9 +465,9 @@ object DayTimeline {
                         // event seen from two sides.
                         is Item.Arrived -> 1
                         is Item.Place -> 1
-                        is Item.Talked -> 2
-                        // A call is the same kind of fact as a conversation, so they sort
-                        // together rather than in two separate bands.
+                        // A call is something that happened *to* the day — it stopped whatever you
+                        // were doing — so it stays an event. Texting does not stop anything, and
+                        // sorts down with the background it is now drawn as. See [TalkedMention].
                         is Item.Called -> 2
                         is Item.Note -> 3
                         // A recording sorts with a photograph: both are something you deliberately
@@ -488,6 +488,8 @@ object DayTimeline {
                         is Item.Caught -> 4
                         is Item.Listening -> 5
                         is Item.Pickups -> 6
+                        // With the pickups: both are the phone in your hand rather than the day.
+                        is Item.Talked -> 6
                         // Last: being on the charger is the background of a day, not an event
                         // competing with the things that happened during it.
                         is Item.Charged -> 7

@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.PhotoLibrary
@@ -725,6 +726,54 @@ fun PickupsMention(item: DayTimeline.Item.Pickups, modifier: Modifier = Modifier
 }
 
 /**
+ * Who you texted, as a mention in the margin.
+ *
+ * It was a full row with a glyph, a time and a count, which is the shape this app uses for an
+ * appointment — so "Talked to Alex" sat on the day at the same weight as a doctor's appointment,
+ * and a day with four threads on it had four of them. Texting somebody is not something you have
+ * to be somewhere for. It is the background of a day, the same as picking the phone up and the
+ * same as having music on, and it gets the same shape those do: a short rule and one quiet line.
+ *
+ * Everything the row said survives the demotion — who, how many, whether they answered, when it
+ * started — because none of that was the problem. Only the weight was.
+ */
+@Composable
+fun TalkedMention(item: DayTimeline.Item.Talked, modifier: Modifier = Modifier) {
+    val colors = LightThemeTokens.colors
+    val who = if (item.isGroup) "Talked in ${item.name}" else "Talked to ${item.name}"
+    // Whether they answered, because talking *at* somebody and talking *with* them are different
+    // days. Said only when they did not: "no reply" is the fact, a reply is the ordinary case.
+    val count = if (item.messages == 1) "1 message" else "${item.messages} messages"
+    val phrase = listOfNotNull(
+        who,
+        count,
+        if (item.theyReplied) null else "no reply",
+    ).joinToString(" · ") + ", " + NoteDates.clock(JournalDay.clockMinutes(item.minutes)).orEmpty()
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.4f.verticalGridUnitsAsDp()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(2.dp)
+                .height(1.6f.verticalGridUnitsAsDp())
+                .background(colors.rule),
+        )
+        LightText(
+            text = phrase,
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 0.6f.gridUnitsAsDp()),
+        )
+    }
+}
+
+/**
  * Music, drawn as something that was going on rather than something that happened.
  *
  * **This is the one thing on a day that runs alongside everything else.** A photograph is a moment
@@ -821,6 +870,10 @@ fun AllDaySection(
                 title = entry.row.title,
                 sub = entry.row.subtitle,
                 leading = holiday ?: LightIcons.Calendar,
+                // Filled, the same as a timed entry down the page: one rule — a calendar entry is
+                // white — is a rule you can read off the screen. Two, with all-day quietly
+                // exempted, is a difference nobody can account for and everybody notices.
+                inverted = true,
                 onClick = { onOpen(entry.row) },
             )
             LightRule()

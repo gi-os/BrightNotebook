@@ -1,3 +1,36 @@
+## BrightNotebook v1.54 — an event is the white thing on the page
+
+**Calendar entries are drawn inverted now: white fill, black text, the full width of the screen.**
+
+A day here is mostly things the phone noticed on your behalf. Where you went, what was playing, how
+far you walked, how often you picked it up. Among all of that sits one kind of thing you are
+actually expected to *be somewhere for*, and it was drawn in the same white-on-black as everything
+else — one line among fifteen lines. The 3pm you have to keep read no louder than a walk you
+happened to take.
+
+There is no other way to raise a row on this panel. No colour, no elevation, no tint, and every
+weight of the typeface is already spoken for by the type scale. Inversion is the one move left, and
+it is a move the phone has already taught: a selected chip inverts, the primary button on a screen
+inverts. A filled row is not a new shape, it is that shape at row width.
+
+All-day entries are filled too, in their section at the top. One rule — a calendar entry is white —
+is a rule you can read straight off the screen. Two rules, with all-day quietly exempted, is a
+difference nobody can account for and everybody notices.
+
+**Texting somebody is a mention now, not an event.**
+
+"Talked to Alex" had a glyph, a time, a message count and a rule under it, which is precisely the
+shape an appointment gets. A day with four threads on it had four appointments it never made. But
+texting is not something you have to be somewhere for — it is the background of a day, the same as
+picking the phone up and the same as having music on — so it gets the shape those already have: a
+short rule in the margin and one quiet line.
+
+Nothing was lost in the demotion. Who, how many messages, whether they answered, when it started —
+all still there, on one line, at the size the day uses for its own asides. Only the weight changed,
+because the weight was the whole problem.
+
+Calls are untouched, and stay events. A call stops whatever you were doing; a text does not.
+
 ## BrightNotebook v1.53 — one box for a reminder, not two
 
 BrightControl v3.65 grew a heads-up box of its own. It reads the shade and puts the same box over

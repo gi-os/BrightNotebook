@@ -456,28 +456,9 @@ fun DayPane(
                             LightRule()
                         }
 
-                        is DayTimeline.Item.Talked -> {
-                            LightListRow(
-                                title = if (item.isGroup) {
-                                    "Talked in ${item.name}"
-                                } else {
-                                    "Talked to ${item.name}"
-                                },
-                                // Whether they answered, because talking *at* somebody and talking
-                                // *with* them are different days. The count is the quieter fact.
-                                sub = listOfNotNull(
-                                    if (item.theyReplied) null else "no reply",
-                                    if (item.messages == 1) "1 message" else "${item.messages} messages",
-                                ).joinToString(" · "),
-                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
-                                // Who, not what: a compose glyph said "a message" where the row is
-                                // about a person. A real contact photo would have to come from
-                                // LightChat — nothing here can see one — so this is the person
-                                // itself, and a group is drawn as more than one.
-                                leading = if (item.isGroup) LightIcons.Group else LightIcons.Person,
-                            )
-                            LightRule()
-                        }
+                        // A mention, not a row: see [TalkedMention]. Texting somebody is not an
+                        // appointment, and no rule under it either — it did not interrupt the day.
+                        is DayTimeline.Item.Talked -> TalkedMention(item)
 
                         is DayTimeline.Item.Went -> {
                             LightListRow(
@@ -616,6 +597,14 @@ fun DayPane(
                                 title = row.title,
                                 sub = row.subtitle,
                                 detail = NoteDates.clock(row.minutes),
+                                // The one filled row on the page. A day is mostly things the phone
+                                // noticed on your behalf — where you went, what you played, how
+                                // often you picked it up — and exactly one kind of thing you are
+                                // expected to *be somewhere for*. Drawn in the same white as
+                                // everything else it was a line among lines, and the 3pm you had to
+                                // keep read no louder than a walk you happened to take. Inverted, a
+                                // day answers "what do I have to do" from across the room.
+                                inverted = true,
                                 leading = when {
                                     row.passId != null -> LightIcons.Ticket
                                     entry?.fromPhoto == true -> LightIcons.Camera
