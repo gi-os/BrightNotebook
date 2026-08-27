@@ -23,6 +23,13 @@ seen through — the surface carrying on past the chrome is what makes it feel l
 than a screen. It passes `opaque = false` and keeps its 82%. Everything else is solid, and a bar
 that wants to be see-through now has to ask.
 
+**Also in this build: BrightCollect's catches are drawn as stickers.** They came through
+MediaStore before, which made every cutout a photograph as far as the phone was concerned — a
+shape on a white card here, and white-background duplicates filling Roll's grid. BrightCollect
+serves a provider now, in the shape the other bridges already use, so the PNG arrives with its
+alpha and the page draws the shape of the thing. A day's catches are one row, heights matched so
+they line up along the bottom the way objects on a shelf do. No permission needed on either side.
+
 ## BrightNotebook v1.54 — an event is the white thing on the page
 
 **Calendar entries are drawn inverted now: white fill, black text, the full width of the screen.**
