@@ -50,6 +50,15 @@ import com.gios.lightnotebook.ui.theme.verticalGridUnitsAsDp
 /**
  * A row in a list. Everything is a full-width row on this phone: it is the only shape
  * that stays tappable at a glance, and it means the eye only ever scans one column.
+ *
+ * [inverted] fills the row white and draws it in black. There is no other way to raise one row
+ * above its neighbours here — the panel has no colour, no elevation and no tint, and every weight
+ * of the typeface is already spoken for by the type scale. Inversion is what [LightChip] and
+ * [LightWideButton] already use to say "this one", so a filled row is a shape the phone has
+ * taught already rather than a new one.
+ *
+ * It is deliberately expensive. A page where several kinds of row are filled is a page of white
+ * bands with the day lost between them, so this belongs to one kind of thing at a time.
  */
 @Composable
 fun LightListRow(
@@ -59,12 +68,23 @@ fun LightListRow(
     leading: LightIconSpec? = null,
     trailing: LightIconSpec? = null,
     lighten: Boolean = false,
+    inverted: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val colors = LightThemeTokens.colors
+    // Null everywhere it is not inverted, so an ordinary row goes on resolving its own colours
+    // from the tokens and nothing about the common case changes.
+    val ink = if (inverted) colors.background else null
+    val inkSecondary = if (inverted) colors.backgroundSecondary else null
+
     Row(
         Modifier
             .fillMaxWidth()
+            // Behind the click, so the fill is the row rather than something drawn inside it, and
+            // full width rather than inset: a band that stops short of the edges reads as a card,
+            // and there are no cards on this phone.
+            .let { if (inverted) it.background(colors.content) else it }
             .let {
                 when {
                     onClick != null && onLongClick != null ->
@@ -81,6 +101,7 @@ fun LightListRow(
             LightIcon(
                 leading,
                 size = 1.4f,
+                tint = ink,
                 modifier = Modifier.padding(end = 0.6f.gridUnitsAsDp()),
             )
         }
@@ -89,6 +110,7 @@ fun LightListRow(
                 text = title,
                 variant = LightTextVariant.Copy,
                 lighten = lighten,
+                color = ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -97,6 +119,7 @@ fun LightListRow(
                     text = sub,
                     variant = LightTextVariant.Detail,
                     lighten = true,
+                    color = inkSecondary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -107,6 +130,7 @@ fun LightListRow(
                 text = detail,
                 variant = LightTextVariant.Detail,
                 lighten = true,
+                color = inkSecondary,
                 modifier = Modifier.padding(start = 0.6f.gridUnitsAsDp()),
             )
         }
@@ -114,6 +138,7 @@ fun LightListRow(
             LightIcon(
                 trailing,
                 size = 1.2f,
+                tint = ink,
                 modifier = Modifier.padding(start = 0.6f.gridUnitsAsDp()),
             )
         }

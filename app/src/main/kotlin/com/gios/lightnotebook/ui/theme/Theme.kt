@@ -103,6 +103,15 @@ data class LightColors(
     val contentFaint: Color,
     /** Hairlines between rows. Not an SDK token; a notebook is a list of things. */
     val rule: Color,
+    /**
+     * Secondary text *on* an inverted row — the mirror of [contentSecondary].
+     *
+     * It cannot be [contentSecondary] and it cannot be [background]: a light grey on white is
+     * unreadable on a matte panel, and pure black under a black title flattens the two lines into
+     * one. This is the same distance from the fill that [contentSecondary] is from [background],
+     * measured the other way.
+     */
+    val backgroundSecondary: Color,
 )
 
 object LightThemeColors {
@@ -112,6 +121,7 @@ object LightThemeColors {
         contentSecondary = Color(0xFFBBBBBB),
         contentFaint = Color(0xFF5E5E5E),
         rule = Color(0xFF262626),
+        backgroundSecondary = Color(0xFF444444),
     )
 }
 
