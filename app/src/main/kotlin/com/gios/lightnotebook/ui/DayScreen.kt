@@ -55,6 +55,8 @@ import com.gios.lightnotebook.util.Recurrence
 import kotlinx.coroutines.delay
 import java.time.ZoneId
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -303,7 +305,12 @@ fun DayPane(
             .imePadding()
             .then(gestures),
     ) {
-        AnimatedVisibility(visible = !chromeHidden) {
+        // See the note on the shell's own bar: height only, never alpha.
+        AnimatedVisibility(
+            visible = !chromeHidden,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
         LightTopBar(
             title = NoteDates.dayTitle(epochDay),
             left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onClose),
@@ -677,8 +684,14 @@ fun DayPane(
 
         // Out of the way with the rest of the chrome. Reading back through a day is not writing in
         // it, and the field is the largest thing on the screen that is not the day itself.
-        AnimatedVisibility(visible = !chromeHidden) {
-        Column {
+        AnimatedVisibility(
+            visible = !chromeHidden,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
+        // The composer paints the page colour for the same reason the bars do: it sits over the
+        // end of the list, and while it is animating there is a day sliding about behind it.
+        Column(Modifier.background(LightThemeTokens.colors.background)) {
         LightRule()
         Row(
             Modifier

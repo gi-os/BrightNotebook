@@ -25,6 +25,13 @@ import androidx.compose.ui.unit.Dp
  * Both bars are sized in grid units — 3 units tall at the top, 4 at the bottom — and
  * both take at most a left item, a centre and a right item. Text items are set in the
  * Button variant, which is tracked out wide and reads as a label rather than as prose.
+ *
+ * **Both paint their own background, and that is not optional decoration.** A bar drawn on
+ * nothing is only opaque for as long as whatever happens to be behind it is the page colour, and
+ * that assumption breaks in two places at once here: the chrome fades in and out as you scroll, so
+ * the bar spends every one of those frames at partial alpha, and on the planner the surface slides
+ * underneath it. Both showed as a bar you could see the list through. A bar owns its own pixels;
+ * [opaque] exists only for the one caller that wants the surface visible through it and says so.
  */
 
 private const val TOPBAR_HEIGHT_UNITS = 3f
@@ -59,12 +66,17 @@ fun LightTopBar(
     left: LightBarItem? = null,
     right: LightBarItem? = null,
     modifier: Modifier = Modifier,
+    /** False only where something behind the bar is meant to be seen. See [LightBottomBar]. */
+    opaque: Boolean = true,
 ) {
     val barHeight = TOPBAR_HEIGHT_UNITS.gridUnitsAsDp()
     Box(
         modifier
             .fillMaxWidth()
             .height(barHeight)
+            // Before the padding, so the fill reaches the edges of the screen rather than
+            // stopping where the items do.
+            .barBackground(opaque)
             .padding(horizontal = HORIZONTAL_PADDING_UNITS.gridUnitsAsDp()),
     ) {
         Row(Modifier.fillMaxWidth().height(barHeight), verticalAlignment = Alignment.CenterVertically) {
@@ -99,13 +111,19 @@ fun LightTopBar(
  * exactly the number this app needs: notes, add, calendar.
  */
 @Composable
-fun LightBottomBar(items: List<LightBarItem?>, modifier: Modifier = Modifier) {
+fun LightBottomBar(
+    items: List<LightBarItem?>,
+    modifier: Modifier = Modifier,
+    /** False only where something behind the bar is meant to be seen. */
+    opaque: Boolean = true,
+) {
     require(items.size <= 5) { "LightBottomBar supports at most 5 items" }
     val barHeight = BOTTOMBAR_HEIGHT_UNITS.gridUnitsAsDp()
     Row(
         modifier
             .fillMaxWidth()
             .height(barHeight)
+            .barBackground(opaque)
             .padding(horizontal = HORIZONTAL_PADDING_UNITS.gridUnitsAsDp()),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -124,6 +142,16 @@ fun LightBottomBar(items: List<LightBarItem?>, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * The page colour, behind a bar, unless the caller has asked for the page to show through.
+ *
+ * A `Color?` parameter would have been the smaller signature and the wrong one: it invites every
+ * caller to pick a colour, and there is exactly one colour a bar is ever allowed to be.
+ */
+@Composable
+private fun Modifier.barBackground(opaque: Boolean): Modifier =
+    if (opaque) background(LightThemeTokens.colors.background) else this
 
 @Composable
 private fun RowScope.BarSlot(align: Alignment, content: @Composable () -> Unit) {

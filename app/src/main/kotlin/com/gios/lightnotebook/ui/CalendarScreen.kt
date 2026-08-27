@@ -121,6 +121,10 @@ fun CalendarScreen(
                     .background(LightThemeTokens.colors.background.copy(alpha = BAR_ALPHA)),
             ) {
                 LightTopBar(
+                    // The one bar in the app that is meant to be seen through, and the Column
+                    // around it already paints the translucent fill. Left opaque it would paint
+                    // the page colour over that and the planner would stop sliding under it.
+                    opaque = false,
                     title = NoteDates.monthTitle(NoteDates.monthOf(focusDay)),
                     left = LightBarItem.Icon(
                         icon = LightIcons.List,

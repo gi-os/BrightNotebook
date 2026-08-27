@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -665,7 +667,16 @@ private fun HomeShell(
         // Out of the way while a day is being read, back the moment you scroll up. The day owns
         // the decision; this bar only follows, because it belongs to the shell underneath.
         val chromeHidden by vm.chromeHidden.collectAsStateWithLifecycle()
-        AnimatedVisibility(visible = !chromeHidden) {
+        // Height only, never alpha. `AnimatedVisibility`'s default in a Column is
+        // `fadeIn() + expandVertically()`, and the chrome toggles on every scroll — so the bar
+        // spent a good part of the time you are actually looking at it drawn at partial alpha
+        // with the page sliding beneath. Sliding it out of the way is the honest animation;
+        // dissolving it was only ever a side effect of the default.
+        AnimatedVisibility(
+            visible = !chromeHidden,
+            enter = expandVertically(),
+            exit = shrinkVertically(),
+        ) {
         Column {
         LightRule()
         // Icons, not labels: three words at the Button variant's 15% tracking filled the

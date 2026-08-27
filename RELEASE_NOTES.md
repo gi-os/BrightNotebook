@@ -1,3 +1,28 @@
+## BrightNotebook v1.55 — a bar you cannot see through
+
+**The bars paint their own background now.** They never did. A bar was a row of items over
+whatever happened to be behind it, and that was fine for exactly as long as the thing behind it was
+the page colour.
+
+It stopped being fine in two places at once. The chrome slides away while you read and comes back
+when you scroll up, and `AnimatedVisibility` in a column fades by default as well as expanding — so
+every hide and every return drew the bar at partial alpha, with the list or the planner moving
+underneath it. On the planner the surface genuinely does slide under the chrome, which is the point
+of the planner, so there the bar was see-through whenever the day was moving.
+
+Two changes, both small. A bar fills with the page colour, edge to edge, behind its own items. And
+the chrome animates its height only — it slides out of the way and slides back, and never dissolves.
+Sliding was always the honest description of what it does; the fade was a side effect of a default
+nobody chose.
+
+The composer at the foot of a day gets the same fill, for the same reason: it sits over the end of
+the list and there is a day sliding about behind it while it animates.
+
+**One bar is still translucent, and now says so.** The month header on the planner is meant to be
+seen through — the surface carrying on past the chrome is what makes it feel like a wall rather
+than a screen. It passes `opaque = false` and keeps its 82%. Everything else is solid, and a bar
+that wants to be see-through now has to ask.
+
 ## BrightNotebook v1.54 — an event is the white thing on the page
 
 **Calendar entries are drawn inverted now: white fill, black text, the full width of the screen.**
