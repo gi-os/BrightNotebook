@@ -159,6 +159,7 @@ fun DayPane(
     val calls by vm.dayCalls.collectAsStateWithLifecycle()
     val charges by vm.dayCharges.collectAsStateWithLifecycle()
     val recordings by vm.dayRecordings.collectAsStateWithLifecycle()
+    val caught by vm.dayCaught.collectAsStateWithLifecycle()
     val lightNotes by vm.dayLightNotes.collectAsStateWithLifecycle()
     val went by vm.dayWent.collectAsStateWithLifecycle()
     val read by vm.dayRead.collectAsStateWithLifecycle()
@@ -230,7 +231,7 @@ fun DayPane(
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
         rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
-        recordings, lightNotes, went, read, epochDay, today, nowMinutes,
+        recordings, lightNotes, went, read, caught, epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
             rows = rows,
@@ -244,6 +245,7 @@ fun DayPane(
             calls = calls,
             charges = charges,
             recordings = recordings,
+            caught = caught,
             lightNotes = lightNotes,
             went = went,
             read = read,
@@ -522,6 +524,16 @@ fun DayPane(
                                 onClick = { vm.openLightDoc(context, item) },
                             )
                             LightRule()
+                        }
+
+                        is DayTimeline.Item.Caught -> {
+                            // No LightRule under it. The rules separate rows of text; a tray of
+                            // cutouts is already a break in the page, and a line under it puts
+                            // them back in the box this change took them out of.
+                            TimelineCaught(
+                                item = item,
+                                onOpen = { vm.openCaught(context, it) },
+                            )
                         }
 
                         is DayTimeline.Item.Recorded -> {

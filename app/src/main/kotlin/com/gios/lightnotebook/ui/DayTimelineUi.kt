@@ -1,6 +1,8 @@
 package com.gios.lightnotebook.ui
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -23,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -48,7 +52,6 @@ import com.gios.lightnotebook.util.NoteDates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.height
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import com.gios.lightnotebook.util.Steps
@@ -267,6 +270,118 @@ fun TimelinePhotos(
  * website hero rather than as something someone stuck down.
  */
 private const val PAGE_PHOTO_WIDTH = 0.7f
+
+/**
+ * The day's catches, from BrightCollect.
+ *
+ * **No card, no frame, no plate.** Every other row on this page is a line of text or a photograph
+ * in a margin; a cutout is neither, and putting one on a white rectangle turns it back into the
+ * photograph it was cut out of. They sit straight on the page with their alpha, slightly tilted,
+ * at their own proportions — the same treatment BrightCollect's own shelf gives them, so opening
+ * the day and opening the collection show you the same objects.
+ *
+ * Heights are matched rather than widths. A row of cutouts scaled to a common width has a tall
+ * thin thing towering over a flat one; scaled to a common height they line up along the bottom the
+ * way objects on a shelf do.
+ */
+@Composable
+fun TimelineCaught(
+    item: DayTimeline.Item.Caught,
+    onOpen: (DayTimeline.CaughtSticker) -> Unit,
+) {
+    if (item.stickers.isEmpty()) return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.2f.verticalGridUnitsAsDp()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(
+            Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LightText(
+                text = clockOf(item.minutes),
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+            )
+            LightText(
+                text = "  ·  caught " + item.stickers.size,
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+            )
+        }
+        Spacer(Modifier.size(6.dp))
+        Row(
+            Modifier.fillMaxWidth(PAGE_PHOTO_WIDTH),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            item.stickers.take(MAX_CAUGHT_SHOWN).forEachIndexed { i, sticker ->
+                CaughtCutout(sticker = sticker, index = i, onOpen = onOpen)
+                Spacer(Modifier.width(8.dp))
+            }
+            if (item.stickers.size > MAX_CAUGHT_SHOWN) {
+                LightText(
+                    text = "+" + (item.stickers.size - MAX_CAUGHT_SHOWN),
+                    variant = LightTextVariant.Superfine,
+                    lighten = true,
+                )
+            }
+        }
+    }
+}
+
+/** Past this a day's catches stop being a tray and start being a wall. */
+private const val MAX_CAUGHT_SHOWN = 5
+
+/** How far a cutout leans on the page. Smaller than the shelf's — this is a diary, not a tray. */
+private const val CAUGHT_TILT = 3.5f
+
+private val CAUGHT_HEIGHT = 64.dp
+
+@Composable
+private fun CaughtCutout(
+    sticker: DayTimeline.CaughtSticker,
+    index: Int,
+    onOpen: (DayTimeline.CaughtSticker) -> Unit,
+) {
+    val context = LocalContext.current
+    var bitmap by remember(sticker.id) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(sticker.id) {
+        bitmap = withContext(Dispatchers.IO) {
+            // Read straight out of BrightCollect through its provider. Nothing is copied here and
+            // nothing is cached to disk: the collection is the collection, and a second copy that
+            // could go stale is what the MediaStore route was.
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(sticker.uri))?.use {
+                    BitmapFactory.decodeStream(it)
+                }
+            }.getOrNull()
+        }
+    }
+
+    // Alternating lean, not random: two neighbours tilted the same way read as a crooked row,
+    // and a random source would re-roll on every scroll.
+    val tilt = if (index % 2 == 0) CAUGHT_TILT else -CAUGHT_TILT
+    val aspect = if (sticker.height > 0) sticker.width.toFloat() / sticker.height else 1f
+
+    Box(
+        modifier = Modifier
+            .height(CAUGHT_HEIGHT)
+            .width(CAUGHT_HEIGHT * aspect.coerceIn(0.35f, 2.4f))
+            .lightClickable { onOpen(sticker) },
+        contentAlignment = Alignment.Center,
+    ) {
+        bitmap?.let {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = sticker.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().rotate(tilt),
+            )
+        }
+    }
+}
 
 /** 4:3, the shape assumed for a photograph whose own dimensions MediaStore did not report. */
 private const val LANDSCAPE = 4f / 3f

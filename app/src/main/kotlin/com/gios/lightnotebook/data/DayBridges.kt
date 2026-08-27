@@ -83,6 +83,29 @@ data class Reading(
  */
 data class Arrival(val atMs: Long, val name: String)
 
+/**
+ * Something you caught, from BrightCollect.
+ *
+ * An object photographed and cut out of its background — a sticker, not a photograph, which is
+ * the whole reason this is a bridge at all. BrightCollect used to publish a flattened copy into
+ * MediaStore, and the day drew it in the photo strip on a white card, because that is what
+ * anything in the photo library is. The cutout arrives with its alpha intact now and is drawn as
+ * the shape of the thing.
+ *
+ * [width] and [height] are the trimmed silhouette, so the day can lay several out at their own
+ * proportions without decoding them first.
+ */
+data class Caught(
+    val atMs: Long,
+    val id: String,
+    val name: String,
+    val width: Int,
+    val height: Int,
+) {
+    /** Where the PNG itself lives. BrightCollect serves it; nothing is copied. */
+    val uri: String get() = "content://com.gios.brightcollect.caught/sticker/" + id
+}
+
 /** Someone you talked to, from LightChat. Names only — no message ever crosses the boundary. */
 data class Talked(
     val firstMs: Long,
@@ -115,6 +138,7 @@ object DayBridges {
     private const val CLIPS = "content://com.gios.brightrecorder.clips/clips/"
     private const val TRIPS = "content://com.gios.brightway.trips/trips/"
     private const val READING = "content://com.lightfastread.reading/reading/"
+    private const val CAUGHT = "content://com.gios.brightcollect.caught/caught/"
 
     fun stays(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Stay> {
         val window = JournalDay.windowMs(epochDay, zone)
@@ -218,6 +242,32 @@ object DayBridges {
             // The provider walks every tape, and the same clip cannot appear twice — but both
             // calendar dates are fetched, so a clip is offered twice whenever the window overlaps.
             .distinctBy { it.tapeDir to it.file }
+    }
+
+    /**
+     * What you caught, from BrightCollect.
+     *
+     * Placed by when the shutter fired, which is not when the cutout was finished — a sticker made
+     * this evening out of a photograph taken in June belongs to June, and BrightCollect carries the
+     * original EXIF time through for exactly that reason.
+     */
+    fun caught(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Caught> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, CAUGHT + date) { c ->
+                Caught(
+                    atMs = c.getLong(c.getColumnIndexOrThrow("caught_ms")),
+                    id = c.getString(c.getColumnIndexOrThrow("id")).orEmpty(),
+                    name = c.getString(c.getColumnIndexOrThrow("name")).orEmpty(),
+                    width = c.getInt(c.getColumnIndexOrThrow("width")),
+                    height = c.getInt(c.getColumnIndexOrThrow("height")),
+                )
+            }
+        }
+            .filter { it.atMs in window && it.id.isNotBlank() }
+            .sortedBy { it.atMs }
+            // Both calendar dates are fetched, so anything inside the overlap arrives twice.
+            .distinctBy { it.id }
     }
 
     /**
@@ -340,6 +390,11 @@ object DayBridges {
             reading(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.startedMs, day, zone))
                 minutes.add(JournalDay.minutesInto(it.lastMs, day, zone))
+            }
+            // A day you only caught something on is still a day something happened, and the
+            // activity line is the one place that shows it before you open the day.
+            caught(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.atMs, day, zone))
             }
             val span = if (minutes.size < 2) null else minutes.min()..minutes.max()
             spanCache[day] = Cached(span)
