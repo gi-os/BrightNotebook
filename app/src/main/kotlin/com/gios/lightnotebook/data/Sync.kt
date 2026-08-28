@@ -74,10 +74,12 @@ object Sync {
             )
             calendars++
             events += result.entries.size
-            Reminders.rearmAll(
-                app,
-                result.entries.filter { it.epochDay >= NoteDates.today() },
-            )
+            // `Reminders.needsAlarm`, not `epochDay >= today`. A repeating entry's stored day is
+            // the day the series began, so the day test on its own dropped every recurring
+            // imported event — which is most of a work calendar — and left it with no alarm from
+            // one launch to the next. See [Reminders.needsAlarm].
+            val today = NoteDates.today()
+            Reminders.rearmAll(app, result.entries.filter { Reminders.needsAlarm(it, today) })
         }
         Log.i(TAG, "refreshed $calendars calendar(s), $events event(s), $failed failed")
         return SyncResult(calendars = calendars, events = events, failed = failed)

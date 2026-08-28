@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.util.Daylight
 import java.time.ZoneId
 import com.gios.lightnotebook.util.PhotoDays
@@ -497,7 +498,16 @@ class NotebookRepository(private val context: Context) {
                 sourceRef = sourceRef,
             )
         dao.putCalendar(calendar)
-        if (existing != null) dao.deleteEntriesOf(calendar.id)
+        if (existing != null) {
+            // The alarms first, and this is not tidiness. Every row below is written with a fresh
+            // `UUID.randomUUID()`, so a re-import does not update the old rows — it deletes them and
+            // writes strangers. The alarm armed against the old id survives the row it belonged to,
+            // fires at the meeting's reminder time, finds nothing in the database and does nothing
+            // except buzz; and because the sync runs hourly, they pile up one per event per hour.
+            // `deleteCalendar` has always taken them down for the same reason.
+            dao.entriesWithRemindersOf(calendar.id).forEach { Reminders.dropAlarm(context, it.id) }
+            dao.deleteEntriesOf(calendar.id)
+        }
 
         val now = System.currentTimeMillis()
         val rows = events.map { event ->
@@ -526,7 +536,7 @@ class NotebookRepository(private val context: Context) {
         return ImportResult(calendar = calendar, entries = rows, replaced = existing != null)
     }
 
-    private companion object {
+    internal companion object {
         const val PREFS = "lightnotebook"
         const val KEY_API = "anthropic_key"
         private const val KEY_LIGHT_DOCS = "light_docs_tree"
@@ -539,3 +549,19 @@ class NotebookRepository(private val context: Context) {
         const val DEFAULT_LEAD = 10
     }
 }
+
+/**
+ * The calendar zone, read without opening the database.
+ *
+ * For [com.gios.lightnotebook.notify.Reminders], which arms alarms from a broadcast receiver on a
+ * plain thread and has no business constructing a repository — and from [Reminders.zoneFor], which
+ * is on the path a reminder fires on. One `SharedPreferences` read of a file that is already an
+ * in-memory map, against the same key the repository writes.
+ */
+fun calendarZoneOf(context: Context): ZoneId =
+    context.applicationContext
+        .getSharedPreferences(NotebookRepository.PREFS, Context.MODE_PRIVATE)
+        .getString(NotebookRepository.KEY_ZONE, null)
+        ?.takeIf { it.isNotBlank() }
+        ?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+        ?: ZoneId.systemDefault()

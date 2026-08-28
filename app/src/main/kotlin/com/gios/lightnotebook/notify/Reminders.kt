@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.gios.lightnotebook.data.DayEntryEntity
+import com.gios.lightnotebook.data.calendarZoneOf
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Recurrence
 import java.time.ZoneId
@@ -89,10 +90,28 @@ object Reminders {
     /** How far ahead a repeating reminder will look for its next occurrence. */
     private const val REPEAT_LOOKAHEAD_DAYS = 400L
 
+    /**
+     * The zone an entry's clock time is written in, which is not always the phone's.
+     *
+     * A typed entry is local by construction: "9:30" means 9:30 on the clock the person was
+     * looking at, which is the phone's. An **imported** one is not — an `.ics` carries instants,
+     * and they were turned into a day and a clock time using the calendar zone, which on this
+     * phone may have been overridden precisely because the device reports the wrong one. Arming
+     * that row against the phone's zone converts it back with the wrong offset, and a reminder
+     * hours early is one that has already passed by the time it is armed: [triggerAtMillis] finds
+     * no candidate ahead of now and the event gets no alarm at all.
+     *
+     * `calendarId` is the whole test, and it is the same line drawn in
+     * [com.gios.lightnotebook.data.NotebookRepository.calendarZoneId]. With no override set both
+     * branches are the phone's zone, so this changes nothing on a phone that is telling the truth.
+     */
+    fun zoneFor(context: Context, entry: DayEntryEntity): ZoneId =
+        if (entry.calendarId != null) calendarZoneOf(context) else ZoneId.systemDefault()
+
     fun schedule(context: Context, entry: DayEntryEntity) {
         val app = context.applicationContext
-        val at = triggerAtMillis(entry) ?: run {
-            cancel(app, entry.id)
+        val at = triggerAtMillis(entry, zoneFor(app, entry)) ?: run {
+            dropAlarm(app, entry.id)
             return
         }
         val manager = app.getSystemService(AlarmManager::class.java) ?: return
@@ -107,16 +126,50 @@ object Reminders {
         }
     }
 
+    /**
+     * The entry is gone: take down its alarm *and* anything it has already put in the shade.
+     */
     fun cancel(context: Context, entryId: String) {
-        val app = context.applicationContext
-        app.getSystemService(AlarmManager::class.java)?.cancel(pendingIntent(app, entryId))
-        Notifier.cancel(app, entryId)
+        dropAlarm(context, entryId)
+        Notifier.cancel(context.applicationContext, entryId)
     }
 
-    /** Re-arms everything still ahead of us. Idempotent: each entry owns one alarm. */
+    /**
+     * Take down the alarm and leave the shade alone.
+     *
+     * For the row a re-import is about to replace. The event still exists — it is being rewritten
+     * under a new id — so a reminder that already fired for it half an hour ago is still a true
+     * thing to have in the list, and clearing it would delete a notification the person has not
+     * read yet.
+     */
+    fun dropAlarm(context: Context, entryId: String) {
+        val app = context.applicationContext
+        app.getSystemService(AlarmManager::class.java)?.cancel(pendingIntent(app, entryId))
+    }
+
+    /**
+     * Re-arms everything still ahead of us. Idempotent: each entry owns one alarm.
+     *
+     * Hand it whatever [needsAlarm] keeps and nothing narrower. An entry with nothing left to fire
+     * costs one cancelled alarm here, which is cheap; an entry wrongly left out costs a reminder.
+     */
     fun rearmAll(context: Context, entries: List<DayEntryEntity>) {
         entries.forEach { schedule(context, it) }
     }
+
+    /**
+     * Whether a row is still worth arming — the in-memory pair of the `entriesWithReminders`
+     * query, and it exists because the two disagreed.
+     *
+     * **A series' `epochDay` is the day it began**, which for a weekly meeting is months ago, so
+     * `epochDay >= today` throws away exactly the entries most likely to have a reminder on them.
+     * The DAO query knows that and carries an `OR rrule IS NOT NULL` clause; the hourly sync
+     * filtered its freshly written rows by the day alone, so every repeating imported event lost
+     * its alarm on the first sync after launch and only got one back the next time the app was
+     * opened or the phone rebooted. Since the sync runs hourly, that is very nearly never.
+     */
+    fun needsAlarm(entry: DayEntryEntity, today: Long = NoteDates.today()): Boolean =
+        entry.reminderMinutes != null && (entry.repeats || entry.lastDay >= today)
 
     private fun pendingIntent(app: Context, entryId: String): PendingIntent =
         PendingIntent.getBroadcast(

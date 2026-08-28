@@ -294,6 +294,13 @@ interface NotebookDao {
     @Query("DELETE FROM day_entries WHERE calendarId = :id")
     suspend fun deleteEntriesOf(id: String)
 
+    /**
+     * The rows of one calendar that hold an alarm, so a re-import can take those alarms down
+     * before it deletes the rows they belong to. See [NotebookRepository.importEvents].
+     */
+    @Query("SELECT * FROM day_entries WHERE calendarId = :id AND reminderMinutes IS NOT NULL")
+    suspend fun entriesWithRemindersOf(id: String): List<DayEntryEntity>
+
     @Query("SELECT COUNT(*) FROM day_entries WHERE calendarId = :id")
     suspend fun countEntriesOf(id: String): Int
 

@@ -16,7 +16,11 @@ import com.gios.lightnotebook.util.NoteDates
  *
  *  1. **A notification**, always. It is the record — it stays in LightOS's list, and it is
  *     what LightGlance's dots read.
- *  2. **A buzz**, always.
+ *  2. **A buzz**, once the entry has been read back and turns out to still exist. It used to be
+ *     the first line of `onReceive`, before the database was touched, on the reasoning that a buzz
+ *     should not depend on a read that might be slow. That was wrong in one case that turned out
+ *     to be common: an alarm whose row has since been rewritten by a calendar re-import buzzed the
+ *     phone and then had nothing to post.
  *  3. **A box that lights the panel** — BrightControl's, if it has claimed the on-screen box
  *     for every app (see [AlertOwner]); otherwise [ReminderAlertActivity], if the phone will allow a
  *     background activity start. On Android 14 that needs the `SYSTEM_ALERT_WINDOW`
@@ -36,7 +40,6 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
         val entryId = intent.getStringExtra(Reminders.EXTRA_ENTRY_ID) ?: return
-        Notifier.buzz(app)
 
         val pending = goAsync()
         Thread {
@@ -45,6 +48,9 @@ class ReminderReceiver : BroadcastReceiver() {
                     runCatching { dao.getDayEntryBlocking(entryId) }.getOrNull()
                 }
                 if (entry == null) {
+                    // Not a buzz. An alarm can outlive its row -- a re-import rewrites every event
+                    // under a new id -- and a phone that buzzes with nothing to show for it is
+                    // worse than one that stays quiet. This is why the buzz moved below the read.
                     Log.d(TAG, "reminder for an entry that no longer exists")
                     return@Thread
                 }
@@ -55,6 +61,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     lead <= 0 -> "Now · $time"
                     else -> "In $lead min · $time"
                 }
+                Notifier.buzz(app)
                 Notifier.post(app, entry.id, entry.text, subtitle, entry.epochDay)
                 showBox(app, entry.text, subtitle, entry.epochDay)
                 // A series holds one alarm at a time, so the next one is armed as this one

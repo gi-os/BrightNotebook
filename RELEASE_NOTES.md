@@ -1,3 +1,41 @@
+## BrightNotebook v1.56 — the reminder for a recurring meeting
+
+**A repeating event has not had a reminder in a long time, and the reason is one line.**
+
+Alarms are re-armed in three places: when the app opens, after a reboot, and after the hourly
+calendar sync. The first two ask the database which entries still need one, and that question is
+written correctly — it keeps a repeating entry whatever day it says, because **a series is stored
+on the day it began**. A weekly standup imported in March is one row dated in March forever; the
+days it actually lands on are worked out from its rule.
+
+The sync did not ask the database. It had the rows it had just written in hand and filtered them
+itself, on `epochDay >= today` — which is the one test a series always fails. So every recurring
+event in an imported calendar lost its alarm on the first sync after launch, and got one back only
+the next time the app was opened or the phone rebooted. The sync runs every hour. In practice that
+meant a recurring meeting never got a reminder.
+
+Both re-arm paths now use the same predicate, `Reminders.needsAlarm`, and it is tested: a series is
+kept however long ago it started, a multi-day entry is judged on its last day rather than its
+first, and a plain entry that has been and gone is dropped.
+
+**A calendar refresh used to leave its alarms behind.** Re-importing a calendar does not update
+its rows — it deletes them and writes new ones, each with a new id. The alarm armed against the old
+id survives the row it belonged to. It fires at the meeting's reminder time, finds nothing in the
+database, and buzzes the phone with nothing to show for it. Once an hour, one per event, they
+accumulated. A re-import now takes those alarms down before it deletes the rows, and a reminder
+whose entry has vanished no longer buzzes at all — the buzz moved below the read, so it only
+happens when there is something to say.
+
+**Imported events are armed in the calendar's timezone, not the phone's.** An `.ics` carries
+instants, and turning one into "11:00, Tuesday" needs a zone — which is why there is a setting for
+it, for a phone that reports the wrong one. Reminders were converting that clock time back to an
+instant using the phone's zone instead, so on a phone with the override set the alarm was computed
+hours off, and an alarm computed in the past is one that is never armed. Typed entries are
+unchanged: "9:30" means 9:30 on the clock you were looking at, which is the phone's.
+
+**A reminder you have not read yet is no longer wiped when you open the app.** Re-arming an entry
+whose moment has passed used to clear its notification along with its alarm.
+
 ## BrightNotebook v1.55 — a bar you cannot see through
 
 **The bars paint their own background now.** They never did. A bar was a row of items over

@@ -1516,7 +1516,11 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         withContext(Dispatchers.IO) {
-            Reminders.rearmAll(getApplication(), result.entries.filter { it.epochDay >= NoteDates.today() })
+            // The same predicate the hourly sync uses, and for the same reason: a series is stored
+            // on the day it began, so filtering on the day alone armed nothing for a recurring
+            // event. See [Reminders.needsAlarm].
+            val today = NoteDates.today()
+            Reminders.rearmAll(getApplication(), result.entries.filter { Reminders.needsAlarm(it, today) })
         }
         refreshShowings()
         _importStatus.value = buildString {
