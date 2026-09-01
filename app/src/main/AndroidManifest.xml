@@ -117,6 +117,14 @@
         <!-- What you read, from LightBooks. -->
         <package android:name="com.lightfastread" />
         <provider android:authorities="com.lightfastread.reading" />
+        <!--
+          What the money did, from BrightLedger. The provider entry is load-bearing on
+          Android 11+: without it `contentResolver.query` answers null however installed the
+          ledger is, and a bridge that cannot see its provider reads as a day nothing was
+          bought on. Query-only at the other end; nothing here can write a transaction.
+        -->
+        <package android:name="com.gios.brightledger" />
+        <provider android:authorities="com.gios.brightledger.days" />
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
@@ -262,6 +270,18 @@
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>
         </receiver>
+        <!--
+          The single next thing — one row: startAt, title, kind, allDay — for BrightControl's
+          lock face. Exported because the caller is another app, and that is the whole trust
+          decision: it is read-only by construction (insert/update/delete are refused in
+          code), serves one title the user typed on their own calendar, and every failure is
+          an empty cursor. See data/NextUpProvider.kt for the contract.
+        -->
+        <provider
+            android:name=".data.NextUpProvider"
+            android:authorities="com.gios.lightnotebook.nextup"
+            android:exported="true" />
+
         <!--
             LightSync finds apps by provider authority suffix, so this entry is the whole
             registration. exported=true is required for a cross-app ContentProvider and is not

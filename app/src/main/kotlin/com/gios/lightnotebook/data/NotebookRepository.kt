@@ -388,6 +388,7 @@ class NotebookRepository(private val context: Context) {
             updatedAt = now,
         )
         dao.putDayEntry(detached)
+        NextUpProvider.poke(context)
         return detached
     }
 
@@ -436,6 +437,9 @@ class NotebookRepository(private val context: Context) {
             rrule = rrule?.takeIf { it.isNotBlank() },
         )
         dao.putDayEntry(entry)
+        // The lock face may be showing whatever was next before this existed. Best-effort:
+        // the nextup row is recomputed on every read, this only says "read again".
+        NextUpProvider.poke(context)
         return entry
     }
 
@@ -445,12 +449,16 @@ class NotebookRepository(private val context: Context) {
     suspend fun updateDayEntry(entry: DayEntryEntity): DayEntryEntity {
         val updated = entry.copy(updatedAt = System.currentTimeMillis())
         dao.putDayEntry(updated)
+        NextUpProvider.poke(context)
         return updated
     }
 
     suspend fun getDayEntry(id: String): DayEntryEntity? = dao.getDayEntry(id)
 
-    suspend fun deleteDayEntry(id: String) = dao.deleteDayEntry(id)
+    suspend fun deleteDayEntry(id: String) {
+        dao.deleteDayEntry(id)
+        NextUpProvider.poke(context)
+    }
 
     suspend fun entriesWithReminders(from: Long): List<DayEntryEntity> =
         dao.entriesWithReminders(from)
@@ -473,6 +481,7 @@ class NotebookRepository(private val context: Context) {
     suspend fun deleteCalendar(id: String) {
         dao.deleteEntriesOf(id)
         dao.deleteCalendar(id)
+        NextUpProvider.poke(context)
     }
 
     /**
@@ -533,6 +542,7 @@ class NotebookRepository(private val context: Context) {
             )
         }
         dao.putDayEntries(rows)
+        NextUpProvider.poke(context)
         return ImportResult(calendar = calendar, entries = rows, replaced = existing != null)
     }
 

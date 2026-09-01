@@ -1041,31 +1041,50 @@ private fun DrawScope.drawDay(
         // in a way that two different dots would not.
         val markY = top + height - inset - width * 0.05f
         val radius = (width * 0.035f).coerceAtLeast(1.5f)
-        val written = rows.isNotEmpty()
+        // A bill is not something written on the day, so it must not light the written dot:
+        // a month of subscriptions would otherwise read as a month of plans.
+        val written = rows.any { it.billCents == null }
+        val expected = rows.any { it.billCents != null }
 
-        // Both marks present: they share the bottom edge, so each shifts off centre by its
-        // own width rather than overlapping into an ambiguous blob.
-        val shift = if (written && hasPhotos) radius * 2.2f else 0f
-
-        if (written) {
-            drawCircle(
-                color = ink,
-                radius = radius,
-                center = Offset(left + width / 2f - shift, markY),
-            )
+        // Three possible marks now, and they have to be told apart at a glance on a cell a
+        // few millimetres wide. A filled dot is something *written* on the day; a hollow
+        // square is something *photographed* — a frame, which is what a picture is; a hollow
+        // circle is money *expected* — the dot's own shape, not yet filled in, because the
+        // charge has not happened yet. Filled versus outline is how LightOS carries state
+        // everywhere else, and it survives being three pixels across.
+        //
+        // Whichever are present share the bottom edge in a fixed order — written,
+        // photographed, expected — spaced off centre so they never overlap into a blob.
+        val present = buildList {
+            if (written) add(0)
+            if (hasPhotos) add(1)
+            if (expected) add(2)
         }
-        if (hasPhotos) {
-            val side = radius * 2f
-            drawRect(
-                color = ink,
-                topLeft = Offset(left + width / 2f + shift - side / 2f, markY - side / 2f),
-                size = Size(side, side),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    // Hairline at this size, but a 1px stroke on a 1080-wide panel is a
-                    // clean line; anything thicker fills the square in and it becomes a dot.
-                    width = (radius * 0.5f).coerceAtLeast(1f),
-                ),
-            )
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(
+            // Hairline at this size, but a 1px stroke on a 1080-wide panel is a
+            // clean line; anything thicker fills the outline in and it becomes a dot.
+            width = (radius * 0.5f).coerceAtLeast(1f),
+        )
+        present.forEachIndexed { index, mark ->
+            val x = left + width / 2f + (index - (present.size - 1) / 2f) * radius * 4.4f
+            when (mark) {
+                0 -> drawCircle(color = ink, radius = radius, center = Offset(x, markY))
+                1 -> {
+                    val side = radius * 2f
+                    drawRect(
+                        color = ink,
+                        topLeft = Offset(x - side / 2f, markY - side / 2f),
+                        size = Size(side, side),
+                        style = stroke,
+                    )
+                }
+                else -> drawCircle(
+                    color = ink,
+                    radius = radius,
+                    center = Offset(x, markY),
+                    style = stroke,
+                )
+            }
         }
         return
     }

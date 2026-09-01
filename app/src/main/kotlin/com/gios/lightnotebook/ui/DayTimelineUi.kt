@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import com.gios.lightnotebook.util.AgendaRow
+import com.gios.lightnotebook.util.Ledger
 import androidx.compose.foundation.layout.Arrangement
 import com.gios.lightnotebook.data.DayWeather
 import com.gios.lightnotebook.util.WeatherCodes
@@ -842,6 +843,33 @@ private fun phraseFor(item: DayTimeline.Item.Listening, minutes: Int): String {
 }
 
 /**
+ * "SPENT $34.20 · 3", at the foot of the day with the step graph and the screen time.
+ *
+ * One superfine line, not a table: the transactions are already up the page at the minutes
+ * they happened, so this is the total and nothing else. "AS OF MON 14:05" rides along when
+ * the ledger's last sync does not cover the whole day — a running total labelled with when it
+ * was true stops being wrong when it is merely old.
+ */
+@Composable
+fun DaySpendingLine(summary: Ledger.DaySummary, modifier: Modifier = Modifier) {
+    val line = Ledger.summaryLine(summary).takeIf { it.isNotBlank() } ?: return
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = lightInset(), vertical = 0.6f.verticalGridUnitsAsDp()),
+    ) {
+        LightText(
+            text = listOfNotNull(
+                line,
+                summary.asOf?.let { "AS OF " + it.uppercase() },
+            ).joinToString("  ·  "),
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+        )
+    }
+}
+
+/**
  * The all-day things, as a section at the top of the day.
  *
  * They were a wrapped strip of small words under the date, which is where all-day entries *belong*
@@ -866,15 +894,19 @@ fun AllDaySection(
         LightSectionLabel(if (entries.size == 1) "ALL DAY" else "ALL DAY · ${entries.size}")
         entries.forEach { entry ->
             val holiday = entry.row.holidayId?.let { LightIcons.holiday(it) }
+            // A bill is not an appointment. The inverted fill means "a calendar entry — be
+            // somewhere", and an expected charge is neither, so it stays in the page's own
+            // colours: "NETFLIX · $15.49 expected", quietly, on the day it is due.
+            val isBill = entry.row.billCents != null
             LightListRow(
                 title = entry.row.title,
                 sub = entry.row.subtitle,
-                leading = holiday ?: LightIcons.Calendar,
+                leading = if (isBill) null else holiday ?: LightIcons.Calendar,
                 // Filled, the same as a timed entry down the page: one rule — a calendar entry is
                 // white — is a rule you can read off the screen. Two, with all-day quietly
                 // exempted, is a difference nobody can account for and everybody notices.
-                inverted = true,
-                onClick = { onOpen(entry.row) },
+                inverted = !isBill,
+                onClick = if (isBill) null else ({ onOpen(entry.row) }),
             )
             LightRule()
         }

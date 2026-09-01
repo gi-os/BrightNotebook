@@ -18,6 +18,7 @@ import com.gios.lightnotebook.data.DeviceCalendar
 import com.gios.lightnotebook.data.DeviceCalendars
 import com.gios.lightnotebook.data.DevicePhoto
 import com.gios.lightnotebook.data.DayBridges
+import com.gios.lightnotebook.data.LedgerBridge
 import com.gios.lightnotebook.data.LightDocs
 import com.gios.lightnotebook.data.DayWeather
 import com.gios.lightnotebook.data.DeviceUse
@@ -48,6 +49,7 @@ import com.gios.lightnotebook.util.AgendaRow
 import com.gios.lightnotebook.util.Recurrence
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.JournalDay
+import com.gios.lightnotebook.util.Ledger
 import com.gios.lightnotebook.util.Daylight
 import com.gios.lightnotebook.util.CalendarUrl
 import com.gios.lightnotebook.util.IcsParser
@@ -217,7 +219,32 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         _showings.value = withContext(Dispatchers.IO) {
             LightPassBridge.showings(getApplication())
         }
+        // Bills ride the same refresh: both are somebody else's shelf, re-read on arrival at a
+        // calendar screen because they change while the user is in the other app.
+        _bills.value = withContext(Dispatchers.IO) {
+            LedgerBridge.bills(getApplication())
+        }
     }
+
+    /**
+     * Expected bills, from BrightLedger — merged at read time exactly like showings, never
+     * written into the database, never given a reminder. Empty when the ledger isn't
+     * installed, which is not an error.
+     */
+    private val _bills = MutableStateFlow<List<Ledger.Bill>>(emptyList())
+
+    private fun Ledger.Bill.toAgendaRow() = AgendaRow(
+        // Merchant and day, because that is what a bill *is* here: the provider can serve the
+        // same bill twice and a fortnightly one twice legitimately, and the bridge already
+        // deduped the former.
+        id = "bill:${merchant.lowercase()}:$dueEpochDay",
+        epochDay = dueEpochDay,
+        // No time: a bill is expected on a day, not at ten to three.
+        minutes = null,
+        title = merchant,
+        label = Ledger.expectedLabel(this),
+        billCents = amountCents,
+    )
 
     fun openPass(passId: String) {
         LightPassBridge.openPass(getApplication(), passId)
@@ -273,12 +300,12 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
      */
     val dayRows: StateFlow<List<AgendaRow>> =
         combine(
-            dayEntries,
-            recurringEntries,
+            combine(dayEntries, recurringEntries) { a, b -> a to b },
             dayShowings,
             repo.observeCalendars(),
             _selectedDay,
-        ) { entries, repeats, showings, calendars, day ->
+            _bills,
+        ) { (entries, repeats), showings, calendars, day, bills ->
             Agenda.merge(
                 Agenda.collapse(
                     // Clipped to the one day, so a span becomes exactly one row saying which day of
@@ -290,6 +317,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                     films = showings.map { it.toAgendaRow() },
                 ),
                 Agenda.holidayRows(day, day),
+                bills.filter { it.dueEpochDay == day }.map { it.toAgendaRow() },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -305,7 +333,8 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             recurringEntries,
             _showings,
             repo.observeCalendars(),
-        ) { entries, repeats, showings, calendars ->
+            _bills,
+        ) { entries, repeats, showings, calendars, bills ->
             val today = NoteDates.today()
             Agenda.merge(
                 Agenda.collapse(
@@ -319,6 +348,9 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 // The same horizon the agenda already shows, so a holiday appears exactly when
                 // the entries around it do.
                 Agenda.holidayRows(today, today + AGENDA_HORIZON_DAYS),
+                // "NETFLIX · $15.49 expected", on the day it is due. The provider's horizon is
+                // 35 days, which sits inside the agenda's own.
+                bills.filter { it.dueEpochDay >= today }.map { it.toAgendaRow() },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -341,7 +373,8 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 recurringEntries,
                 _showings,
                 repo.observeCalendars(),
-            ) { entries, repeats, showings, calendars ->
+                _bills,
+            ) { entries, repeats, showings, calendars, bills ->
                 val films = showings.filter { it.epochDay in window }
                 // Holidays are merged after the collapse rather than inside it: collapse folds
                 // a ticket onto the entry describing the same plan, and a holiday is never a
@@ -354,6 +387,7 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                         films = films.map { it.toAgendaRow() },
                     ),
                     Agenda.holidayRows(window.first, window.last),
+                    bills.filter { it.dueEpochDay in window }.map { it.toAgendaRow() },
                 ).groupBy { it.epochDay }
             }
         }
@@ -668,6 +702,56 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * What the open day cost, from BrightLedger.
+     *
+     * One read serves both halves of the section: the per-transaction rows the timeline
+     * places at their own minutes, and the one-line total the foot of the day carries. Both
+     * are absent entirely when there is nothing — a day with no transactions is not a day
+     * that spent $0.00, it is a day the ledger has nothing to say about.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val daySpend: StateFlow<DaySpend> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    val txs = LedgerBridge.spending(getApplication(), day, zone)
+                    if (txs.isEmpty()) {
+                        DaySpend(emptyList(), null)
+                    } else {
+                        DaySpend(
+                            items = txs.map { tx ->
+                                DayTimeline.Item.Spent(
+                                    minutes = JournalDay.minutesInto(tx.postedAt, day, zone),
+                                    merchant = tx.merchant,
+                                    amountCents = tx.amountCents,
+                                    pending = tx.pending,
+                                    postedAt = tx.postedAt,
+                                )
+                            },
+                            summary = Ledger.summarize(
+                                txs,
+                                // "as of Mon 14:05" whenever the sync does not already cover
+                                // the whole day shown — which is every time today is open.
+                                asOf = Ledger.asOfLabel(
+                                    LedgerBridge.syncedAt(getApplication()),
+                                    day,
+                                    zone,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DaySpend(emptyList(), null))
+
+    /** The two halves of the day's money section; both empty means no section at all. */
+    data class DaySpend(
+        val items: List<DayTimeline.Item.Spent>,
+        val summary: Ledger.DaySummary?,
+    )
 
     /**
      * Which visible days the other apps have evidence for, and between what times.

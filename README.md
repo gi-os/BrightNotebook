@@ -4,7 +4,7 @@
 
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
-`com.gios.lightnotebook`. Current release: **v1.43.0**.
+`com.gios.lightnotebook`. Current release: **v1.57.0**.
 
 ## Install via BrightMarket
 
@@ -412,6 +412,8 @@ and not only what changed:
 
 | Version | Commit | Change |
 | --- | --- | --- |
+| v1.57.0 | (on main) | Spending on the day and bills on the calendar, from BrightLedger; a next-up row for BrightControl's lock face |
+| v1.56.0 | (on main) | A recurring event keeps its reminder through the hourly sync |
 | v1.43.0 | (on main) | The first page scan asks for the camera instead of crashing |
 | v1.42.0 | `b61f88e` | Things that repeat, and checkboxes you can tick |
 | v1.40.0 | `070b5a8` | One arrival per zone per minute, so the day screen stops closing itself |

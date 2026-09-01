@@ -406,6 +406,25 @@ interface NotebookDao {
     )
     fun entriesWithRemindersBlocking(from: Long): List<DayEntryEntity>
 
+    /**
+     * Blocking pair of [observeRange] and [observeRecurring], for the `nextup` provider: a
+     * ContentProvider answers on a binder thread with no coroutine scope to suspend in, and
+     * the lock face asking "what is next" cannot wait on one being invented.
+     */
+    @Query(
+        "SELECT * FROM day_entries WHERE " +
+            "epochDay <= :to AND COALESCE(endEpochDay, epochDay) >= :from AND " +
+            "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1)) " +
+            "ORDER BY epochDay ASC, startMinutes IS NULL DESC, startMinutes ASC",
+    )
+    fun rangeBlocking(from: Long, to: Long): List<DayEntryEntity>
+
+    @Query(
+        "SELECT * FROM day_entries WHERE rrule IS NOT NULL AND rrule != '' AND " +
+            "(calendarId IS NULL OR calendarId IN (SELECT id FROM calendars WHERE visible = 1))",
+    )
+    fun recurringBlocking(): List<DayEntryEntity>
+
     @Query("DELETE FROM day_entries WHERE id = :id")
     suspend fun deleteDayEntry(id: String)
 }

@@ -49,6 +49,15 @@ data class AgendaRow(
      * a detail you already know.
      */
     val location: String? = null,
+    /**
+     * Set when this row is an expected bill from BrightLedger, to the amount in cents
+     * (negative, like the charge it will become).
+     *
+     * A bill rides the agenda as a row the way a ticket does — merged at read time, never
+     * written to the database — but it is not an appointment: the day screen leaves it
+     * un-inverted and the month grid gives it a mark of its own rather than the entry dot.
+     */
+    val billCents: Long? = null,
 ) {
     val isSpan: Boolean get() = spanDays > 1
 

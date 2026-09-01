@@ -324,6 +324,27 @@ object DayTimeline {
             override val behind: Boolean get() = true
         }
 
+        /**
+         * Money leaving (or, rarely, arriving), from BrightLedger.
+         *
+         * A row per transaction at the minute the bank says it happened, because "coffee at
+         * 8:40, taxi at 23:50" is part of a day's story the way a call is. Always behind:
+         * a posted transaction is by definition a thing that has already happened, whatever
+         * a drifted bank clock claims.
+         */
+        data class Spent(
+            override val minutes: Int,
+            /** The bank's own description, verbatim — cleaning it up is BrightLedger's job. */
+            val merchant: String,
+            /** Negative for a charge, positive for a credit, in cents. */
+            val amountCents: Long,
+            val pending: Boolean,
+            /** The provider's millisecond timestamp, carried only so the list key is unique. */
+            val postedAt: Long,
+        ) : Item {
+            override val behind: Boolean get() = true
+        }
+
         data class Photos(
             val photos: List<PhotoAt>,
             override val minutes: Int,
@@ -369,6 +390,9 @@ object DayTimeline {
         is Item.Went -> "went-" + item.minutes + "-" + item.place
         is Item.Read -> "read-" + item.minutes + "-" + item.title
         is Item.Caught -> "caught-" + item.minutes
+        // The millisecond, not the minute: two coffees from one machine can post in the same
+        // minute for the same amount, and only the bank's own timestamp tells them apart.
+        is Item.Spent -> "spent-" + item.postedAt + "-" + item.merchant + "-" + item.amountCents
     }
 
     /**
@@ -423,6 +447,7 @@ object DayTimeline {
         went: List<Item.Went> = emptyList(),
         read: List<Item.Read> = emptyList(),
         caught: List<Item.Caught> = emptyList(),
+        spending: List<Item.Spent> = emptyList(),
         epochDay: Long,
         today: Long,
         nowMinutes: Int,
@@ -445,7 +470,7 @@ object DayTimeline {
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrived + calls + charges + recordings + lightNotes + went + read + caught)
+            arrived + calls + charges + recordings + lightNotes + went + read + caught + spending)
             // One row per key, whatever the sources handed over. See [key]: this is the only place
             // that can enforce it, and a duplicate reaching the list is a crash rather than a
             // cosmetic fault.
@@ -486,6 +511,9 @@ object DayTimeline {
                         // With the photographs and the recordings: catching something is the same
                         // kind of fact as photographing it, because it starts by photographing it.
                         is Item.Caught -> 4
+                        // With the captured things: paying for the coffee is part of the same
+                        // minute as photographing it, not the background the music is.
+                        is Item.Spent -> 4
                         is Item.Listening -> 5
                         is Item.Pickups -> 6
                         // With the pickups: both are the phone in your hand rather than the day.

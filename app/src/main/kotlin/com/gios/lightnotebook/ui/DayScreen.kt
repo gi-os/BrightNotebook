@@ -49,6 +49,7 @@ import com.gios.lightnotebook.util.DayLayout
 import com.gios.lightnotebook.util.DayTimeline
 import com.gios.lightnotebook.util.Charging
 import com.gios.lightnotebook.util.JournalDay
+import com.gios.lightnotebook.util.Ledger
 import com.gios.lightnotebook.util.ChromeScroll
 import com.gios.lightnotebook.util.NoteDates
 import com.gios.lightnotebook.util.Recurrence
@@ -165,6 +166,7 @@ fun DayPane(
     val lightNotes by vm.dayLightNotes.collectAsStateWithLifecycle()
     val went by vm.dayWent.collectAsStateWithLifecycle()
     val read by vm.dayRead.collectAsStateWithLifecycle()
+    val spend by vm.daySpend.collectAsStateWithLifecycle()
 
     // Where an entry is, and where to send it. The sheet appears when more than one thing on the
     // phone can navigate; with exactly one, the tap goes straight there — a chooser with a single
@@ -233,7 +235,7 @@ fun DayPane(
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
         rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
-        recordings, lightNotes, went, read, caught, epochDay, today, nowMinutes,
+        recordings, lightNotes, went, read, caught, spend, epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
             rows = rows,
@@ -251,6 +253,7 @@ fun DayPane(
             lightNotes = lightNotes,
             went = went,
             read = read,
+            spending = spend.items,
             epochDay = epochDay,
             today = today,
             nowMinutes = nowMinutes,
@@ -577,6 +580,24 @@ fun DayPane(
                             LightRule()
                         }
 
+                        is DayTimeline.Item.Spent -> {
+                            LightListRow(
+                                // The bank's description, verbatim — "SQ *BLUESTONE LANE" is
+                                // what the statement will say, and matching the statement is
+                                // worth more here than prettiness.
+                                title = item.merchant,
+                                // The amount is the fact; "pending" is the bank still deciding,
+                                // and a credit says which way the money went.
+                                sub = listOfNotNull(
+                                    Ledger.money(item.amountCents) +
+                                        if (item.amountCents > 0) " back" else "",
+                                    if (item.pending) "pending" else null,
+                                ).joinToString(" · "),
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                            )
+                            LightRule()
+                        }
+
                         // A mention, not a row: see [PickupsMention]. No rule under it either —
                         // it is the background of the day rather than an entry in it.
                         is DayTimeline.Item.Pickups -> PickupsMention(item)
@@ -674,6 +695,15 @@ fun DayPane(
                         item(key = "app-time") {
                             DayAppTime(apps = stats.appTime)
                         }
+                    }
+                }
+
+                // What the day cost, with the day's other numbers. One line: the story is
+                // already up the page, transaction by transaction, at the times it happened.
+                spend.summary?.let { summary ->
+                    item(key = "spending") {
+                        LightRule()
+                        DaySpendingLine(summary)
                     }
                 }
 
