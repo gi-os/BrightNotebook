@@ -170,6 +170,7 @@ fun DayPane(
     val lightNotes by vm.dayLightNotes.collectAsStateWithLifecycle()
     val went by vm.dayWent.collectAsStateWithLifecycle()
     val read by vm.dayRead.collectAsStateWithLifecycle()
+    val watched by vm.dayWatched.collectAsStateWithLifecycle()
     val spend by vm.daySpend.collectAsStateWithLifecycle()
 
     // Where an entry is, and where to send it. The sheet appears when more than one thing on the
@@ -239,7 +240,7 @@ fun DayPane(
     val pickups = remember(stats) { DayTimeline.pickups(stats.pickupMinutes) }
     val items = remember(
         rows, photos, dayNotes, places, listening, pickups, talked, arrivals, calls, charges,
-        recordings, lightNotes, went, read, caught, spend, epochDay, today, nowMinutes,
+        recordings, lightNotes, went, read, watched, caught, spend, epochDay, today, nowMinutes,
     ) {
         DayTimeline.build(
             rows = rows,
@@ -257,6 +258,7 @@ fun DayPane(
             lightNotes = lightNotes,
             went = went,
             read = read,
+            watched = watched,
             spending = spend.items,
             epochDay = epochDay,
             today = today,
@@ -535,6 +537,28 @@ fun DayPane(
                                 ).joinToString(" · ").takeIf { it.isNotBlank() },
                                 detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
                                 leading = LightIcons.List,
+                            )
+                            LightRule()
+                        }
+
+                        is DayTimeline.Item.Watched -> {
+                            LightListRow(
+                                // "Watched Slow Horses", and the episode under it where there is
+                                // one. A session with no title is still a session — the remote
+                                // saw the set on, and "television" is what was true of the hour.
+                                title = if (item.title.isBlank()) {
+                                    "Watched television"
+                                } else {
+                                    "Watched ${item.title}"
+                                },
+                                sub = listOfNotNull(
+                                    item.subtitle.takeIf { it.isNotBlank() },
+                                    item.tookMinutes.takeIf { it >= 1 }?.let { "$it min" },
+                                ).joinToString(" · ").takeIf { it.isNotBlank() },
+                                detail = NoteDates.clock(JournalDay.clockMinutes(item.minutes)),
+                                // The ticket: from the day's point of view an evening in front of
+                                // a film and a seat at one are the same kind of fact.
+                                leading = LightIcons.Ticket,
                             )
                             LightRule()
                         }

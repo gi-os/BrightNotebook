@@ -20,6 +20,21 @@ data class Stay(
 data class Play(val atMs: Long, val title: String, val artist: String)
 
 /**
+ * A session in front of the television, from BrightRemote.
+ *
+ * Already a sitting at the other end — the remote watches the Apple TV's now-playing state and
+ * writes one row per session, so nothing here has to guess where an episode ended and the next
+ * began. [subtitle] is the episode under the show's name, and may be empty: a film has no episode.
+ */
+data class Watched(
+    val startAt: Long,
+    val endAt: Long,
+    val title: String,
+    val subtitle: String,
+    val durationMin: Int,
+)
+
+/**
  * Something you recorded, from BrightRecorder.
  *
  * [tapeDir] and [file] are carried so the clip can be played without a copy of it — the recorder
@@ -139,6 +154,7 @@ object DayBridges {
     private const val TRIPS = "content://com.gios.brightway.trips/trips/"
     private const val READING = "content://com.lightfastread.reading/reading/"
     private const val CAUGHT = "content://com.gios.brightcollect.caught/caught/"
+    private const val WATCHED = "content://com.gios.lightremote.watched/sessions/"
 
     fun stays(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Stay> {
         val window = JournalDay.windowMs(epochDay, zone)
@@ -173,6 +189,32 @@ object DayBridges {
             .filter { it.atMs in window }
             .sortedBy { it.atMs }
             .distinctBy { it.atMs }
+    }
+
+    /**
+     * What you watched, from BrightRemote.
+     *
+     * Placed by when the session *started*, like everything else on the timeline: an episode that
+     * ran past four in the morning still belongs to the evening it began on. An older remote has
+     * no provider at all, and that reads as a day with no television on it — absence, not an error.
+     */
+    fun watched(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Watched> {
+        val window = JournalDay.windowMs(epochDay, zone)
+        return datesFor(epochDay).flatMap { date ->
+            read(context, WATCHED + date) { c ->
+                Watched(
+                    startAt = c.getLong(c.getColumnIndexOrThrow("startAt")),
+                    endAt = c.getLong(c.getColumnIndexOrThrow("endAt")),
+                    title = c.getString(c.getColumnIndexOrThrow("title")).orEmpty(),
+                    subtitle = c.getString(c.getColumnIndexOrThrow("subtitle")).orEmpty(),
+                    durationMin = c.getLong(c.getColumnIndexOrThrow("durationMin")).toInt(),
+                )
+            }
+        }
+            .filter { it.startAt in window }
+            .sortedBy { it.startAt }
+            // Both calendar dates are fetched, so a session inside the overlap arrives twice.
+            .distinctBy { it.startAt to it.title }
     }
 
     fun talked(context: Context, epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): List<Talked> {
@@ -386,6 +428,10 @@ object DayBridges {
             }
             trips(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.startedMs, day, zone))
+            }
+            // An evening you only watched something on is still an evening the day can see.
+            watched(context, day, zone).forEach {
+                minutes.add(JournalDay.minutesInto(it.startAt, day, zone))
             }
             reading(context, day, zone).forEach {
                 minutes.add(JournalDay.minutesInto(it.startedMs, day, zone))

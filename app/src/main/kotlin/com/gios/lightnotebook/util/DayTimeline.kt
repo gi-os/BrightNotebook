@@ -282,6 +282,26 @@ object DayTimeline {
         }
 
         /**
+         * A session in front of the television, from BrightRemote.
+         *
+         * A row per session, not a summary. The grouping treatment is for what ran alongside the
+         * day — music, pickups — and an episode is not a background, it is something you sat down
+         * for, the way a book is. Two episodes back to back are two rows, which is right: that is
+         * how you would tell the evening.
+         */
+        data class Watched(
+            override val minutes: Int,
+            val title: String,
+            /** The episode under the show's name, or "" — a film has no episode. */
+            val subtitle: String,
+            val tookMinutes: Int,
+        ) : Item {
+            // A session the remote has already measured is by definition over. Whatever a
+            // drifted set-top clock claims, you cannot have watched the future.
+            override val behind: Boolean get() = true
+        }
+
+        /**
          * A note or a voice note taken in Light's own app.
          *
          * Read out of `Documents/` rather than owned here — see [com.gios.lightnotebook.data
@@ -386,6 +406,7 @@ object DayTimeline {
         is Item.Called -> "call-" + item.minutes + "-" + item.call.who
         is Item.Charged -> "charge-" + item.minutes
         is Item.Recorded -> "clip-" + item.tapeDir + "-" + item.file
+        is Item.Watched -> "watched-" + item.minutes + "-" + item.title
         is Item.LightNote -> "lightdoc-" + item.uri
         is Item.Went -> "went-" + item.minutes + "-" + item.place
         is Item.Read -> "read-" + item.minutes + "-" + item.title
@@ -446,6 +467,7 @@ object DayTimeline {
         lightNotes: List<Item.LightNote> = emptyList(),
         went: List<Item.Went> = emptyList(),
         read: List<Item.Read> = emptyList(),
+        watched: List<Item.Watched> = emptyList(),
         caught: List<Item.Caught> = emptyList(),
         spending: List<Item.Spent> = emptyList(),
         epochDay: Long,
@@ -470,7 +492,8 @@ object DayTimeline {
         // Sorted with a stable secondary key, because a LazyColumn keyed on position and a list
         // that reorders on every recomposition is how a photograph ends up under the wrong time.
         return (entries + clustered + notes + places + listening + pickups + talked +
-            arrived + calls + charges + recordings + lightNotes + went + read + caught + spending)
+            arrived + calls + charges + recordings + lightNotes + went + read + watched +
+            caught + spending)
             // One row per key, whatever the sources handed over. See [key]: this is the only place
             // that can enforce it, and a duplicate reaching the list is a crash rather than a
             // cosmetic fault.
@@ -505,6 +528,8 @@ object DayTimeline {
                         is Item.Went -> 1
                         // Reading sorts with the things you sat down and did on purpose.
                         is Item.Read -> 4
+                        // Watching sorts with reading: both are something you sat down for.
+                        is Item.Watched -> 4
                         is Item.LightNote -> 4
                         is Item.Recorded -> 4
                         is Item.Photos -> 4

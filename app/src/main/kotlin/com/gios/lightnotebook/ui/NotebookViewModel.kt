@@ -1014,6 +1014,31 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * What you watched, from BrightRemote.
+     *
+     * On the same nudge as the photographs and the recordings, and for the same reason: a
+     * session ends while this app is closed, and coming back to the day is the moment it
+     * should already be there.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dayWatched: StateFlow<List<DayTimeline.Item.Watched>> =
+        combine(_selectedDay, _photoNudge) { day, _ -> day }
+            .mapLatest { day ->
+                withContext(Dispatchers.IO) {
+                    val zone = ZoneId.systemDefault()
+                    DayBridges.watched(getApplication(), day, zone).map { session ->
+                        DayTimeline.Item.Watched(
+                            minutes = JournalDay.minutesInto(session.startAt, day, zone),
+                            title = session.title,
+                            subtitle = session.subtitle,
+                            tookMinutes = session.durationMin,
+                        )
+                    }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val dayCalls: StateFlow<List<DayTimeline.Item.Called>> =
         combine(_selectedDay, _photoNudge) { day, _ -> day }

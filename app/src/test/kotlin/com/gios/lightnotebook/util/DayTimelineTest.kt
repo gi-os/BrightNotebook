@@ -669,6 +669,81 @@ class DayTimelineTest {
         assertEquals(1, built.count { it is DayTimeline.Item.Talked })
     }
 
+    /* ---- watched television, from BrightRemote ---- */
+
+    @Test
+    fun `a watched session is a row at the minute it started`() {
+        val built = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            watched = listOf(
+                DayTimeline.Item.Watched(
+                    minutes = 21 * 60,
+                    title = "Slow Horses",
+                    subtitle = "Failure's Contagious",
+                    tookMinutes = 42,
+                ),
+            ),
+            epochDay = today,
+            today = today,
+            nowMinutes = 23 * 60,
+        )
+        val watched = built.filterIsInstance<DayTimeline.Item.Watched>()
+        assertEquals(1, watched.size)
+        assertEquals(21 * 60, watched.first().minutes)
+        // The remote measured it, so it has happened, whatever the set-top clock claims.
+        assertTrue(watched.first().behind)
+    }
+
+    @Test
+    fun `two episodes back to back stay two rows`() {
+        val built = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            watched = listOf(
+                DayTimeline.Item.Watched(20 * 60, "Slow Horses", "", 42),
+                DayTimeline.Item.Watched(20 * 60 + 45, "Slow Horses", "", 41),
+            ),
+            epochDay = today,
+            today = today,
+            nowMinutes = 23 * 60,
+        )
+        assertEquals(2, built.count { it is DayTimeline.Item.Watched })
+    }
+
+    @Test
+    fun `the same session offered twice is one row`() {
+        // Both calendar dates are fetched, so anything in the overlap arrives twice; the bridge
+        // dedupes by timestamp, and the build's key check is the last line of defence.
+        val session = DayTimeline.Item.Watched(2 * 60, "Late film", "", 96)
+        val built = DayTimeline.build(
+            rows = emptyList(),
+            photos = emptyList(),
+            watched = listOf(session, session.copy()),
+            epochDay = today,
+            today = today,
+            nowMinutes = 23 * 60,
+        )
+        assertEquals(1, built.count { it is DayTimeline.Item.Watched })
+    }
+
+    @Test
+    fun `a session sorts among the day by its start`() {
+        val built = DayTimeline.build(
+            rows = listOf(row("dinner", 19 * 60)),
+            photos = listOf(photo(1L, 22 * 60)),
+            watched = listOf(DayTimeline.Item.Watched(21 * 60, "Slow Horses", "", 42)),
+            epochDay = today,
+            today = today,
+            nowMinutes = 23 * 60,
+        )
+        val order = built.mapNotNull { it.minutes }
+        assertEquals(order.sorted(), order)
+        val watchedIndex = built.indexOfFirst { it is DayTimeline.Item.Watched }
+        val photoIndex = built.indexOfFirst { it is DayTimeline.Item.Photos }
+        assertTrue(watchedIndex in 1 until photoIndex)
+    }
+
     @Test
     fun `every key on a built day is unique`() {
         val built = DayTimeline.build(

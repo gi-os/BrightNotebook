@@ -1,3 +1,23 @@
+## BrightNotebook v1.60 — what you watched, from BrightRemote
+
+**An evening in front of the television is part of the day, and the notebook can say so now.**
+BrightRemote sits on the Apple TV's now-playing state all evening anyway; it now serves what it
+saw — one row per session, with the show, the episode and how long it ran — and the day draws
+each one at the minute you pressed play. "Watched Slow Horses · Failure's Contagious · 42 min",
+between the dinner entry and the photographs, on the same axis as everything else.
+
+A row per session rather than a summary, deliberately. The grouping treatment is for what ran
+alongside the day — music, pickups — and an episode is not a background, it is something you sat
+down for, the way a book is. Two episodes back to back are two rows, because that is how you
+would tell the evening.
+
+The same bus rules as every other source: ask the provider, take what comes, and every failure
+is nothing. A remote that predates the provider — or no remote at all — reads as a day with no
+television on it, which costs no message anywhere. Journal days run four to four, so both
+calendar dates are fetched and clipped to the window by timestamp; a film that ran past four in
+the morning still belongs to the evening it began on. Sessions also feed the planner's activity
+line, so an evening you only watched something on still shows as an evening the day can see.
+
 ## BrightNotebook v1.59 — your journal, in your hand
 
 **Settings → Backup: save everything as one file, and load one back.** For the person whose

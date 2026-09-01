@@ -114,6 +114,14 @@
         <!-- Where you went, from BrightWay. -->
         <package android:name="com.gios.brightway" />
         <provider android:authorities="com.gios.brightway.trips" />
+        <!--
+          What you watched, from BrightRemote. The provider entry is load-bearing on Android 11+:
+          without it `contentResolver.query` answers null however installed the remote is, and a
+          bridge that cannot see its provider reads as an evening nothing was on. An older remote
+          has no provider at all, and that reads the same way — absence, not an error.
+        -->
+        <package android:name="com.gios.lightremote" />
+        <provider android:authorities="com.gios.lightremote.watched" />
         <!-- What you read, from LightBooks. -->
         <package android:name="com.lightfastread" />
         <provider android:authorities="com.lightfastread.reading" />
