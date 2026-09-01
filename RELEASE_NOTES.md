@@ -1,34 +1,27 @@
-## BrightNotebook v1.58 — degrees you can read, and arrows you can see
+## BrightNotebook v1.59 — your journal, in your hand
 
-**The weather line speaks Fahrenheit now, and the day view grew the arrows the LightOS calendar
-always had.**
+**Settings → Backup: save everything as one file, and load one back.** For the person whose
+Light desktop tool stopped working and who does not run a home server — which is most people.
 
-### 74°, not 23°
+LightSync has carried these exact stores onto a home server nightly since it shipped, and that
+half stays. This is the other half: the same list of what matters — the notes database, the
+calendar subscriptions, day entries, the capture photographs, the charging log, the settings —
+zipped into one file through the system file picker. Same store list as LightSync on purpose;
+the two halves must never disagree about what "everything" means. The file is a plain zip of
+the app's own files, not an invented format: a database is one file, and even with this app
+gone the notes inside are a `sqlite3` command away.
 
-The calendar's weather has always been said in Celsius, because that is what Open-Meteo delivers
-and the number went to the screen the way it arrived. On a phone that lives in New York, "23° to
-28°" reads as a cold snap in what was actually a warm week.
+The export checkpoints the write-ahead log first, so the database file alone is the whole
+database — without that, the newest notes live only in the WAL and the backup silently misses
+exactly the writing you did today, which is the worst property a backup can have.
 
-There is a setting now — **Settings → Weather → Degrees** — and it ships saying Fahrenheit. The
-conversion happens at the moment of saying, not of storing: the cache stays Celsius forever,
-exactly as delivered, so flipping the switch re-says every cached day instantly and re-fetches
-nothing. A number is data; which units you say it in is presentation, and presentation is the
-only thing the switch touches.
+**Loading replaces.** A restore is a restore, not a merge — merging two journals across primary
+keys is a promise nobody can keep. What makes replacement safe to offer is the order of
+operations: the file is unpacked and validated in staging before a single live file moves (a
+truncated zip, someone else's zip, a zip with no database — all refused with nothing changed),
+and the data about to be replaced is first written to a safety copy inside the app, so loading
+last month's backup over this morning's writing is one more load away from undone. Then
+Notebook closes itself — the open database handle and the in-memory settings are both stale at
+that point, and a clean start is the only honest one.
 
-Fixes [light-reports#161] — no option for Fahrenheit for temperature metrics on calendar.
-
-### Stepping a day, visibly
-
-The day view has always stepped between days — slide the surface sideways and yesterday arrives.
-But a gesture announces itself to nobody: the report asked for "an arrow at the top to toggle
-forward or backward," which is a person telling you the only affordance they could find was
-missing.
-
-The date in the day view's header now sits between two arrows, the way the LightOS calendar draws
-its own. One press steps one day, either direction, with the same haptic click as every other
-control. The slide still works and still feels better for covering distance; the arrows are for
-knowing the capability exists at all. The bar's corners keep their jobs — back on the left,
-TODAY on the right when you have wandered.
-
-Fixes [light-reports#172] — when in daily view, adjust arrow at the top to toggle forward or
-backward a day.
+Fixes [light-reports#42] — no way to export/import any backup; the Light manager tool is broken.

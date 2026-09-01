@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.text.format.DateFormat
+import com.gios.lightnotebook.backup.BackupFile
 import com.gios.lightnotebook.data.CallHistory
 import com.gios.lightnotebook.data.DeviceUse
 import com.gios.lightnotebook.data.SystemCalendar
@@ -29,6 +32,9 @@ import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.report.Reports
 import com.gios.lightnotebook.report.ShakeMonitor
 import com.gios.lightnotebook.ui.theme.LightBarItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightText
@@ -57,6 +63,46 @@ fun SettingsScreen(
     val zone by vm.calendarZone.collectAsStateWithLifecycle()
     val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
     val fahrenheitOn by vm.fahrenheit.collectAsStateWithLifecycle()
+
+    // The backup file (light-reports#42). SAF both ways; the heavy lifting is [BackupFile].
+    val backupScope = rememberCoroutineScope()
+    var backupNote by remember { mutableStateOf<String?>(null) }
+    val backupSaver = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupNote = "SAVING…"
+        backupScope.launch(Dispatchers.IO) {
+            val note = runCatching {
+                context.contentResolver.openOutputStream(uri)!!.use { out ->
+                    BackupFile.export(context, out)
+                }
+                "SAVED"
+            }.getOrElse { "COULD NOT WRITE THE FILE" }
+            withContext(Dispatchers.Main) { backupNote = note }
+        }
+    }
+    val backupLoader = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupNote = "LOADING — NOTEBOOK WILL CLOSE ITSELF"
+        backupScope.launch(Dispatchers.IO) {
+            val refusal = runCatching {
+                context.contentResolver.openInputStream(uri)!!.use { input ->
+                    BackupFile.restore(context, input)
+                }
+            }.getOrElse { "could not read the file" }
+            if (refusal == null) {
+                // The database handle is closed and the in-memory preferences are stale; every
+                // path from here is a lie until the process starts over. Say so, then go.
+                withContext(Dispatchers.Main) { backupNote = "LOADED — CLOSING" }
+                kotlinx.coroutines.delay(800)
+                kotlin.system.exitProcess(0)
+            }
+            withContext(Dispatchers.Main) { backupNote = refusal.uppercase() }
+        }
+    }
     val home by vm.home.collectAsStateWithLifecycle()
     val usageGranted = remember { DeviceUse.granted(context) }
     val callsGranted = remember { CallHistory.granted(context) }
@@ -393,6 +439,50 @@ fun SettingsScreen(
             LightText(
                 text = "Steps can only be counted from the day this app was installed — the " +
                     "phone's counter keeps no history to look back through.",
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                modifier = Modifier.padding(
+                    top = 0.5f.verticalGridUnitsAsDp(),
+                    bottom = 1.2f.verticalGridUnitsAsDp(),
+                ),
+            )
+
+            LightText(
+                text = "BACKUP",
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                modifier = Modifier.padding(top = 1.6f.verticalGridUnitsAsDp()),
+            )
+            LightWideButton(
+                label = "SAVE A BACKUP FILE",
+                filled = false,
+                modifier = Modifier.padding(top = 0.4f.verticalGridUnitsAsDp()),
+                onClick = {
+                    backupSaver.launch(
+                        "brightnotebook-backup-" +
+                            DateFormat.format("yyyyMMdd", System.currentTimeMillis()) + ".zip",
+                    )
+                },
+            )
+            LightWideButton(
+                label = "LOAD A BACKUP FILE",
+                filled = false,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                onClick = { backupLoader.launch(arrayOf("application/zip", "*/*")) },
+            )
+            backupNote?.let { note ->
+                LightText(
+                    text = note,
+                    variant = LightTextVariant.Superfine,
+                    modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                )
+            }
+            LightText(
+                text = "One file holds everything written here: notes, folders, day entries, " +
+                    "calendar subscriptions, captures and settings. Loading one replaces what " +
+                    "is on the phone — the replaced data is first saved inside the app, so a " +
+                    "wrong load is one more load away from undone — and Notebook closes " +
+                    "itself to finish; reopen it.",
                 variant = LightTextVariant.Detail,
                 lighten = true,
                 modifier = Modifier.padding(
