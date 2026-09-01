@@ -5,10 +5,12 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,6 +36,7 @@ import com.gios.lightnotebook.data.PhotoLibrary
 import com.gios.light.common.hw.WheelScroll
 import com.gios.lightnotebook.notify.Reminders
 import com.gios.lightnotebook.ui.theme.LightBarItem
+import com.gios.lightnotebook.ui.theme.LightIcon
 import com.gios.lightnotebook.ui.theme.LightIcons
 import com.gios.lightnotebook.ui.theme.LightRule
 import com.gios.lightnotebook.ui.theme.LightText
@@ -157,6 +160,7 @@ fun DayPane(
     val places by vm.dayPlaces.collectAsStateWithLifecycle()
     val listening by vm.dayListening.collectAsStateWithLifecycle()
     val weather by vm.dayWeather.collectAsStateWithLifecycle()
+    val fahrenheit by vm.fahrenheit.collectAsStateWithLifecycle()
     val talked by vm.dayTalked.collectAsStateWithLifecycle()
     val arrivals by vm.dayArrivals.collectAsStateWithLifecycle()
     val calls by vm.dayCalls.collectAsStateWithLifecycle()
@@ -316,18 +320,50 @@ fun DayPane(
             enter = expandVertically(),
             exit = shrinkVertically(),
         ) {
-        LightTopBar(
-            title = NoteDates.dayTitle(epochDay),
-            left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onClose),
-            right = if (epochDay != today) {
-                LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() })
-            } else {
-                null
-            },
-        )
+        // The bar keeps its two jobs — leaving the day, and jumping home — and the date between
+        // them grows the arrows the LightOS calendar has: one press steps a day, either way.
+        // The slide gesture still steps days too; the arrows are for the person that gesture
+        // never announced itself to (light-reports#172).
+        Box(Modifier.fillMaxWidth()) {
+            LightTopBar(
+                title = null,
+                left = LightBarItem.Icon(LightIcons.Back, sizeUnits = 1.6f, onClick = onClose),
+                right = if (epochDay != today) {
+                    LightBarItem.Text("TODAY", onClick = { vm.jumpToToday() })
+                } else {
+                    null
+                },
+            )
+            Row(
+                Modifier.align(Alignment.Center).height(3f.gridUnitsAsDp()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LightIcon(
+                    LightIcons.Back,
+                    size = 1.1f,
+                    contentDescription = "previous day",
+                    modifier = Modifier
+                        .lightClickable { vm.stepDay(-1) }
+                        .padding(horizontal = 0.8f.gridUnitsAsDp()),
+                )
+                LightText(
+                    text = NoteDates.dayTitle(epochDay),
+                    variant = LightTextVariant.Fine,
+                    maxLines = 1,
+                )
+                LightIcon(
+                    LightIcons.Forward,
+                    size = 1.1f,
+                    contentDescription = "next day",
+                    modifier = Modifier
+                        .lightClickable { vm.stepDay(1) }
+                        .padding(horizontal = 0.8f.gridUnitsAsDp()),
+                )
+            }
+        }
         }
 
-        DayWeatherLine(weather = weather, unfinished = epochDay >= today)
+        DayWeatherLine(weather = weather, unfinished = epochDay >= today, fahrenheit = fahrenheit)
 
 
         // Picking the phone up counts as something happening: the first time you looked at it is

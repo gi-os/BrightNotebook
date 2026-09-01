@@ -56,6 +56,7 @@ fun SettingsScreen(
     val status by vm.importStatus.collectAsStateWithLifecycle()
     val zone by vm.calendarZone.collectAsStateWithLifecycle()
     val daylightOn by vm.daylightShown.collectAsStateWithLifecycle()
+    val fahrenheitOn by vm.fahrenheit.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
     val usageGranted = remember { DeviceUse.granted(context) }
     val callsGranted = remember { CallHistory.granted(context) }
@@ -360,6 +361,14 @@ fun SettingsScreen(
                 filled = false,
                 modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
                 onClick = { vm.fetchWeather(everything = true) },
+            )
+            // A way of saying the number, not of storing it: the cache stays Celsius, so the
+            // switch re-says every cached day instantly and re-fetches nothing.
+            LightWideButton(
+                label = if (fahrenheitOn) "DEGREES: FAHRENHEIT" else "DEGREES: CELSIUS",
+                filled = false,
+                modifier = Modifier.padding(top = 0.5f.verticalGridUnitsAsDp()),
+                onClick = { vm.setFahrenheit(!fahrenheitOn) },
             )
             weatherStatus?.let { status ->
                 LightText(

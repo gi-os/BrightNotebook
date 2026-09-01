@@ -926,13 +926,21 @@ fun AllDaySection(
  * picture and "It rained" is only half of one.
  */
 @Composable
-fun DayWeatherLine(weather: DayWeather?, unfinished: Boolean, modifier: Modifier = Modifier) {
+fun DayWeatherLine(
+    weather: DayWeather?,
+    unfinished: Boolean,
+    fahrenheit: Boolean,
+    modifier: Modifier = Modifier,
+) {
     if (weather == null) return
     val kind = weather.kind
     if (!WeatherCodes.notable(kind)) return
 
     val what = if (unfinished) WeatherCodes.ahead(kind) else WeatherCodes.past(kind)
-    val range = listOfNotNull(weather.minC?.let { Math.round(it) }, weather.maxC?.let { Math.round(it) })
+    // The cache is Celsius forever — Open-Meteo's numbers, stored as delivered. Fahrenheit is
+    // applied at the moment of saying, so the switch re-says every cached day and re-fetches none.
+    val said = { c: Double -> Math.round(if (fahrenheit) c * 9.0 / 5.0 + 32.0 else c) }
+    val range = listOfNotNull(weather.minC?.let(said), weather.maxC?.let(said))
     val temperatures = if (range.size == 2) "${range[0]}° to ${range[1]}°" else null
 
     Row(

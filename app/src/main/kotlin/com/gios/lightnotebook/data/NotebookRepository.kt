@@ -142,6 +142,21 @@ class NotebookRepository(private val context: Context) {
     }
 
     /**
+     * Whether temperatures are said in Fahrenheit.
+     *
+     * On by default: this phone lives in the United States, and the complaint that created the
+     * setting (light-reports#161) was that the calendar had no way to say 74° the way the person
+     * reading it says it. Open-Meteo keeps delivering Celsius and the cache stays Celsius — this
+     * is a way of *saying* the number, not of storing it, so flipping the switch re-says every
+     * cached day instantly and re-fetches nothing.
+     */
+    fun fahrenheit(): Boolean = prefs.getBoolean(KEY_FAHRENHEIT, true)
+
+    fun setFahrenheit(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_FAHRENHEIT, enabled).apply()
+    }
+
+    /**
      * Lead time given to a new timed entry, in minutes. Null is "don't remind me", stored
      * as -1 because SharedPreferences has no absent-but-set state for an Int.
      */
@@ -555,6 +570,7 @@ class NotebookRepository(private val context: Context) {
         const val KEY_LAT = "home_lat"
         const val KEY_LON = "home_lon"
         const val KEY_DAYLIGHT = "show_daylight"
+        const val KEY_FAHRENHEIT = "temperature_fahrenheit"
         const val KEY_ZONE = "calendar_zone"
         const val DEFAULT_LEAD = 10
     }

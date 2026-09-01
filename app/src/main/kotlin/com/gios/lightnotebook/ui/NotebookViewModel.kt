@@ -610,6 +610,15 @@ class NotebookViewModel(app: Application) : AndroidViewModel(app) {
         _daylightSettings.value = _daylightSettings.value.copy(first = enabled)
     }
 
+    /** Whether temperatures are said in Fahrenheit. See [NotebookRepository.fahrenheit]. */
+    private val _fahrenheit = MutableStateFlow(repo.fahrenheit())
+    val fahrenheit: StateFlow<Boolean> = _fahrenheit.asStateFlow()
+
+    fun setFahrenheit(enabled: Boolean) {
+        repo.setFahrenheit(enabled)
+        _fahrenheit.value = enabled
+    }
+
     /** False when the coordinates are nonsense, so the sheet can say so instead of storing them. */
     fun setHome(latitude: Double, longitude: Double): Boolean {
         if (!repo.setHome(latitude, longitude)) return false
