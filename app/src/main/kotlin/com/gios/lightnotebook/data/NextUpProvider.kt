@@ -6,13 +6,27 @@ import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import com.gios.lightnotebook.util.Daylight
+import com.gios.lightnotebook.util.Holidays
+import com.gios.lightnotebook.util.JournalDay
 import com.gios.lightnotebook.util.NextUp
 import com.gios.lightnotebook.util.Recurrence
 import java.time.Instant
 import java.time.ZoneId
 
 /**
- * The single next thing, served to BrightControl's lock face.
+ * The single next thing, served to BrightControl's lock face — and, since v1.61, the whole of
+ * today, served to BrightNews' Daily Briefing.
+ *
+ * `content://com.gios.lightnotebook.nextup/day` answers with one row per item on the current
+ * *journal* day (4 am to 4 am, the same day the planner shows): `title`, `startMinute`,
+ * `endMinute` (clock minutes from midnight, -1 when all-day), `allDay` (0/1), `kind`
+ * (`event` | `reminder` | `ticket` | `holiday`), in the day's order. Entries, imported
+ * calendars, expanded series, LightPass tickets and US holidays — the same merge the agenda
+ * draws. `/weather` answers with at most one row for that day: `code` (WMO), `kind` (Clear,
+ * Cloudy, Fog, Rain, Snow, Storm, Hail), `maxC`, `minC` (may be null), `observed` (0/1),
+ * `sunriseMinute`, `sunsetMinute` (clock minutes, -1 when unknown). No weather cached yet
+ * means an empty cursor.
  *
  * `content://com.gios.lightnotebook.nextup/next` answers with **at most one row** —
  * `startAt` (epoch ms), `title`, `kind` (`event` | `reminder` | `ticket`), `allDay` (0/1) —
@@ -39,17 +53,117 @@ class NextUpProvider : ContentProvider() {
         selectionArgs: Array<out String>?,
         sortOrder: String?,
     ): Cursor {
-        val cursor = MatrixCursor(arrayOf("startAt", "title", "kind", "allDay"))
-        if (uri.pathSegments.firstOrNull() != PATH) return cursor
-        val context = context ?: return cursor
+        val context = context
         // Every failure is an empty cursor: a half-broken database or a bridge mid-upgrade
         // must read as "nothing coming up", never as a crash in somebody else's process.
-        runCatching {
-            pick(context)?.let {
-                cursor.addRow(arrayOf(it.startAt, it.title, it.kind, if (it.allDay) 1 else 0))
+        return when (uri.pathSegments.firstOrNull()) {
+            PATH_DAY -> MatrixCursor(arrayOf("title", "startMinute", "endMinute", "allDay", "kind")).also { cursor ->
+                if (context != null) runCatching {
+                    for (item in today(context)) {
+                        cursor.addRow(
+                            arrayOf(item.title, item.startMinute ?: -1, item.endMinute ?: -1, if (item.allDay) 1 else 0, item.kind),
+                        )
+                    }
+                }
+            }
+            PATH_WEATHER -> MatrixCursor(
+                arrayOf("code", "kind", "maxC", "minC", "observed", "sunriseMinute", "sunsetMinute"),
+            ).also { cursor ->
+                if (context != null) runCatching {
+                    weather(context)?.let { w ->
+                        cursor.addRow(arrayOf(w.code, w.kind, w.maxC, w.minC, if (w.observed) 1 else 0, w.sunriseMinute, w.sunsetMinute))
+                    }
+                }
+            }
+            PATH -> MatrixCursor(arrayOf("startAt", "title", "kind", "allDay")).also { cursor ->
+                if (context != null) runCatching {
+                    pick(context)?.let {
+                        cursor.addRow(arrayOf(it.startAt, it.title, it.kind, if (it.allDay) 1 else 0))
+                    }
+                }
+            }
+            else -> MatrixCursor(emptyArray())
+        }
+    }
+
+    private data class DayItem(
+        val title: String,
+        val startMinute: Int?,
+        val endMinute: Int?,
+        val allDay: Boolean,
+        val kind: String,
+    )
+
+    /**
+     * Everything on today's page, in the order the agenda lists it: all-day items first
+     * (holidays, then entries, then later days of a span), then timed items by clock time.
+     */
+    private fun today(context: Context): List<DayItem> {
+        val zone = calendarZoneOf(context)
+        val day = JournalDay.today(zone)
+        val dao = NotebookDatabase.get(context).dao()
+        val items = ArrayList<DayItem>()
+
+        Holidays.on(day)?.let { items.add(DayItem(it.name, null, null, true, KIND_HOLIDAY)) }
+
+        for (entry in dao.rangeBlocking(day, day)) {
+            if (entry.repeats) continue
+            val kind = if (entry.reminderMinutes != null) KIND_REMINDER else KIND_EVENT
+            // Only the first day of a span carries the time; a later day of it is all-day.
+            val timed = entry.epochDay == day && entry.startMinutes != null
+            items.add(
+                DayItem(
+                    title = entry.text,
+                    startMinute = if (timed) entry.startMinutes else null,
+                    endMinute = if (timed) entry.endMinutes else null,
+                    allDay = !timed,
+                    kind = kind,
+                ),
+            )
+        }
+
+        for (master in dao.recurringBlocking()) {
+            val kind = if (master.reminderMinutes != null) KIND_REMINDER else KIND_EVENT
+            val lands = Recurrence.expand(
+                rrule = master.rrule,
+                startDay = master.epochDay,
+                from = day,
+                to = day,
+                exDays = Recurrence.parseExDays(master.exDays),
+            ).isNotEmpty()
+            if (lands) {
+                items.add(DayItem(master.text, master.startMinutes, master.endMinutes, master.startMinutes == null, kind))
             }
         }
-        return cursor
+
+        LightPassBridge.showings(context)
+            .filter { it.epochDay == day }
+            .forEach { items.add(DayItem(it.title, it.startMinutes, it.endMinutes, it.startMinutes == null, KIND_TICKET)) }
+
+        return items.sortedWith(compareBy({ !it.allDay }, { it.startMinute ?: -1 }))
+    }
+
+    private data class DayWeatherRow(
+        val code: Int,
+        val kind: String,
+        val maxC: Double?,
+        val minC: Double?,
+        val observed: Boolean,
+        val sunriseMinute: Int,
+        val sunsetMinute: Int,
+    )
+
+    private fun weather(context: Context): DayWeatherRow? {
+        val zone = calendarZoneOf(context)
+        val day = JournalDay.today(zone)
+        val cached = Weather(context).cached(day, day)[day] ?: return null
+        val repository = NotebookRepository(context)
+        val daylight = Daylight.of(day, repository.homeLatitude(), repository.homeLongitude(), zone)
+        val (rise, set) = when (daylight) {
+            is Daylight.Result.Times -> daylight.sunriseMinutes to daylight.sunsetMinutes
+            else -> -1 to -1
+        }
+        return DayWeatherRow(cached.code, cached.kind.name, cached.maxC, cached.minC, cached.observed, rise, set)
     }
 
     private fun pick(context: Context): NextUp.Pick? {
@@ -117,9 +231,12 @@ class NextUpProvider : ContentProvider() {
     companion object {
         const val AUTHORITY = "com.gios.lightnotebook.nextup"
         private const val PATH = "next"
+        private const val PATH_DAY = "day"
+        private const val PATH_WEATHER = "weather"
         private const val KIND_EVENT = "event"
         private const val KIND_REMINDER = "reminder"
         private const val KIND_TICKET = "ticket"
+        private const val KIND_HOLIDAY = "holiday"
 
         val URI: Uri = Uri.parse("content://$AUTHORITY/$PATH")
 

@@ -1,3 +1,22 @@
+## BrightNotebook v1.61 — today, served to the news
+
+**The notebook's page for today can be read by another app now.** BrightNews' Daily Briefing
+opens with the day — the date, the weather, what is on the calendar — and that is the notebook's
+to say. Two new paths on the provider that already serves BrightControl's lock face:
+
+`content://com.gios.lightnotebook.nextup/day` — one row per item on the current journal day
+(4 am to 4 am, the same day the planner shows): title, start and end clock minutes, whether it
+is all-day, and its kind (event, reminder, ticket, holiday). Entries, imported calendars,
+repeating series, LightPass tickets and US holidays, in the order the agenda lists them.
+
+`content://com.gios.lightnotebook.nextup/weather` — at most one row for the same day: the WMO
+code and its kind, the high and low, whether it is observed or forecast, and sunrise and sunset
+in clock minutes from the home coordinates. Nothing cached yet reads as an empty cursor, never
+an error.
+
+Read-only, exported because the caller is another app, and every failure is an empty cursor:
+a reader that cannot see the day sees a day with nothing on it.
+
 ## BrightNotebook v1.60 — what you watched, from BrightRemote
 
 **An evening in front of the television is part of the day, and the notebook can say so now.**
