@@ -2,6 +2,8 @@
 
 # BrightNotebook
 
+[**⬇ Download the latest APK**](https://github.com/gi-os/BrightNotebook/releases/latest) · free, open source.
+
 Notes and a calendar for the Light Phone III, built against the real LightOS design
 tokens rather than an approximation of them. Launcher label **Notebook**, package
 `com.gios.lightnotebook`. Current release: **v1.60.0**.
