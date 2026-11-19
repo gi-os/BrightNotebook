@@ -415,7 +415,25 @@ the original fingerprint. Keep the original private key out of CI; it is only ne
 offline to create the lineage. After creating and verifying it, revoke the old key from
 active signing use and archive it securely offline; its exposed copy remains in Git history.
 
-In **Settings → Secrets and variables → Actions**, set these five secrets:
+In [BrightNotebook's environment settings](https://github.com/gi-os/BrightNotebook/settings/environments),
+create an environment named `release`. Under **Deployment branches and tags**, choose
+**Selected branches and tags** and add a single **Branch** rule for `main`, with no tag
+rules. Add the five secrets below to that environment only. Do not use repository-wide
+secrets or upload the original key or its passwords.
+
+For a new environment, the equivalent commands are:
+
+```sh
+gh api --method PUT repos/gi-os/BrightNotebook/environments/release \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+gh api --method POST repos/gi-os/BrightNotebook/environments/release/deployment-branch-policies \
+  -f name=main -f type=branch
+gh api repos/gi-os/BrightNotebook/environments/release/deployment-branch-policies
+```
+
+Verify that the only deployment rule is the `main` branch. If `release` already exists,
+remove any other branch or tag rules in its settings before uploading secrets.
 
 | Secret | Value |
 | --- | --- |
@@ -428,11 +446,24 @@ In **Settings → Secrets and variables → Actions**, set these five secrets:
 On Linux, upload the files without printing their contents and enter the other values when prompted:
 
 ```sh
-base64 -w 0 lightnotebook-new.jks | gh secret set RELEASE_KEYSTORE_BASE64 -R gi-os/BrightNotebook
-base64 -w 0 lightnotebook.lineage | gh secret set SIGNING_LINEAGE_BASE64 -R gi-os/BrightNotebook
-gh secret set KEYSTORE_PASSWORD -R gi-os/BrightNotebook
-gh secret set KEY_ALIAS -R gi-os/BrightNotebook
-gh secret set KEY_PASSWORD -R gi-os/BrightNotebook
+base64 -w 0 lightnotebook-new.jks | gh secret set RELEASE_KEYSTORE_BASE64 --env release -R gi-os/BrightNotebook
+base64 -w 0 lightnotebook.lineage | gh secret set SIGNING_LINEAGE_BASE64 --env release -R gi-os/BrightNotebook
+gh secret set KEYSTORE_PASSWORD --env release -R gi-os/BrightNotebook
+gh secret set KEY_ALIAS --env release -R gi-os/BrightNotebook --body lightnotebook-release
+gh secret set KEY_PASSWORD --env release -R gi-os/BrightNotebook
+```
+
+Delete any same-named repository-level secrets; these commands do not delete the
+environment secrets. Skip a delete only if that repository secret is already absent.
+Repository-level secrets are readable by workflows on other branches, so keeping a
+second copy there defeats the environment's branch restriction.
+
+```sh
+gh secret delete RELEASE_KEYSTORE_BASE64 -R gi-os/BrightNotebook
+gh secret delete SIGNING_LINEAGE_BASE64 -R gi-os/BrightNotebook
+gh secret delete KEYSTORE_PASSWORD -R gi-os/BrightNotebook
+gh secret delete KEY_ALIAS -R gi-os/BrightNotebook
+gh secret delete KEY_PASSWORD -R gi-os/BrightNotebook
 ```
 
 CI signs with the new key using APK Signature Scheme v3 and verifies the proof of rotation
