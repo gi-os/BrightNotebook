@@ -340,22 +340,16 @@ Some things about how it is built that are easy to get wrong:
   by definition one that was just misbehaving, and a report that exists only in flight is the
   one guaranteed to be lost. The queue drains on the next launch.
 - **The screenshot rides inside the issue body as base64**, downscaled to 360px and
-  desaturated. Attaching a file would need `contents: write` on a token that ships inside a
-  sideloaded APK anyone can unzip; kept to `issues: write`, the worst a lifted key can do is
-  write junk into one private tracker.
+  desaturated, so filing a report never needs more than permission to open an issue.
 
-The key is `REPORT_TOKEN` — a fine-grained PAT with **Issues: read and write** on
-`gi-os/light-reports` and nothing else, and it is set as a repository secret, so any build
-from `main` carries it. For local builds put it in `local.properties` as `reportToken=`.
+Reports go to the report relay (`relay/` in gi-os/BrightCommon), not to GitHub directly. The
+relay holds the only key that can file issues in `gi-os/light-reports`; the app carries no
+credential, so there is nothing to lift from the APK. CI bakes in the relay's address from the
+repository variable `REPORT_RELAY_URL`; for a local build, export `REPORT_RELAY_URL` first.
 
 A build without one still compiles and still collects reports; they wait on the phone until a
-build that has one installs over it, which is what makes the key safe to be missing.
-
-The scope was checked rather than assumed. With that token: filing an issue on `light-reports`
-succeeds, opening one on this repo is 403, and writing repository contents anywhere — including
-`light-reports` itself — is 403. Anyone who unzips the APK gets the ability to write junk into one
-private tracker, and nothing else. It expires and will need replacing; when reports stop arriving
-and the settings screen starts counting a queue, that is the first thing to check.
+build that has one installs over it. When reports stop arriving and the settings screen starts
+counting a queue, check the relay first.
 
 ## Build and test
 

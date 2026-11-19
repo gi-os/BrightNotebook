@@ -1,27 +1,8 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
-}
-
-/**
- * The key shake-to-report posts issues with. Never in the repository: `local.properties` is
- * ignored by git, and CI hands it in as an environment variable from a repository secret.
- *
- * An empty string is a working build — reports queue on the phone and go out from a later one
- * that has the key — so a fresh clone still compiles for anyone who has never seen this file.
- */
-val reportToken: String = run {
-    val local = rootProject.file("local.properties")
-    val fromFile = if (local.exists()) {
-        Properties().apply { local.inputStream().use { load(it) } }.getProperty("reportToken")
-    } else {
-        null
-    }
-    fromFile ?: System.getenv("REPORT_TOKEN") ?: ""
 }
 
 android {
@@ -40,7 +21,9 @@ android {
         // The LPIII is arm64 only; shipping four ABIs tripled the APK for nothing.
         ndk { abiFilters += "arm64-v8a" }
 
-        buildConfigField("String", "REPORT_TOKEN", "\"$reportToken\"")
+        // Shake-to-report posts to the relay in gi-os/BrightCommon (relay/), which holds the key
+        // that files the issue, so no credential ships in the APK. Blank queues reports.
+        buildConfigField("String", "REPORT_RELAY_URL", "\"${System.getenv("REPORT_RELAY_URL") ?: ""}\"")
         buildConfigField("String", "REPORT_REPO", "\"gi-os/light-reports\"")
     }
 

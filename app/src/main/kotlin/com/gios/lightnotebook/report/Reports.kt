@@ -60,7 +60,7 @@ object Reports {
     }
 
     /** True when this build can actually send. False means reports pile up in the queue. */
-    fun canSend(): Boolean = BuildConfig.REPORT_TOKEN.isNotBlank()
+    fun canSend(): Boolean = BuildConfig.REPORT_RELAY_URL.isNotBlank()
 
     fun pendingCount(context: Context): Int = queued(context).size
 
@@ -208,10 +208,7 @@ object Reports {
             put("labels", JSONArray(report.labels))
         }
         val request = Request.Builder()
-            .url("https://api.github.com/repos/${BuildConfig.REPORT_REPO}/issues")
-            .header("Authorization", "Bearer ${BuildConfig.REPORT_TOKEN}")
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
+            .url(BuildConfig.REPORT_RELAY_URL)
             .post(body.toString().toRequestBody(JSON))
             .build()
         return runCatching {
