@@ -60,7 +60,8 @@ object Reports {
     }
 
     /** True when this build can actually send. False means reports pile up in the queue. */
-    fun canSend(): Boolean = BuildConfig.REPORT_TOKEN.isNotBlank()
+    // https only: a report carries a screenshot and crash detail, and the relay is a public URL.
+    fun canSend(): Boolean = BuildConfig.REPORT_RELAY_URL.startsWith("https://")
 
     fun pendingCount(context: Context): Int = queued(context).size
 
@@ -207,21 +208,18 @@ object Reports {
             put("body", report.body)
             put("labels", JSONArray(report.labels))
         }
-        val request = Request.Builder()
-            .url("https://api.github.com/repos/${BuildConfig.REPORT_REPO}/issues")
-            .header("Authorization", "Bearer ${BuildConfig.REPORT_TOKEN}")
-            .header("Accept", "application/vnd.github+json")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .post(body.toString().toRequestBody(JSON))
-            .build()
         return runCatching {
+            val request = Request.Builder()
+                .url(BuildConfig.REPORT_RELAY_URL)
+                .post(body.toString().toRequestBody(JSON))
+                .build()
             http.newCall(request).execute().use { response ->
                 when {
                     response.isSuccessful -> Outcome.Sent
-                    // 422 is a body GitHub will never accept, 413 one it will never take.
-                    // Anything else — no network, a rate limit, a token that has not been
-                    // put in the build yet — is worth another go on the next launch.
-                    response.code == 422 || response.code == 413 -> Outcome.Unpostable
+                    // 400, 413 and 422 are the relay saying this body will never post.
+                    // Anything else — no network, a rate limit, a relay not set up yet —
+                    // is worth another go on the next launch.
+                    response.code == 400 || response.code == 413 || response.code == 422 -> Outcome.Unpostable
                     else -> Outcome.Later
                 }
             }
