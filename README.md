@@ -40,14 +40,13 @@ repo (and every other camera-carrying Light* app) is built from.
 ```sh
 git clone https://github.com/gi-os/BrightNotebook.git
 cd BrightNotebook
-./gradlew :app:assembleRelease
-adb install -r app/build/outputs/apk/release/app-release.apk
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-You need JDK 17 and the Android SDK (`compileSdk` 35, `minSdk` 29). The keystore is
-committed at `keystore/lightnotebook.jks` on purpose — see
-[Signing](#signing-and-releases) below — so a release build made from a fresh checkout
-installs over an existing one instead of failing with Obtainium's `Failure: Invalid`.
+You need JDK 17 and the Android SDK (`compileSdk` 35, `minSdk` 29). Without signing
+credentials, release APKs are unsigned and debug builds use the standard Android debug key.
+Neither can update an installed production APK. See [Signing](#signing-and-releases).
 
 To pick up notes, calendar entries and Claude vision parsing with no further setup, that
 first install is already the whole app. The camera page needs an Anthropic key (see
@@ -354,7 +353,7 @@ counting a queue, check the relay first.
 ## Build and test
 
 ```sh
-./gradlew :app:assembleRelease        # signed release APK
+./gradlew :app:assembleRelease        # unsigned release APK
 ./gradlew :app:testDebugUnitTest      # markdown, date, planner-geometry logic
 python3 scripts/generate_icon.py      # regenerate the launcher icon (needs Pillow)
 ```
@@ -371,8 +370,8 @@ only harmless until somebody's notes are in the database.
 
 ## Signing and releases
 
-Every push to `main` runs `:app:testDebugUnitTest`, assembles, verifies the signing
-certificate against `signing-fingerprint.txt`, verifies a launcher icon is present, and
+Every push to `main` runs `:app:testDebugUnitTest`, assembles, signs with the new key and verifies its v3 signing
+lineage against `signing-lineage-root-fingerprint.txt` and `signing-fingerprint.txt`, verifies a launcher icon is present, and
 publishes a signed GitHub Release — **a push is a release trigger, not a cosmetic
 action.** `versionCode`/`versionName` are not fixed in the committed
 `app/build.gradle.kts` (which carries a `1.0.0` placeholder); CI stamps
@@ -383,6 +382,94 @@ why release tags are `v1.0.<n>` in strict sequence. Point
 ```sh
 adb install -r LightNotebook-v1.0.<run>.apk
 ```
+
+### Release signing
+
+Giovanni: complete these steps **before this PR is merged**; a push to `main` releases.
+Before merging the signing change, disable **Build & Release APK** so the merge does
+not publish. In a private directory outside the checkout, use Android Build Tools
+35.0.0 to generate the replacement key and create a proof of rotation from the original
+release key. Use fresh passwords when prompted.
+
+```sh
+keytool -genkeypair -storetype JKS -keystore lightnotebook-new.jks -alias lightnotebook-release \
+  -keyalg RSA -keysize 3072 -validity 10000
+
+apksigner rotate --out lightnotebook.lineage \
+  --old-signer --ks /path/to/original/lightnotebook.jks --ks-key-alias lightnotebook \
+  --set-installed-data true --set-rollback false \
+  --new-signer --ks lightnotebook-new.jks --ks-key-alias lightnotebook-release
+
+apksigner lineage --in lightnotebook.lineage --print-certs
+```
+
+Verify that signer #1's SHA-256 digest matches `signing-lineage-root-fingerprint.txt`,
+then replace `signing-fingerprint.txt` with signer #2's SHA-256 digest. Do not change
+the original fingerprint. Keep the original private key out of CI; it is only needed
+offline to create the lineage. After creating and verifying it, revoke the old key from
+active signing use and archive it securely offline; its exposed copy remains in Git history.
+
+In [BrightNotebook's environment settings](https://github.com/gi-os/BrightNotebook/settings/environments),
+create an environment named `release`. Under **Deployment branches and tags**, choose
+**Selected branches and tags** and add a single **Branch** rule for `main`, with no tag
+rules. Add the five secrets below to that environment only. Do not use repository-wide
+secrets or upload the original key or its passwords.
+
+For a new environment, the equivalent commands are:
+
+```sh
+gh api --method PUT repos/gi-os/BrightNotebook/environments/release \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+gh api --method POST repos/gi-os/BrightNotebook/environments/release/deployment-branch-policies \
+  -f name=main -f type=branch
+gh api repos/gi-os/BrightNotebook/environments/release/deployment-branch-policies
+```
+
+Verify that the only deployment rule is the `main` branch. If `release` already exists,
+remove any other branch or tag rules in its settings before uploading secrets.
+
+| Secret | Value |
+| --- | --- |
+| `RELEASE_KEYSTORE_BASE64` | Base64-encoded `lightnotebook-new.jks` |
+| `SIGNING_LINEAGE_BASE64` | Base64-encoded `lightnotebook.lineage` |
+| `KEYSTORE_PASSWORD` | New keystore password |
+| `KEY_ALIAS` | `lightnotebook-release` |
+| `KEY_PASSWORD` | New key password |
+
+On Linux, upload the files without printing their contents and enter the other values when prompted:
+
+```sh
+base64 -w 0 lightnotebook-new.jks | gh secret set RELEASE_KEYSTORE_BASE64 --env release -R gi-os/BrightNotebook
+base64 -w 0 lightnotebook.lineage | gh secret set SIGNING_LINEAGE_BASE64 --env release -R gi-os/BrightNotebook
+gh secret set KEYSTORE_PASSWORD --env release -R gi-os/BrightNotebook
+gh secret set KEY_ALIAS --env release -R gi-os/BrightNotebook --body lightnotebook-release
+gh secret set KEY_PASSWORD --env release -R gi-os/BrightNotebook
+```
+
+Delete any same-named repository-level secrets; these commands do not delete the
+environment secrets. Skip a delete only if that repository secret is already absent.
+Repository-level secrets are readable by workflows on other branches, so keeping a
+second copy there defeats the environment's branch restriction.
+
+```sh
+gh secret delete RELEASE_KEYSTORE_BASE64 -R gi-os/BrightNotebook
+gh secret delete SIGNING_LINEAGE_BASE64 -R gi-os/BrightNotebook
+gh secret delete KEYSTORE_PASSWORD -R gi-os/BrightNotebook
+gh secret delete KEY_ALIAS -R gi-os/BrightNotebook
+gh secret delete KEY_PASSWORD -R gi-os/BrightNotebook
+```
+
+CI signs with the new key using APK Signature Scheme v3 and verifies the proof of rotation
+from the original pin to the new pin. BrightNotebook requires Android API 29, so no supported
+device needs a v1/v2 signature or the old private key. Android can accept an in-place update,
+but a catalog that compares only the current certificate can still hide it from users on
+the old signer. Coordinate the BrightMarket catalog/updater transition before re-enabling
+publishing, and only re-enable it for an authorized release.
+
+A push to `main` (other than ignored paths) or a manual run of `build.yml` builds,
+signs, tags, and publishes. Tag pushes do not trigger it. Branch checks
+in `check.yml` publish nothing.
 
 ## Contributing
 

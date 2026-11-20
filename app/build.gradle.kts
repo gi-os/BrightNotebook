@@ -5,6 +5,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val keystoreFile = providers.environmentVariable("KEYSTORE_FILE").orNull
+val keystorePassword = providers.environmentVariable("KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("KEY_PASSWORD").orNull
+
 val reportRelayUrl = System.getenv("REPORT_RELAY_URL")?.trim()?.takeIf { it.isNotEmpty() }
     ?: "https://light-report-relay.glupo.workers.dev/report"
 
@@ -30,13 +35,17 @@ android {
         buildConfigField("String", "REPORT_REPO", "\"gi-os/light-reports\"")
     }
 
-    signingConfigs {
-        getByName("debug") {
-            storeFile = file("../keystore/lightnotebook.jks")
-            storePassword = "lightnotebook"
-            keyAlias = "lightnotebook"
-            keyPassword = "lightnotebook"
+    val releaseSigning = if (!keystoreFile.isNullOrBlank() && !keystorePassword.isNullOrBlank()
+        && !releaseKeyAlias.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank()
+    ) {
+        signingConfigs.create("release") {
+            storeFile = rootProject.file(keystoreFile)
+            storePassword = keystorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
+    } else {
+        null
     }
 
     buildTypes {
@@ -44,8 +53,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Same committed key as debug, so either APK upgrades over the other.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning
         }
     }
     compileOptions {
